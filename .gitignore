@@ -1,0 +1,38 @@
+# Editor and OS files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*~
+
+# Python cache
+__pycache__/
+*.pyc
+
+# xv6 build outputs
+*.o
+*.d
+*.asm
+*.sym
+*.img
+.gdbinit
+
+# Generated xv6 binaries and build products
+xv6-riscv_src/kernel/kernel
+xv6-riscv_src/mkfs/mkfs
+xv6-riscv_src/user/_*
+xv6-riscv_src/user/usys.S
+
+# Temporary outputs
+*.tmp
+*.bak
+*.out
+
+# Local planning notes not intended for submission
+plan/
+
+# Logs: keep curated contest logs under tests/logs/
+*.log
+!tests/**/logs/*.log
+!tests/**/logs/README.md
