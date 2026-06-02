@@ -32,6 +32,9 @@ xv6-riscv_src/user/usys.S
 # Local planning notes not intended for submission
 plan/
 
+# Root Makefile stores the selected test here.
+.last-test
+
 # Logs: keep curated contest logs under tests/logs/
 *.log
 !tests/**/logs/*.log

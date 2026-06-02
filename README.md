@@ -53,6 +53,23 @@
 
 > 对 `tests/` 目录结构进行介绍，该目录的详细结构见该目录内的 `README.md`
 
+##### 测试环境：
+
+- Host OS: WSL2 Ubuntu 24.04 LTS
+- Shell: Bash
+- Build tools: `make`, `gcc`, `python3`, `perl`, `bc`
+- Debug tool: `gdb-multiarch`
+- Version control: `git`
+
+##### 目前包括：
+
+- `test_baseline/`：对基础功能进行测试
+
+##### 快速开始：
+
+`make test_baseline && make run`：测试基本功能并记录日志
+
+
 ## 提交辅助材料
 
 > 对 `submit` 目录结构进行介绍

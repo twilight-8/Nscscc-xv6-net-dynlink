@@ -1,28 +1,38 @@
 # tests
 
-> 本目录对源码测试进行详细记录
+> 本目录对源码测试进行详细记录。
 
-## 目录结构说明
-
-该目录由多个子目录组成，每个子目录对应一个测试样例
-每个子目录内分以下五部分：
-
-- `README.md`：说明测试目的、环境和简要结果记录
-- `src/`：测试源码
-- `run.sh`：可复现的构建和运行命令
-- `logs/`：测试日志
-- `analysis.md`：对本次测试结果的分析
-
-以一个名为 `test1/` 的测试样例为例，其内部结构一般如此：
+每个子目录对应一个测试点。当前只有基线测试点：
 
 ```text
-
-test1/
-├── src/
-├── run.sh
-├── logs/
-└── analysis.md
-
+tests/
+└── test_baseline/
+    ├── README.md
+    ├── src/
+    ├── run.sh
+    └── logs/
 ```
 
-## 当前目录构成
+## 根目录测试入口
+
+在仓库根目录执行：
+
+```sh
+make test_baseline
+make run
+```
+
+也可以连写为：
+
+```sh
+make test_baseline && make run
+```
+
+其中：
+
+- `make test_baseline`：完成基线测试的环境记录、源码清理和基础构建。
+- `make run`：运行已准备好的基线测试。
+
+## 当前测试点
+
+- `test_baseline`：对 xv6-riscv rev5 官方基线源码执行 RISC-V `usertests -q` 测试。
