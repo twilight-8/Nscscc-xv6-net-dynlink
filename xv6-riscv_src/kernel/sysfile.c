@@ -361,7 +361,7 @@ sys_open(void)
   f->writable = (omode & O_WRONLY) || (omode & O_RDWR);
 
   if((omode & O_TRUNC) && ip->type == T_FILE){
-    itrunc(ip);
+    vfs_itrunc(ip);
   }
 
   iunlock(ip);

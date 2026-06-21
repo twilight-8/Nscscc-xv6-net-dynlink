@@ -55,6 +55,14 @@ int             writei(struct inode*, int, uint64, uint, uint);
 void            itrunc(struct inode*);
 void            ireclaim(int);
 
+// vfs.c
+void            vfsinit(void);
+void            vfs_init_inode(struct inode*);
+int             vfs_readi(struct inode*, int, uint64, uint, uint);
+int             vfs_writei(struct inode*, int, uint64, uint, uint);
+void            vfs_stati(struct inode*, struct stat*);
+void            vfs_itrunc(struct inode*);
+
 // kalloc.c
 void*           kalloc(void);
 void            kfree(void *);

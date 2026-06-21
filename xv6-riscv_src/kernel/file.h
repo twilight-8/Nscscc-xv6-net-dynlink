@@ -1,3 +1,5 @@
+#include "vfs.h"
+
 struct file {
   enum { FD_NONE, FD_PIPE, FD_INODE, FD_DEVICE } type;
   int ref; // reference count
@@ -20,6 +22,11 @@ struct inode {
   int ref;            // Reference count
   struct sleeplock lock; // protects everything below here
   int valid;          // inode has been read from disk?
+
+  enum fs_type fstype;      // file system type
+  struct mount *mnt;        // mount instance
+  struct inode_ops *ops;    // inode operation table
+  void *fs_private;         // file-system specific data
 
   short type;         // copy of disk inode
   short major;

@@ -272,6 +272,7 @@ iget(uint dev, uint inum)
   ip->inum = inum;
   ip->ref = 1;
   ip->valid = 0;
+  vfs_init_inode(ip);
   release(&itable.lock);
 
   return ip;
