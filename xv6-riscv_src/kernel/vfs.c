@@ -1,9 +1,3 @@
-/*
-这个文件(vfs.c)的作用是实现虚拟文件层对文件操作的分发
-当前该文件主要是将文件操作重新分发到 xv6 文件系统的操作
-*/
-
-
 #include "types.h"
 #include "riscv.h"
 #include "defs.h"
@@ -13,15 +7,7 @@
 #include "file.h"
 #include "vfs.h"
 
-/*
-原xv6操作在 defs.h中
-int  readi(struct inode*, int, uint64, uint, uint);
-int  writei(struct inode*, int, uint64, uint, uint);
-void stati(struct inode*, struct stat*);
-void itrunc(struct inode*);
-*/
-
-
+// The default backend is the original xv6 filesystem.
 static struct inode_ops xv6_inode_ops = {
   .read = readi,
   .write = writei,
@@ -29,11 +15,13 @@ static struct inode_ops xv6_inode_ops = {
   .trunc = itrunc,
 };
 
-void vfsinit(void)
+void
+vfsinit(void)
 {
 }
 
-void vfs_init_inode(struct inode *ip)
+void
+vfs_init_inode(struct inode *ip)
 {
   ip->fstype = FS_XV6;
   ip->mnt = 0;
@@ -41,28 +29,32 @@ void vfs_init_inode(struct inode *ip)
   ip->fs_private = 0;
 }
 
-int vfs_readi(struct inode *ip, int user_dst, uint64 dst, uint off, uint n)
+int
+vfs_readi(struct inode *ip, int user_dst, uint64 dst, uint off, uint n)
 {
   if(ip == 0 || ip->ops == 0 || ip->ops->read == 0)
     return -1;
   return ip->ops->read(ip, user_dst, dst, off, n);
 }
 
-int vfs_writei(struct inode *ip, int user_src, uint64 src, uint off, uint n)
+int
+vfs_writei(struct inode *ip, int user_src, uint64 src, uint off, uint n)
 {
   if(ip == 0 || ip->ops == 0 || ip->ops->write == 0)
     return -1;
   return ip->ops->write(ip, user_src, src, off, n);
 }
 
-void vfs_stati(struct inode *ip, struct stat *st)
+void
+vfs_stati(struct inode *ip, struct stat *st)
 {
   if(ip == 0 || ip->ops == 0 || ip->ops->stat == 0)
     return;
   ip->ops->stat(ip, st);
 }
 
-void vfs_itrunc(struct inode *ip)
+void
+vfs_itrunc(struct inode *ip)
 {
   if(ip == 0 || ip->ops == 0 || ip->ops->trunc == 0)
     return;

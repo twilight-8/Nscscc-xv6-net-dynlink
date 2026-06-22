@@ -13,3 +13,4 @@
 - `final_slides.pdf`：演示ppt的pdf导出版
 - `demo-script.md`：演示视频使用脚本
 - `demo-video-link.txt`：演示视频链接
+- `vfs-visualizer/`：文件系统 GUI 可视化工具，当前提供一个类似文件夹窗口的 xv6fs 操作原型。
