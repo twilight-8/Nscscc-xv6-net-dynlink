@@ -14,6 +14,8 @@ enum fs_type {
   FS_FAT32,
 };
 
+#define NMOUNT 8
+
 // Per-inode operations. Each filesystem backend provides its own table.
 struct inode_ops {
   int  (*read)(struct inode *ip, int user_dst, uint64 dst, uint off, uint n);
@@ -31,6 +33,7 @@ struct mount {
   int used;
   enum fs_type fstype;
   uint dev;
+  struct inode *mountpoint;
   struct inode *root;
   struct fs_ops *fsops;
 };

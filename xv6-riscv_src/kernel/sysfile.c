@@ -16,6 +16,20 @@
 #include "file.h"
 #include "fcntl.h"
 
+uint64
+sys_mount(void)
+{
+  char fstype[16], path[MAXPATH];
+  int dev;
+
+  if(argstr(0, fstype, sizeof(fstype)) < 0 ||
+     argstr(1, path, MAXPATH) < 0)
+    return -1;
+  argint(2, &dev);
+
+  return vfs_mount(fstype, path, dev);
+}
+
 // Fetch the nth word-sized system call argument as a file descriptor
 // and return both the descriptor and the corresponding struct file.
 static int
