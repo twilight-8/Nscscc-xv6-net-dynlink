@@ -267,13 +267,21 @@ create(char *path, short type, short major, short minor)
 
   ilock(dp);
 
-  if((ip = dirlookup(dp, name, 0)) != 0){
+  if((ip = vfs_lookup(dp, name)) != 0){
     iunlockput(dp);
     ilock(ip);
     if(type == T_FILE && (ip->type == T_FILE || ip->type == T_DEVICE))
       return ip;
     iunlockput(ip);
     return 0;
+  }
+
+  if(dp->fstype != FS_XV6){
+    ip = vfs_create(dp, name, type, major, minor);
+    iunlockput(dp);
+    if(ip)
+      ilock(ip);
+    return ip;
   }
 
   if((ip = ialloc(dp->dev, type)) == 0){
@@ -389,14 +397,24 @@ sys_mkdir(void)
 {
   char path[MAXPATH];
   struct inode *ip;
+  int automount;
 
   begin_op();
-  if(argstr(0, path, MAXPATH) < 0 || (ip = create(path, T_DIR, 0, 0)) == 0){
+  if(argstr(0, path, MAXPATH) < 0){
     end_op();
+    return -1;
+  }
+  automount = strncmp(path, "/mnt", 5) == 0;
+  if((ip = create(path, T_DIR, 0, 0)) == 0){
+    end_op();
+    if(automount)
+      return vfs_mount("ext2", path, EXT2DEV);
     return -1;
   }
   iunlockput(ip);
   end_op();
+  if(automount)
+    return vfs_mount("ext2", path, EXT2DEV);
   return 0;
 }
 

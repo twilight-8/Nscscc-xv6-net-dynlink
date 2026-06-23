@@ -215,7 +215,12 @@ alloc3_desc(int *idx)
 void
 virtio_disk_rw(struct buf *b, int write)
 {
-  uint64 sector = b->blockno * (BSIZE / 512);
+  uint64 blockno = b->blockno;
+
+  if(b->dev == EXT2DEV)
+    blockno += FSSIZE;
+
+  uint64 sector = blockno * (BSIZE / 512);
 
   acquire(&disk.vdisk_lock);
 

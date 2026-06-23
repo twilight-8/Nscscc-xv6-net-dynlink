@@ -44,6 +44,7 @@ void            fsinit(int);
 int             dirlink(struct inode*, char*, uint);
 struct inode*   dirlookup(struct inode*, char*, uint*);
 struct inode*   ialloc(uint, short);
+struct inode*   iget(uint, uint);
 struct inode*   idup(struct inode*);
 void            iinit();
 void            ilock(struct inode*);
@@ -65,10 +66,15 @@ void            vfsinit(void);
 void            vfs_init_inode(struct inode*);
 int             vfs_mount(char*, char*, int);
 struct mount*   vfs_mountpoint(struct inode*);
+struct inode*   vfs_lookup(struct inode*, char*);
+struct inode*   vfs_create(struct inode*, char*, short, short, short);
 int             vfs_readi(struct inode*, int, uint64, uint, uint);
 int             vfs_writei(struct inode*, int, uint64, uint, uint);
 void            vfs_stati(struct inode*, struct stat*);
 void            vfs_itrunc(struct inode*);
+
+// ext2.c
+struct fs_ops*  ext2_get_fs_ops(void);
 
 // kalloc.c
 void*           kalloc(void);

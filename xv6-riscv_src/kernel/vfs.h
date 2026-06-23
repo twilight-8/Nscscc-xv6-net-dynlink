@@ -22,6 +22,8 @@ struct inode_ops {
   int  (*write)(struct inode *ip, int user_src, uint64 src, uint off, uint n);
   void (*stat)(struct inode *ip, struct stat *st);
   void (*trunc)(struct inode *ip);
+  struct inode *(*lookup)(struct inode *dp, char *name);
+  struct inode *(*create)(struct inode *dp, char *name, short type, short major, short minor);
 };
 
 // Per-filesystem operations. Each backend validates and initializes a mount.

@@ -190,8 +190,6 @@ iinit()
   }
 }
 
-static struct inode* iget(uint dev, uint inum);
-
 // Allocate an inode on device dev.
 // Mark it as allocated by  giving it type type.
 // Returns an unlocked but allocated and referenced inode,
@@ -244,7 +242,7 @@ iupdate(struct inode *ip)
 // Find the inode with number inum on device dev
 // and return the in-memory copy. Does not lock
 // the inode and does not read it from disk.
-static struct inode*
+struct inode*
 iget(uint dev, uint inum)
 {
   struct inode *ip, *empty;
@@ -302,6 +300,9 @@ ilock(struct inode *ip)
 
   acquiresleep(&ip->lock);
 
+  if(ip->fstype != FS_XV6)
+    return;
+
   if(ip->valid == 0){
     bp = bread(ip->dev, IBLOCK(ip->inum, sb));
     dip = (struct dinode*)bp->data + ip->inum%IPB;
@@ -339,6 +340,20 @@ void
 iput(struct inode *ip)
 {
   acquire(&itable.lock);
+
+  if(ip->ref < 1)
+    panic("iput");
+
+  if(ip->fstype != FS_XV6){
+    ip->ref--;
+    if(ip->ref == 0){
+      ip->valid = 0;
+      ip->mnt = 0;
+      ip->ops = 0;
+    }
+    release(&itable.lock);
+    return;
+  }
 
   if(ip->ref == 1 && ip->valid && ip->nlink == 0){
     // inode has no links and no other references: truncate and free.
@@ -676,6 +691,7 @@ static struct inode*
 namex(char *path, int nameiparent, char *name)
 {
   struct inode *ip, *next;
+  struct mount *mnt;
 
   if(*path == '/')
     ip = iget(ROOTDEV, ROOTINO);
@@ -693,11 +709,15 @@ namex(char *path, int nameiparent, char *name)
       iunlock(ip);
       return ip;
     }
-    if((next = dirlookup(ip, name, 0)) == 0){
+    if((next = vfs_lookup(ip, name)) == 0){
       iunlockput(ip);
       return 0;
     }
     iunlockput(ip);
+    if((mnt = vfs_mountpoint(next)) != 0 && mnt->root != 0){
+      iput(next);
+      next = idup(mnt->root);
+    }
     ip = next;
   }
   if(nameiparent){

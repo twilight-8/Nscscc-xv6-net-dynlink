@@ -15,11 +15,19 @@ static struct {
 } mtable;
 
 // The default backend is the original xv6 filesystem.
+static struct inode*
+xv6_lookup(struct inode *dp, char *name)
+{
+  return dirlookup(dp, name, 0);
+}
+
 static struct inode_ops xv6_inode_ops = {
   .read = readi,
   .write = writei,
   .stat = stati,
   .trunc = itrunc,
+  .lookup = xv6_lookup,
+  .create = 0,
 };
 
 static int
@@ -54,6 +62,8 @@ vfs_fsops(enum fs_type fstype)
   switch(fstype){
   case FS_XV6:
     return &xv6_fs_ops;
+  case FS_EXT2:
+    return ext2_get_fs_ops();
   default:
     return 0;
   }
@@ -84,7 +94,6 @@ vfs_init_inode(struct inode *ip)
   ip->fstype = FS_XV6;
   ip->mnt = &mtable.mount[0];
   ip->ops = &xv6_inode_ops;
-  ip->fs_private = 0;
 }
 
 int
@@ -93,7 +102,7 @@ vfs_mount(char *fstype, char *path, int dev)
   enum fs_type type;
   struct fs_ops *ops;
   struct inode *mp;
-  struct mount mnt;
+  struct mount *mnt;
   int free, i;
 
   if(fstype == 0 || path == 0 || dev <= 0)
@@ -122,20 +131,6 @@ vfs_mount(char *fstype, char *path, int dev)
   }
   iunlock(mp);
 
-  memset(&mnt, 0, sizeof(mnt));
-  mnt.fstype = type;
-  mnt.dev = dev;
-  mnt.mountpoint = mp;
-  mnt.root = 0;
-  mnt.fsops = ops;
-  mnt.fs_private = 0;
-
-  if(ops->mount(&mnt) < 0){
-    iput(mp);
-    end_op();
-    return -1;
-  }
-
   free = -1;
   acquire(&mtable.lock);
   for(i = 1; i < NMOUNT; i++){
@@ -159,9 +154,25 @@ vfs_mount(char *fstype, char *path, int dev)
     return -1;
   }
 
-  mnt.used = 1;
-  mtable.mount[free] = mnt;
+  mnt = &mtable.mount[free];
+  memset(mnt, 0, sizeof(*mnt));
+  mnt->used = 1;
+  mnt->fstype = type;
+  mnt->dev = dev;
+  mnt->mountpoint = mp;
+  mnt->root = 0;
+  mnt->fsops = ops;
+  mnt->fs_private = 0;
   release(&mtable.lock);
+
+  if(ops->mount(mnt) < 0){
+    acquire(&mtable.lock);
+    memset(mnt, 0, sizeof(*mnt));
+    release(&mtable.lock);
+    iput(mp);
+    end_op();
+    return -1;
+  }
 
   end_op();
   return 0;
@@ -190,6 +201,22 @@ vfs_mountpoint(struct inode *ip)
   release(&mtable.lock);
 
   return 0;
+}
+
+struct inode*
+vfs_lookup(struct inode *dp, char *name)
+{
+  if(dp == 0 || dp->ops == 0 || dp->ops->lookup == 0)
+    return 0;
+  return dp->ops->lookup(dp, name);
+}
+
+struct inode*
+vfs_create(struct inode *dp, char *name, short type, short major, short minor)
+{
+  if(dp == 0 || dp->ops == 0 || dp->ops->create == 0)
+    return 0;
+  return dp->ops->create(dp, name, type, major, minor);
 }
 
 int

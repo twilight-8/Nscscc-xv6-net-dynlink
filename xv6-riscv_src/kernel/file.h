@@ -26,7 +26,6 @@ struct inode {
   enum fs_type fstype;      // file system type
   struct mount *mnt;        // mount instance
   struct inode_ops *ops;    // inode operation table
-  void *fs_private;         // file-system specific data
 
   short type;         // copy of disk inode
   short major;

@@ -21,6 +21,7 @@ OBJS = \
   $K/bio.o \
   $K/block.o \
   $K/fs.o \
+  $K/ext2.o \
   $K/vfs.o \
   $K/log.o \
   $K/sleeplock.o \
@@ -138,6 +139,8 @@ UPROGS=\
 	$U/_rm\
 	$U/_sh\
 	$U/_stressfs\
+	$U/_test1\
+	$U/_test2\
 	$U/_usertests\
 	$U/_grind\
 	$U/_wc\
@@ -146,8 +149,16 @@ UPROGS=\
 	$U/_forphan\
 	$U/_dorphan\
 
-fs.img: mkfs/mkfs README $(UPROGS)
-	mkfs/mkfs fs.img README $(UPROGS)
+EXT2IMG = ext2.img
+
+$(EXT2IMG):
+	rm -f $(EXT2IMG)
+	dd if=/dev/zero of=$(EXT2IMG) bs=1024 count=4096
+	mkfs.ext2 -F -q -b 1024 -I 128 -m 0 $(EXT2IMG)
+
+fs.img: mkfs/mkfs README hello.c tests/hello.c $(UPROGS) $(EXT2IMG)
+	mkfs/mkfs fs.img README hello.c tests/hello.c $(UPROGS)
+	cat $(EXT2IMG) >> fs.img
 
 -include kernel/*.d user/*.d
 
@@ -155,6 +166,7 @@ clean:
 	rm -f *.tex *.dvi *.idx *.aux *.log *.ind *.ilg \
 	*/*.o */*.d */*.asm */*.sym \
 	$K/kernel fs.img \
+	$(EXT2IMG) \
 	mkfs/mkfs .gdbinit \
         $U/usys.S \
 	$(UPROGS)
