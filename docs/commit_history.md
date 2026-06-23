@@ -4,12 +4,6 @@
 
 ## 阶段 0：项目基线与测试环境
 
-建议提交信息：
-
-```text
-docs: initialize project baseline and test layout
-```
-
 主要工作：
 
 - 整理原始 xv6-riscv rev5 源码目录。
@@ -22,12 +16,6 @@ docs: initialize project baseline and test layout
 这是项目的地基。之后每次改动都需要回到这个基线，确认没有破坏 xv6 原有行为。
 
 ## 阶段 A：薄 VFS 虚拟文件系统分发层
-
-建议提交信息：
-
-```text
-vfs: introduce thin inode operation wrappers
-```
 
 主要目标：
 
@@ -58,12 +46,6 @@ vfs: introduce thin inode operation wrappers
 - `python3 test-xv6.py usertests -q`：通过。
 
 ## 阶段 B：挂载表与块设备访问接口
-
-建议提交信息：
-
-```text
-vfs: add mount table and ext2 device mapping
-```
 
 主要目标：
 
@@ -96,12 +78,6 @@ vfs: add mount table and ext2 device mapping
 - 原 xv6 回归测试继续通过。
 
 ## 阶段 C：ext2 最小文件系统支持
-
-建议提交信息：
-
-```text
-ext2: support minimal read-write backend for vfs tests
-```
 
 主要目标：
 
@@ -141,17 +117,19 @@ cat hello.c > /mnt/hello.c
 ## 当前阶段总览
 
 ```mermaid
-timeline
-    title VFS/ext2 阶段演进
-    阶段 0 : 建立基线
-           : 保留原 xv6 测试能力
-    阶段 A : 接入薄 VFS 虚拟文件系统分发层
-           : 行为仍回到 xv6 后端
-    阶段 B : 引入挂载表和块设备接口
-           : /mnt 可切换到 ext2
-    阶段 C : 实现 ext2 最小文件系统支持
-           : test1/test2 通过
+flowchart LR
+    S0["阶段 0：建立基线"]
+    SA["阶段 A：薄 VFS 骨架"]
+    SB["阶段 B：挂载表与块设备接口"]
+    SC["阶段 C：ext2 最小文件系统支持"]
+
+    S0 --> SA --> SB --> SC
 ```
+
+- 阶段 0：建立项目基线，保留原 xv6 测试能力。
+- 阶段 A：接入薄 VFS 虚拟文件系统分发层，行为仍转发回 xv6 后端。
+- 阶段 B：引入挂载表和块设备接口，使 `/mnt` 可切换到 ext2。
+- 阶段 C：实现 ext2 最小文件系统支持，`test1/test2` 通过。
 
 ## 后续提交方向
 
