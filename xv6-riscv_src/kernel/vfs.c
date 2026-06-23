@@ -22,16 +22,18 @@ static struct inode_ops xv6_inode_ops = {
   .trunc = itrunc,
 };
 
-static struct inode*
-xv6_root(struct mount *mnt)
+static int
+xv6_mount(struct mount *mnt)
 {
   if(mnt == 0)
-    return 0;
-  return mnt->root;
+    return -1;
+  mnt->root = 0;
+  mnt->fs_private = 0;
+  return 0;
 }
 
 static struct fs_ops xv6_fs_ops = {
-  .root = xv6_root,
+  .mount = xv6_mount,
 };
 
 static enum fs_type
@@ -71,6 +73,9 @@ vfsinit(void)
   root->mountpoint = 0;
   root->root = 0;
   root->fsops = &xv6_fs_ops;
+  root->fs_private = 0;
+  if(root->fsops->mount(root) < 0)
+    panic("vfsinit: xv6 mount");
 }
 
 void
@@ -88,6 +93,7 @@ vfs_mount(char *fstype, char *path, int dev)
   enum fs_type type;
   struct fs_ops *ops;
   struct inode *mp;
+  struct mount mnt;
   int free, i;
 
   if(fstype == 0 || path == 0 || dev <= 0)
@@ -116,6 +122,20 @@ vfs_mount(char *fstype, char *path, int dev)
   }
   iunlock(mp);
 
+  memset(&mnt, 0, sizeof(mnt));
+  mnt.fstype = type;
+  mnt.dev = dev;
+  mnt.mountpoint = mp;
+  mnt.root = 0;
+  mnt.fsops = ops;
+  mnt.fs_private = 0;
+
+  if(ops->mount(&mnt) < 0){
+    iput(mp);
+    end_op();
+    return -1;
+  }
+
   free = -1;
   acquire(&mtable.lock);
   for(i = 1; i < NMOUNT; i++){
@@ -139,12 +159,8 @@ vfs_mount(char *fstype, char *path, int dev)
     return -1;
   }
 
-  mtable.mount[free].fstype = type;
-  mtable.mount[free].dev = dev;
-  mtable.mount[free].mountpoint = mp;
-  mtable.mount[free].root = 0;
-  mtable.mount[free].fsops = ops;
-  mtable.mount[free].used = 1;
+  mnt.used = 1;
+  mtable.mount[free] = mnt;
   release(&mtable.lock);
 
   end_op();

@@ -24,9 +24,9 @@ struct inode_ops {
   void (*trunc)(struct inode *ip);
 };
 
-// Per-filesystem operations. Mount code uses this to find the root inode.
+// Per-filesystem operations. Each backend validates and initializes a mount.
 struct fs_ops {
-  struct inode *(*root)(struct mount *mnt);
+  int (*mount)(struct mount *mnt);
 };
 
 struct mount {
@@ -36,6 +36,7 @@ struct mount {
   struct inode *mountpoint;
   struct inode *root;
   struct fs_ops *fsops;
+  void *fs_private;
 };
 
 #endif
