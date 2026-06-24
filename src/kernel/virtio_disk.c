@@ -219,6 +219,8 @@ virtio_disk_rw(struct buf *b, int write)
 
   if(b->dev == EXT2DEV)
     blockno += FSSIZE;
+  else if(b->dev == FAT32DEV)
+    blockno += FAT32START;
 
   uint64 sector = blockno * (BSIZE / 512);
 

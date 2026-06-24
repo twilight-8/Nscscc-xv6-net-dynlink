@@ -22,6 +22,7 @@ OBJS = \
   $K/block.o \
   $K/fs.o \
   $K/ext2.o \
+  $K/fat32.o \
   $K/vfs.o \
   $K/log.o \
   $K/sleeplock.o \
@@ -119,6 +120,9 @@ $U/_forktest: $U/forktest.o $(ULIB)
 mkfs/mkfs: mkfs/mkfs.c $K/fs.h $K/param.h
 	gcc -I. -o mkfs/mkfs mkfs/mkfs.c
 
+mkfs/mkfat32: mkfs/mkfat32.c
+	gcc -Wall -Werror -O -o mkfs/mkfat32 mkfs/mkfat32.c
+
 # Prevent deletion of intermediate files, e.g. cat.o, after first build, so
 # that disk image changes after first build are persistent until clean.  More
 # details:
@@ -150,15 +154,23 @@ UPROGS=\
 	$U/_dorphan\
 
 EXT2IMG = ext2.img
+EXT2_BLOCKS = 4096
+FAT32IMG = fat32.img
 
-$(EXT2IMG):
+$(EXT2IMG): hello.c
 	rm -f $(EXT2IMG)
-	dd if=/dev/zero of=$(EXT2IMG) bs=1024 count=4096
+	dd if=/dev/zero of=$(EXT2IMG) bs=1024 count=$(EXT2_BLOCKS)
 	mkfs.ext2 -F -q -b 1024 -I 128 -m 0 $(EXT2IMG)
+	debugfs -w -R "write hello.c hello.c" $(EXT2IMG)
 
-fs.img: mkfs/mkfs README hello.c tests/hello.c $(UPROGS) $(EXT2IMG)
+$(FAT32IMG): mkfs/mkfat32
+	rm -f $(FAT32IMG)
+	mkfs/mkfat32 $(FAT32IMG)
+
+fs.img: mkfs/mkfs README hello.c tests/hello.c $(UPROGS) $(EXT2IMG) $(FAT32IMG)
 	mkfs/mkfs fs.img README hello.c tests/hello.c $(UPROGS)
 	cat $(EXT2IMG) >> fs.img
+	cat $(FAT32IMG) >> fs.img
 
 -include kernel/*.d user/*.d
 
@@ -167,7 +179,8 @@ clean:
 	*/*.o */*.d */*.asm */*.sym \
 	$K/kernel fs.img \
 	$(EXT2IMG) \
-	mkfs/mkfs .gdbinit \
+	$(FAT32IMG) \
+	mkfs/mkfs mkfs/mkfat32 .gdbinit \
         $U/usys.S \
 	$(UPROGS)
 

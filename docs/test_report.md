@@ -1,9 +1,10 @@
 # 测试报告
 
-本文档记录当前阶段的测试内容、测试命令和测试结果。当前已经完成阶段 A/B/C/C4，并重点验证了两件事：
+本文档记录当前阶段的测试内容、测试命令和测试结果。当前已经完成阶段 A/B/C/C4/D0-D4，并重点验证了三件事：
 
 - 加入 VFS 和 ext2 后，原 xv6 行为不能退化。
 - 显式挂载 ext2 到 `/mnt` 后，ext2 最小读写路径必须能通过公开测试风格的跨文件系统复制。
+- 显式挂载 fat32 到 `/fat` 后，fat32 的目录遍历、普通文件创建、读取、覆盖写入和子目录访问可用。
 
 ## 1. 测试环境
 
@@ -14,17 +15,22 @@
 | 源码目录 | `src` |
 | 主要镜像 | `fs.img` |
 | ext2 镜像 | `ext2.img`，追加到 `fs.img` 后半部分 |
-| 当前阶段 | A/B/C 已完成，C4 已修正显式挂载语义 |
+| fat32 镜像 | `fat32.img`，追加到 ext2 区域之后 |
+| 当前阶段 | A/B/C/C4/D0-D4 已完成 |
 
 ## 2. 测试总览
 
 | 测试项 | 测试目的 | 命令/方式 | 结果 |
 |---|---|---|---|
 | 内核构建 | 确认源码可编译 | `make kernel/kernel` | PASS |
-| 镜像生成 | 确认 xv6 镜像和 ext2 镜像可生成 | `rm -f fs.img ext2.img && make fs.img` | PASS |
+| 镜像生成 | 确认 xv6、ext2、fat32 镜像可生成 | `rm -f fs.img ext2.img fat32.img && make fs.img` | PASS |
 | xv6 原始测试 | 确认未破坏原 xv6 行为 | `python3 test-xv6.py usertests -q` | PASS |
 | 显式挂载 VFS 路径模拟 | 确认 `mount ext2 /mnt` 后 ext2 读写可用 | 执行 `test1`、`test2` | PASS |
 | ext2 一致性检查 | 确认写入后的 ext2 镜像结构正常 | `e2fsck -fn` | PASS |
+| fat32 镜像接入 | 确认 fat32 镜像已追加且 BPB 可识别 | `mount fat32 /fat` | PASS |
+| fat32 最小读写闭环 | 确认 fat32 目录和普通文件读写可用 | `cat/ls/echo/mkdir` 组合测试 | PASS |
+| fat32 边界测试 | 确认空文件、覆盖写、跨 cluster、小目录和长文件名拒绝 | D4 命令组 | PASS |
+| 项目 baseline 入口 | 确认根目录脚本仍可工作 | `make test_baseline && make run` | PASS |
 
 ## 3. 原始 xv6 回归测试
 
@@ -51,13 +57,11 @@ ALL TESTS PASSED
 
 ## 4. 公开 VFS 测试路径模拟
 
-公开测试的核心行为是围绕 `/mnt/hello.c` 进行跨文件系统复制。根据题目说明，测试前需要手动挂载 ext2 到 `/mnt`。我们本地使用显式挂载流程：
+公开测试的核心行为是围绕 `/mnt/hello.c` 进行跨文件系统复制。根据题目说明，测试前需要手动挂载 ext2 到 `/mnt`。为匹配 `test1` 一开始从 `/mnt/hello.c` 读取的行为，构建 `ext2.img` 时会预置一份 `hello.c`。
 
 ```sh
-cat hello.c > /hello.c
 mkdir /mnt
 mount ext2 /mnt
-cat hello.c > /mnt/hello.c
 test1
 test2
 ```
@@ -66,8 +70,8 @@ test2
 
 ```mermaid
 flowchart LR
-    A[hello.c in xv6 root] -->|cat > /hello.c| B[/hello.c<br/>xv6]
-    A -->|cat > /mnt/hello.c| C[/mnt/hello.c<br/>ext2]
+    A[hello.c in xv6 root] --> B[/hello.c<br/>xv6]
+    P[ext2.img 预置 hello.c] --> C[/mnt/hello.c<br/>ext2]
     C -->|test1 copy| B
     C -->|test1 copy| D[/tests/hello.c<br/>xv6]
     B -->|test1 copy| C
@@ -118,21 +122,117 @@ Pass 5: Checking group summary information
 
 ext2 镜像结构检查通过，`e2fsck -fn` 未报告错误，说明当前 ext2 写入逻辑没有破坏基本文件系统一致性。
 
-## 6. 当前测试结论
+## 6. fat32 D0-D3 最小读写测试
+
+测试目的：
+
+确认 fat32 镜像已经接入统一磁盘布局，`FAT32DEV` 能正确映射到 `fs.img` 后续区域；同时验证 fat32 后端能完成 8.3 短文件名目录遍历和普通文件读写。
+
+执行命令：
+
+```sh
+mkdir /fat
+mount fat32 /fat
+cat /tests/hello.c > /fat/hello.c
+ls /fat
+cat /fat/hello.c
+echo tiny > /fat/hello.c
+cat /fat/hello.c
+mkdir /fat/dir
+cat /tests/hello.c > /fat/dir/a.c
+ls /fat/dir
+cat /fat/dir/../dir/a.c
+```
+
+关键结果：
+
+```text
+mount: fat32 on /fat dev 3
+hello.c        2 3 101
+Hello, world!
+tiny
+a.c            2 5 101
+```
+
+同时在宿主机检查 `fs.img` 中 fat32 起始偏移处的 BPB：
+
+```text
+sig=55aa
+type=b'FAT32   '
+bps=512 spc=1 fats=2 total=131072 fatsz=1024 root=2
+```
+
+结论：
+
+D0-D3 已经完成 fat32 镜像生成、追加、设备映射、BPB 识别、目录遍历、普通文件创建、读取、覆盖写入和子目录访问。当前 fat32 仍刻意限制在短文件名和普通文件路径，不支持长文件名、`unlink/link/rename` 和完整时间戳维护。
+
+## 7. fat32 D4 边界测试
+
+测试目的：
+
+在不扩大功能范围的前提下，确认 fat32 最小实现对常见边界情况是稳定的。
+
+执行命令：
+
+```sh
+mkdir /fat
+mount fat32 /fat
+cat /missing > /fat/empty
+ls /fat
+echo old > /fat/s.c
+echo new > /fat/s.c
+cat /fat/s.c
+cat /README > /fat/big
+wc /fat/big
+mkdir /fat/d
+echo one > /fat/d/a.c
+echo two > /fat/d/b.c
+echo tre > /fat/d/c.c
+ls /fat/d
+echo bad > /fat/toolongname.c
+ls /fat
+cat /fat/d/../big
+```
+
+关键结果：
+
+```text
+empty          2 3 0
+new
+48 334 2473 /fat/big
+a.c            2 11 4
+b.c            2 12 4
+c.c            2 13 4
+open /fat/toolongname.c failed
+xv6 is a re-implementation
+```
+
+结论：
+
+- 空文件可以创建并显示为 0 字节。
+- 覆盖写触发 `O_TRUNC` 后内容正确更新。
+- 大于单 cluster 的文件可以跨 cluster 读写。
+- 小目录中多个短文件名文件可以正常创建和列出。
+- 超出 8.3 规则的长文件名会被拒绝，符合当前设计边界。
+
+## 8. 当前测试结论
 
 当前阶段可以确认：
 
 - VFS wrapper 不影响原 xv6 文件系统行为。
 - `mkdir` 和 `mount` 职责分离，mount table 能在显式 `mount ext2 /mnt` 后把 `/mnt` 切换到 ext2 根目录。
 - ext2 后端能完成公开测试需要的普通文件创建、读取、写入和截断。
+- fat32 可以通过显式 `mount fat32 /fat` 接入 VFS，并完成短文件名目录遍历与普通文件读写。
+- fat32 边界测试覆盖了空文件、覆盖写、跨 cluster、小目录和长文件名拒绝。
 - 原始 xv6 测试与 VFS 公开路径测试可以同时通过。
 - ext2 镜像经过写入后仍能通过 `e2fsck -fn` 检查。
+- 根目录 baseline 脚本 `make test_baseline && make run` 可以通过。
 
-## 7. 当前未覆盖内容
+## 9. 当前未覆盖内容
 
 这些内容尚未作为当前阶段完成目标：
 
-- fat32 文件系统测试。
+- fat32 长文件名、`unlink/link/rename` 和完整时间戳语义。
 - LoongArch 平台测试。
 - ext2 完整语义测试，例如复杂目录、link/unlink、权限、时间戳、多块组。
 - 长时间压力测试和异常断电恢复测试。

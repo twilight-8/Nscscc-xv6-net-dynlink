@@ -113,6 +113,63 @@ cat hello.c > /mnt/hello.c
 - `python3 test-xv6.py usertests -q`：`ALL TESTS PASSED`
 - `e2fsck -fn` 检查 ext2 镜像：无错误。
 
+## 阶段 D：fat32 最小文件系统支持
+
+主要目标：
+
+在不扩大 VFS 接口的前提下，完成 fat32 的最小闭环，使系统能够同时挂载 xv6、ext2 和 fat32，并支持 fat32 普通文件演示。
+
+主要改动：
+
+- 新增 `kernel/fat32.c`，实现 fat32 BPB 识别、FAT 表读写、cluster 分配和目录项解析。
+- 新增 `mkfs/mkfat32.c`，生成最小 fat32 镜像，减少对宿主机 `mkfs.fat` 的依赖。
+- 新增 `FAT32DEV` 和 `FAT32START`，把 fat32 镜像追加到 xv6、ext2 区域之后。
+- 修改 `virtio_disk.c`，按逻辑设备号把 fat32 访问映射到 `fs.img` 的 fat32 区域。
+- 修改 `Makefile`，编译 `fat32.o`，生成 `fat32.img`，并在 `fs.img` 后追加 fat32 镜像。
+- 支持 `mount fat32 /fat`、`ls /fat`、`cat /tests/hello.c > /fat/hello.c`、覆盖写入、子目录创建和 `..` 路径访问。
+- 修复 ext2 测试镜像构建流程，在 `ext2.img` 中预置 `hello.c`，使 `test1` 的初始读取路径更贴近公开样例。
+
+阶段边界：
+
+- fat32 当前只支持 8.3 短文件名。
+- 暂不支持 fat32 下的 `unlink/link/rename`。
+- 暂不维护完整时间戳、权限和 FSInfo 空闲计数。
+
+验证结果：
+
+- fat32 手动功能测试：通过。
+- ext2 `test1/test2` 回归：通过。
+- `python3 test-xv6.py -q usertests`：`ALL TESTS PASSED`。
+- `make test_baseline && make run`：PASS。
+- `e2fsck -fn` 检查 ext2 镜像：无错误。
+
+## 阶段 D4：fat32 精巧性与稳定性审查
+
+主要目标：
+
+在进入 HAL/LoongArch 之前，对 fat32 当前实现做一次收口，确认代码没有明显冗余，测试覆盖了最容易出问题的边界。
+
+主要改动：
+
+- 移除 `fat32_writei()` 中不必要的预读逻辑。底层 `block_write_bytes()` 已经能处理局部写入，所以这里可以直接 `copyin` 后写入，代码更短，磁盘访问也更少。
+- 移除未使用的 FAT32 属性宏，保持 `fat32.c` 更干净。
+- 保持 VFS 接口不变，没有为 fat32 额外增加新抽象。
+- 明确 fat32 当前边界：只支持 8.3 短文件名，不支持长文件名、`unlink/link/rename` 和完整时间戳维护。
+
+补充测试：
+
+- 空文件创建：`cat /missing > /fat/empty` 后 `ls /fat` 显示 0 字节文件。
+- 覆盖写：`echo old > /fat/s.c` 后再 `echo new > /fat/s.c`，读取结果为 `new`。
+- 跨 cluster 文件：`cat /README > /fat/big` 后 `wc /fat/big` 显示 2473 字节。
+- 小目录多文件：`/fat/d/a.c`、`/fat/d/b.c`、`/fat/d/c.c` 均可创建和列出。
+- 长文件名拒绝：`echo bad > /fat/toolongname.c` 返回 open failed，符合当前短文件名设计边界。
+
+验证结果：
+
+- D4 fat32 边界测试：通过。
+- ext2 `test1/test2` 回归：通过。
+- `python3 test-xv6.py -q usertests`：`ALL TESTS PASSED`。
+
 ## 当前阶段总览
 
 ```mermaid
@@ -121,18 +178,19 @@ flowchart LR
     SA["阶段 A：薄 VFS 骨架"]
     SB["阶段 B：挂载表与块设备接口"]
     SC["阶段 C：ext2 最小文件系统支持"]
+    SD["阶段 D：fat32 文件系统支持"]
 
-    S0 --> SA --> SB --> SC
+    S0 --> SA --> SB --> SC --> SD
 ```
 
 - 阶段 0：建立项目基线，保留原 xv6 测试能力。
 - 阶段 A：接入薄 VFS 虚拟文件系统分发层，行为仍转发回 xv6 后端。
 - 阶段 B：引入挂载表和块设备接口，使 `/mnt` 可切换到 ext2。
 - 阶段 C：实现 ext2 最小文件系统支持，`test1/test2` 通过。
+- 阶段 D：接入 fat32 镜像、设备映射和 BPB 识别，完成短文件名目录遍历与普通文件读写，并通过边界测试收口。
 
 ## 后续提交方向
 
-- `fat32: add minimal backend for vfs tests`
 - `hal: introduce architecture abstraction layer`
 - `loongarch: bring up xv6 kernel on qemu-loongarch`
 - `docs: finalize design demo and test report`

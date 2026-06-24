@@ -21,6 +21,7 @@ __pycache__/
 # Generated xv6 binaries and build products
 src/kernel/kernel
 src/mkfs/mkfs
+src/mkfs/mkfat32
 src/user/_*
 src/user/usys.S
 

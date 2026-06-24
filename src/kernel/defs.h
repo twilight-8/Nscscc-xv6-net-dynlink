@@ -76,6 +76,9 @@ void            vfs_itrunc(struct inode*);
 // ext2.c
 struct fs_ops*  ext2_get_fs_ops(void);
 
+// fat32.c
+struct fs_ops*  fat32_get_fs_ops(void);
+
 // kalloc.c
 void*           kalloc(void);
 void            kfree(void *);

@@ -28,7 +28,7 @@ class QEMU(object):
                                       stderr=subprocess.STDOUT)
         self.output = ""
         self.outbytes = bytearray()       
-        time.sleep(1)
+        time.sleep(5)
 
     def reset_fs(self):
         try:

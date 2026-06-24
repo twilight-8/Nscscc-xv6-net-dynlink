@@ -4,13 +4,15 @@
 
 ## 1. 设计目标
 
-本项目围绕赛题“xv6 虚拟文件系统和硬件抽象层的设计与实现”展开。到阶段 C 为止，我们已经完成：
+本项目围绕赛题“xv6 虚拟文件系统和硬件抽象层的设计与实现”展开。到阶段 D4 为止，我们已经完成：
 
 - 在 xv6 原有文件系统路径上增加一层薄 VFS 分发接口。
 - 保持原 xv6 文件系统行为不变，并通过原始 `usertests -q`。
 - 引入挂载表，使 ext2 可以通过显式 `mount ext2 /mnt` 挂载到 `/mnt`。
 - 实现 ext2 的最小读写闭环，支持公开测试中使用的普通文件创建、读、写、截断和 stat。
 - 将 ext2 镜像追加在 `fs.img` 后半部分，通过逻辑设备号 `EXT2DEV` 访问，避免大规模改动 virtio 设备模型。
+- 接入 fat32 镜像和 `FAT32DEV`，并实现 fat32 短文件名目录遍历、普通文件读取、创建、写入和截断。
+- 对 fat32 做了一轮精巧性审查和边界测试，确认当前实现保持在教学型最小闭环内。
 
 设计原则：
 
@@ -25,7 +27,7 @@
 
 - 上层：系统调用和路径解析，例如 `open/read/write/stat/mkdir`。
 - 中层：VFS 分发层，根据 inode 所属文件系统选择不同操作表。
-- 下层：具体文件系统后端，包括原 xv6 文件系统和 ext2 文件系统。
+- 下层：具体文件系统后端，包括原 xv6 文件系统、ext2 文件系统和 fat32 文件系统。
 
 ```mermaid
 flowchart TD
@@ -43,14 +45,17 @@ flowchart TD
 
     OPS -->|FS_XV6| XV6[xv6 原生后端<br/>readi/writei/stati/itrunc/dirlookup]
     OPS -->|FS_EXT2| EXT2[ext2.c<br/>lookup/create/read/write/trunc/stat]
+    OPS -->|FS_FAT32| FAT32[fat32.c<br/>lookup/create/read/write/trunc/stat]
 
     XV6 --> BIO[bio / virtio_disk]
     EXT2 --> BLK[block_read_bytes<br/>block_write_bytes]
+    FAT32 --> BLK
     BLK --> BIO
 
     BIO --> IMG[fs.img]
     IMG --> XIMG[前 2000 blocks<br/>xv6 文件系统]
     IMG --> EIMG[后 4096 blocks<br/>ext2 镜像]
+    IMG --> FIMG[再后续区域<br/>fat32 镜像]
 ```
 
 ## 3. 核心数据结构
@@ -61,16 +66,16 @@ flowchart TD
 
 当前包含：
 
-| 操作 | 作用 | xv6 后端 | ext2 后端 |
-|---|---|---|---|
-| `read` | 读取文件内容 | `readi` | `ext2_readi` |
-| `write` | 写入文件内容 | `writei` | `ext2_writei` |
-| `stat` | 获取文件元信息 | `stati` | `ext2_stati` |
-| `trunc` | 截断文件 | `itrunc` | `ext2_itrunc` |
-| `lookup` | 目录项查找 | `dirlookup` 包装 | `ext2_lookup` |
-| `create` | 创建文件 | 原 xv6 逻辑保留在 `sysfile.c` | `ext2_create` |
+| 操作 | 作用 | xv6 后端 | ext2 后端 | fat32 后端 |
+|---|---|---|---|---|
+| `read` | 读取文件内容 | `readi` | `ext2_readi` | `fat32_readi` |
+| `write` | 写入文件内容 | `writei` | `ext2_writei` | `fat32_writei` |
+| `stat` | 获取文件元信息 | `stati` | `ext2_stati` | `fat32_stati` |
+| `trunc` | 截断文件 | `itrunc` | `ext2_itrunc` | `fat32_itrunc` |
+| `lookup` | 目录项查找 | `dirlookup` 包装 | `ext2_lookup` | `fat32_lookup` |
+| `create` | 创建文件 | 原 xv6 逻辑保留在 `sysfile.c` | `ext2_create` | `fat32_create` |
 
-这样做的好处是：上层系统调用不需要知道底层到底是 xv6 还是 ext2，只需要调用 VFS wrapper。
+这样做的好处是：上层系统调用不需要知道底层到底是 xv6、ext2 还是 fat32，只需要调用 VFS wrapper。
 
 ### 3.2 `struct mount`
 
@@ -81,7 +86,7 @@ flowchart TD
 | 字段 | 含义 |
 |---|---|
 | `used` | 当前挂载项是否有效 |
-| `fstype` | 文件系统类型，例如 `FS_XV6`、`FS_EXT2` |
+| `fstype` | 文件系统类型，例如 `FS_XV6`、`FS_EXT2`、`FS_FAT32` |
 | `dev` | 逻辑设备号 |
 | `mountpoint` | 被挂载覆盖的 xv6 目录 inode，例如 `/mnt` |
 | `root` | 被挂载文件系统的根 inode |
@@ -210,18 +215,43 @@ sequenceDiagram
 | `kernel/vfs.h` | 定义 VFS 类型、操作表和挂载结构 |
 | `kernel/vfs.c` | 实现 VFS 初始化、挂载表、wrapper 分发 |
 | `kernel/ext2.c` | 实现 ext2 最小文件系统后端 |
+| `kernel/fat32.c` | 实现 fat32 挂载识别、目录遍历和普通文件读写 |
 | `kernel/fs.c` | 保留 xv6 原文件系统逻辑，并在路径解析处接入 VFS |
 | `kernel/sysfile.c` | 在 open/create/mkdir 等路径中接入 VFS |
 | `kernel/file.h` | 扩展内存 inode 的 VFS 字段 |
-| `kernel/virtio_disk.c` | 将 `EXT2DEV` 映射到 `fs.img` 后半部分 |
-| `kernel/param.h` | 定义 `EXT2DEV` |
-| `Makefile` | 编译 VFS/ext2，并生成、追加 ext2 镜像 |
+| `kernel/virtio_disk.c` | 将 `EXT2DEV/FAT32DEV` 映射到 `fs.img` 后续镜像区域 |
+| `kernel/param.h` | 定义 `EXT2DEV/FAT32DEV` 和镜像偏移 |
+| `Makefile` | 编译 VFS/ext2/fat32，并生成、追加 ext2 和 fat32 镜像 |
+| `mkfs/mkfat32.c` | 生成最小空 fat32 镜像，避免依赖宿主机 `mkfs.fat` |
 
 ## 9. 当前状态与后续计划
 
-当前阶段 A/B/C/C4 已经完成并通过测试。后续建议：
+### 阶段 D：fat32 最小文件系统支持
 
-- 阶段 D：实现 fat32 的最小读写支持。
+D0 重新核对公开测试后确认：当前公开样例仍主要围绕 ext2 `/mnt` 跨文件系统复制，fat32 的挂载点、命令和操作集合尚未明确。因此 fat32 采用小步接入策略，不追求一次实现完整 FAT32，而是先完成教学型最小闭环。
+
+当前已完成：
+
+- 新增 `FAT32DEV`，将 fat32 镜像映射到 `fs.img` 中 xv6 和 ext2 区域之后。
+- 新增 `mkfs/mkfat32.c`，生成一个空 fat32 镜像。
+- `Makefile` 生成 `fat32.img` 并追加到 `fs.img`。
+- 新增 `kernel/fat32.c`，读取并校验 fat32 BPB，建立 fat32 根 inode。
+- 支持 `mount fat32 /fat` 显式挂载。
+- 支持 8.3 短文件名目录项查找和 `ls /fat`。
+- 支持普通文件 `read/write/stat/trunc`。
+- 支持普通文件和目录的最小创建流程，能完成 `cat /tests/hello.c > /fat/hello.c`、覆盖写入和子目录读写。
+- D4 删除 `fat32_writei()` 中不必要的预读，底层 `block_write_bytes()` 已能处理局部写入，因此代码更短、I/O 更少。
+- D4 补充空文件、覆盖写、跨 cluster 文件、小目录多文件和长文件名拒绝测试。
+
+刻意保留的边界：
+
+- 暂不支持长文件名。
+- 暂不支持 fat32 下的 `unlink/link/rename`。
+- 暂不维护完整时间戳、权限和 FSInfo 空闲计数。
+- 当前实现面向赛题演示和公开测试风格中的普通文件路径，保持代码集中和可讲清。
+
+当前阶段 A/B/C/C4/D0-D4 已经完成并通过测试。后续建议：
+
 - 阶段 E：整理 HAL 接口，为 LoongArch 移植做准备。
 - 阶段 F：在 RISC-V 和 LoongArch 上分别跑原始 xv6 测试与 VFS 测试。
 - 阶段 G：整理最终文档、Demo、diff 文件和答辩材料。

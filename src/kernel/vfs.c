@@ -64,6 +64,8 @@ vfs_fsops(enum fs_type fstype)
     return &xv6_fs_ops;
   case FS_EXT2:
     return ext2_get_fs_ops();
+  case FS_FAT32:
+    return fat32_get_fs_ops();
   default:
     return 0;
   }
