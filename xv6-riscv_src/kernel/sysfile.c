@@ -397,24 +397,18 @@ sys_mkdir(void)
 {
   char path[MAXPATH];
   struct inode *ip;
-  int automount;
 
   begin_op();
   if(argstr(0, path, MAXPATH) < 0){
     end_op();
     return -1;
   }
-  automount = strncmp(path, "/mnt", 5) == 0;
   if((ip = create(path, T_DIR, 0, 0)) == 0){
     end_op();
-    if(automount)
-      return vfs_mount("ext2", path, EXT2DEV);
     return -1;
   }
   iunlockput(ip);
   end_op();
-  if(automount)
-    return vfs_mount("ext2", path, EXT2DEV);
   return 0;
 }
 

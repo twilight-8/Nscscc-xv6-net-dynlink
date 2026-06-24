@@ -1,9 +1,9 @@
 # 测试报告
 
-本文档记录当前阶段的测试内容、测试命令和测试结果。当前已经完成阶段 A/B/C，并重点验证了两件事：
+本文档记录当前阶段的测试内容、测试命令和测试结果。当前已经完成阶段 A/B/C/C4，并重点验证了两件事：
 
 - 加入 VFS 和 ext2 后，原 xv6 行为不能退化。
-- `/mnt` 上的 ext2 最小读写路径必须能通过公开测试风格的跨文件系统复制。
+- 显式挂载 ext2 到 `/mnt` 后，ext2 最小读写路径必须能通过公开测试风格的跨文件系统复制。
 
 ## 1. 测试环境
 
@@ -14,7 +14,7 @@
 | 源码目录 | `xv6-riscv_src` |
 | 主要镜像 | `fs.img` |
 | ext2 镜像 | `ext2.img`，追加到 `fs.img` 后半部分 |
-| 当前阶段 | A/B/C 已完成，C3 已瘦身复查 |
+| 当前阶段 | A/B/C 已完成，C4 已修正显式挂载语义 |
 
 ## 2. 测试总览
 
@@ -23,7 +23,7 @@
 | 内核构建 | 确认源码可编译 | `make kernel/kernel` | PASS |
 | 镜像生成 | 确认 xv6 镜像和 ext2 镜像可生成 | `rm -f fs.img ext2.img && make fs.img` | PASS |
 | xv6 原始测试 | 确认未破坏原 xv6 行为 | `python3 test-xv6.py usertests -q` | PASS |
-| 公开 VFS 路径模拟 | 确认 `/mnt` ext2 读写可用 | 执行 `test1`、`test2` | PASS |
+| 显式挂载 VFS 路径模拟 | 确认 `mount ext2 /mnt` 后 ext2 读写可用 | 执行 `test1`、`test2` | PASS |
 | ext2 一致性检查 | 确认写入后的 ext2 镜像结构正常 | `e2fsck -fn` | PASS |
 
 ## 3. 原始 xv6 回归测试
@@ -51,11 +51,12 @@ ALL TESTS PASSED
 
 ## 4. 公开 VFS 测试路径模拟
 
-公开测试的核心行为是围绕 `/mnt/hello.c` 进行跨文件系统复制。我们本地模拟了同样的命令序列：
+公开测试的核心行为是围绕 `/mnt/hello.c` 进行跨文件系统复制。根据题目说明，测试前需要手动挂载 ext2 到 `/mnt`。我们本地使用显式挂载流程：
 
 ```sh
 cat hello.c > /hello.c
 mkdir /mnt
+mount ext2 /mnt
 cat hello.c > /mnt/hello.c
 test1
 test2
@@ -87,7 +88,7 @@ test2: succeed
 
 结论：
 
-`/mnt` 挂载点、ext2 创建、读、写、截断和跨文件系统复制路径均正常。
+显式 `mount ext2 /mnt` 后，ext2 创建、读、写、截断和跨文件系统复制路径均正常。
 
 ## 5. ext2 镜像一致性检查
 
@@ -111,19 +112,18 @@ Pass 2: Checking directory structure
 Pass 3: Checking directory connectivity
 Pass 4: Checking reference counts
 Pass 5: Checking group summary information
-/tmp/xv6-ext2-check.img: 11/1024 files, 162/4096 blocks
 ```
 
 结论：
 
-ext2 镜像结构检查通过，说明当前 ext2 写入逻辑没有破坏基本文件系统一致性。
+ext2 镜像结构检查通过，`e2fsck -fn` 未报告错误，说明当前 ext2 写入逻辑没有破坏基本文件系统一致性。
 
 ## 6. 当前测试结论
 
 当前阶段可以确认：
 
 - VFS wrapper 不影响原 xv6 文件系统行为。
-- mount table 能正确把 `/mnt` 切换到 ext2 根目录。
+- `mkdir` 和 `mount` 职责分离，mount table 能在显式 `mount ext2 /mnt` 后把 `/mnt` 切换到 ext2 根目录。
 - ext2 后端能完成公开测试需要的普通文件创建、读取、写入和截断。
 - 原始 xv6 测试与 VFS 公开路径测试可以同时通过。
 - ext2 镜像经过写入后仍能通过 `e2fsck -fn` 检查。

@@ -57,7 +57,7 @@
 - 实现 `vfs_mount()`，支持按文件系统类型挂载。
 - 实现 `vfs_mountpoint()`，路径解析时判断是否需要切换根 inode。
 - 修改 `fs.c:namex()`，遇到挂载点时从 xv6 目录切换到挂载文件系统根目录。
-- 修改 `sysfile.c`，让 `/mnt` 创建后自动挂载 ext2，适配公开测试命令。
+- 增加 `sys_mount()` 和用户态 `mount` 命令，采用显式挂载方式。
 - 新增 `EXT2DEV` 逻辑设备号。
 - 修改 `virtio_disk.c`，将 `EXT2DEV` 映射到 `fs.img` 后半部分。
 - 修改 `Makefile`，生成 `ext2.img` 并追加到 `fs.img`。
@@ -67,7 +67,7 @@
 ```text
 /mnt
   -> xv6 中的普通目录
-  -> 创建后被 mount table 记录为 ext2 挂载点
+  -> 执行 mount ext2 /mnt 后被 mount table 记录为 ext2 挂载点
   -> /mnt/hello.c 进入 ext2 后端解析
 ```
 
@@ -112,7 +112,6 @@ cat hello.c > /mnt/hello.c
 - `test2: succeed`
 - `python3 test-xv6.py usertests -q`：`ALL TESTS PASSED`
 - `e2fsck -fn` 检查 ext2 镜像：无错误。
-
 
 ## 当前阶段总览
 

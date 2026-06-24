@@ -8,7 +8,7 @@
 
 - 在 xv6 原有文件系统路径上增加一层薄 VFS 分发接口。
 - 保持原 xv6 文件系统行为不变，并通过原始 `usertests -q`。
-- 引入挂载表，使 `/mnt` 可以切换到 ext2 文件系统。
+- 引入挂载表，使 ext2 可以通过显式 `mount ext2 /mnt` 挂载到 `/mnt`。
 - 实现 ext2 的最小读写闭环，支持公开测试中使用的普通文件创建、读、写、截断和 stat。
 - 将 ext2 镜像追加在 `fs.img` 后半部分，通过逻辑设备号 `EXT2DEV` 访问，避免大规模改动 virtio 设备模型。
 
@@ -17,7 +17,7 @@
 - 小步接入：先保证 xv6 原行为稳定，再逐步接入 ext2。
 - 接口薄：VFS 只提供当前测试和后续扩展真正需要的入口。
 - 后端集中：ext2 逻辑集中放在 `kernel/ext2.c`，减少对原 xv6 文件系统的污染。
-- 可展示：保留清晰的 `/mnt` 挂载点和跨文件系统复制路径，方便 demo 展示。
+- 可展示：保留清晰的 `mkdir /mnt`、`mount ext2 /mnt`、跨文件系统复制路径，方便 demo 展示。
 
 ## 2. 总体结构
 
@@ -123,6 +123,7 @@ sys_read/sys_write/sys_fstat/sys_open
 - 实现 `vfs_mount()`，用于把文件系统挂到某个目录上。
 - 实现 `vfs_mountpoint()`，用于判断一个 inode 是否为挂载点。
 - 修改 `namex()`：路径解析遇到挂载点时，切换到被挂载文件系统的根 inode。
+- 保持 `mkdir` 和 `mount` 的职责分离：`mkdir /mnt` 只创建目录，`mount ext2 /mnt` 才执行挂载。
 - 通过 `EXT2DEV` 表示 ext2 逻辑设备。
 - 在 `virtio_disk.c` 中对 `EXT2DEV` 做偏移映射，使 ext2 访问落到 `fs.img` 后半部分。
 - 在 `Makefile` 中生成 `ext2.img` 并追加到 `fs.img`。
@@ -130,6 +131,10 @@ sys_read/sys_write/sys_fstat/sys_open
 阶段 B 后的路径切换：
 
 ```text
+/mnt
+  -> 先由 mkdir 在 xv6 中创建普通目录
+  -> 再由 mount ext2 /mnt 写入 mount table
+
 /mnt/hello.c
   -> namex 先找到 xv6 中的 /mnt
   -> vfs_mountpoint 判断 /mnt 已挂载 ext2
@@ -167,6 +172,8 @@ sys_read/sys_write/sys_fstat/sys_open
 以公开测试中的命令为例：
 
 ```sh
+mkdir /mnt
+mount ext2 /mnt
 cat hello.c > /mnt/hello.c
 ```
 
@@ -212,7 +219,7 @@ sequenceDiagram
 
 ## 9. 当前状态与后续计划
 
-当前阶段 A/B/C 已经完成并通过测试。后续建议：
+当前阶段 A/B/C/C4 已经完成并通过测试。后续建议：
 
 - 阶段 D：实现 fat32 的最小读写支持。
 - 阶段 E：整理 HAL 接口，为 LoongArch 移植做准备。
