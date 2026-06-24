@@ -3,7 +3,7 @@ SHELL := /bin/bash
 TEST_NAME := test_baseline
 TEST_DIR := tests/$(TEST_NAME)
 LOG_DIR := $(TEST_DIR)/logs
-XV6_DIR := xv6-riscv_src
+XV6_DIR := src
 STATE_FILE := .last-test
 
 .PHONY: test_baseline run

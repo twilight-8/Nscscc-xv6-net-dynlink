@@ -24,7 +24,7 @@
 - Base version: xv6-riscv rev5
 - Source: https://github.com/mit-pdos/xv6-riscv/releases/tag/xv6-riscv-rev5
 - Original license: MIT License
-- Local source: `xv6-riscv_src/`
+- Local source: `src/`
 
 ## 仓库结构
 
@@ -35,7 +35,7 @@
 ├── docs/                     # 仓库的文档说明，对整体设计、测试结果、迭代记录等进行了简要说明
 ├── tests/                    # 源码详细测试记录(测试样例、脚本等)
 ├── submit/                   # 竞赛提交辅助材料
-└── xv6-riscv_src/            # 源码
+└── src/            # 源码
 ```
 
 ## 文档

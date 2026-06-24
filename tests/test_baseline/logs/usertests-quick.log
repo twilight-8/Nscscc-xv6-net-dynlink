@@ -1,12 +1,13 @@
-make[1]: Entering directory '/mnt/d/our_Os/project3136859-388873/xv6-riscv_src'
+make[1]: Entering directory '/mnt/d/our_Os/project3136859-388873/src'
 make[1]: 'kernel/kernel' is up to date.
-make[1]: Leaving directory '/mnt/d/our_Os/project3136859-388873/xv6-riscv_src'
-make[1]: Entering directory '/mnt/d/our_Os/project3136859-388873/xv6-riscv_src'
-mkfs/mkfs fs.img README user/_cat user/_echo user/_forktest user/_grep user/_init user/_kill user/_ln user/_ls user/_mkdir user/_rm user/_sh user/_stressfs user/_usertests user/_grind user/_wc user/_zombie user/_logstress user/_forphan user/_dorphan 
+make[1]: Leaving directory '/mnt/d/our_Os/project3136859-388873/src'
+make[1]: Entering directory '/mnt/d/our_Os/project3136859-388873/src'
+mkfs/mkfs fs.img README hello.c tests/hello.c user/_cat user/_echo user/_forktest user/_grep user/_init user/_kill user/_ln user/_ls user/_mkdir user/_mount user/_rm user/_sh user/_stressfs user/_test1 user/_test2 user/_usertests user/_grind user/_wc user/_zombie user/_logstress user/_forphan user/_dorphan 
 nmeta 47 (boot, super, log blocks 31, inode blocks 13, bitmap blocks 1) blocks 1953 total 2000
-balloc: first 917 blocks have been allocated
+balloc: first 1033 blocks have been allocated
 balloc: write bitmap block at sector 46
-make[1]: Leaving directory '/mnt/d/our_Os/project3136859-388873/xv6-riscv_src'
+cat ext2.img >> fs.img
+make[1]: Leaving directory '/mnt/d/our_Os/project3136859-388873/src'
 Namespace(testrex='usertests', q=True)
 test copyin: OK
 test copyout: OK
@@ -26,6 +27,16 @@ test copyinstr3: OK
 test rwsbrk: OK
 test truncate1: OK
 test truncate2: OK
+test truncate3: O
+test truncate3: O
+test copyin: OK
+test copyout: OK
+test copyinstr1: OK
+test copyinstr2: OK
+test copyinstr3: OK
+test rwsbrk: OK
+test truncate1: OK
+test truncate2: OK
 test truncate3: OK
 test openiput: OK
 test exitiput: OK
@@ -284,6 +295,35 @@ test forkfork: OK
 test forkforkfork: OK
 test reparent2: O
 test reparent2: O
+test copyin: OK
+test copyout: OK
+test copyinstr1: OK
+test copyinstr2: OK
+test copyinstr3: OK
+test rwsbrk: OK
+test truncate1: OK
+test truncate2: OK
+test truncate3: OK
+test openiput: OK
+test exitiput: OK
+test iput: OK
+test opentest: OK
+test writetest: OK
+test writebig: OK
+test createtest: OK
+test dirtest: OK
+test exectest: OK
+test pipe1: OK
+test killstatus: OK
+test preempt: kill... wait... OK
+test exitwait: OK
+test reparent: OK
+test twochildren: OK
+test forkfork: OK
+test forkforkfork: OK
+test reparent2: OK
+test mem: 
+test mem: 
 test copyin: OK
 test copyout: OK
 test copyinstr1: OK
@@ -719,10 +759,102 @@ test rmdot: OK
 test dirfile: OK
 test iref: OK
 test forktest: OK
+test sbrkbasic: 
+test sbrkbasic: 
+test copyin: OK
+test copyout: OK
+test copyinstr1: OK
+test copyinstr2: OK
+test copyinstr3: OK
+test rwsbrk: OK
+test truncate1: OK
+test truncate2: OK
+test truncate3: OK
+test openiput: OK
+test exitiput: OK
+test iput: OK
+test opentest: OK
+test writetest: OK
+test writebig: OK
+test createtest: OK
+test dirtest: OK
+test exectest: OK
+test pipe1: OK
+test killstatus: OK
+test preempt: kill... wait... OK
+test exitwait: OK
+test reparent: OK
+test twochildren: OK
+test forkfork: OK
+test forkforkfork: OK
+test reparent2: OK
+test mem: OK
+test sharedfd: OK
+test fourfiles: OK
+test createdelete: OK
+test unlinkread: OK
+test linktest: OK
+test concreate: OK
+test linkunlink: OK
+test subdir: OK
+test bigwrite: OK
+test bigfile: OK
+test fourteen: OK
+test rmdot: OK
+test dirfile: OK
+test iref: OK
+test forktest: OK
+test sbrkbasic: OK
+test sbrkmuch: 
+test sbrkmuch: 
+test copyin: OK
+test copyout: OK
+test copyinstr1: OK
+test copyinstr2: OK
+test copyinstr3: OK
+test rwsbrk: OK
+test truncate1: OK
+test truncate2: OK
+test truncate3: OK
+test openiput: OK
+test exitiput: OK
+test iput: OK
+test opentest: OK
+test writetest: OK
+test writebig: OK
+test createtest: OK
+test dirtest: OK
+test exectest: OK
+test pipe1: OK
+test killstatus: OK
+test preempt: kill... wait... OK
+test exitwait: OK
+test reparent: OK
+test twochildren: OK
+test forkfork: OK
+test forkforkfork: OK
+test reparent2: OK
+test mem: OK
+test sharedfd: OK
+test fourfiles: OK
+test createdelete: OK
+test unlinkread: OK
+test linktest: OK
+test concreate: OK
+test linkunlink: OK
+test subdir: OK
+test bigwrite: OK
+test bigfile: OK
+test fourteen: OK
+test rmdot: OK
+test dirfile: OK
+test iref: OK
+test forktest: OK
 test sbrkbasic: OK
 test sbrkmuch: OK
 test kernmem: usertrap(): unexpected scause 0xd pid=6474
-test kernmem: usertrap(): unexpected scause 0xd pid=6474
+test MAXVAplus: usertrap(): unexpected scause 0xf pid=6515
+test MAXVAplus: usertrap(): unexpected scause 0xf pid=6515
 test copyin: OK
 test copyout: OK
 test copyinstr1: OK
@@ -772,6 +904,55 @@ test kernmem: usertrap(): unexpected scause 0xd pid=6474
 test MAXVAplus: usertrap(): unexpected scause 0xf pid=6515
 test sbrkfail: 
 test sbrkfail: 
+test copyin: OK
+test copyout: OK
+test copyinstr1: OK
+test copyinstr2: OK
+test copyinstr3: OK
+test rwsbrk: OK
+test truncate1: OK
+test truncate2: OK
+test truncate3: OK
+test openiput: OK
+test exitiput: OK
+test iput: OK
+test opentest: OK
+test writetest: OK
+test writebig: OK
+test createtest: OK
+test dirtest: OK
+test exectest: OK
+test pipe1: OK
+test killstatus: OK
+test preempt: kill... wait... OK
+test exitwait: OK
+test reparent: OK
+test twochildren: OK
+test forkfork: OK
+test forkforkfork: OK
+test reparent2: OK
+test mem: OK
+test sharedfd: OK
+test fourfiles: OK
+test createdelete: OK
+test unlinkread: OK
+test linktest: OK
+test concreate: OK
+test linkunlink: OK
+test subdir: OK
+test bigwrite: OK
+test bigfile: OK
+test fourteen: OK
+test rmdot: OK
+test dirfile: OK
+test iref: OK
+test forktest: OK
+test sbrkbasic: OK
+test sbrkmuch: OK
+test kernmem: usertrap(): unexpected scause 0xd pid=6474
+test MAXVAplus: usertrap(): unexpected scause 0xf pid=6515
+test sbrkfail: O
+test sbrkfail: O
 test copyin: OK
 test copyout: OK
 test copyinstr1: OK
@@ -957,6 +1138,70 @@ test badarg: OK
 test lazy_alloc: OK
 test lazy_unmap: usertrap(): unexpected scause 0xf pid=6578
 test lazy_unmap: usertrap(): unexpected scause 0xf pid=6578
+test copyin: OK
+test copyout: OK
+test copyinstr1: OK
+test copyinstr2: OK
+test copyinstr3: OK
+test rwsbrk: OK
+test truncate1: OK
+test truncate2: OK
+test truncate3: OK
+test openiput: OK
+test exitiput: OK
+test iput: OK
+test opentest: OK
+test writetest: OK
+test writebig: OK
+test createtest: OK
+test dirtest: OK
+test exectest: OK
+test pipe1: OK
+test killstatus: OK
+test preempt: kill... wait... OK
+test exitwait: OK
+test reparent: OK
+test twochildren: OK
+test forkfork: OK
+test forkforkfork: OK
+test reparent2: OK
+test mem: OK
+test sharedfd: OK
+test fourfiles: OK
+test createdelete: OK
+test unlinkread: OK
+test linktest: OK
+test concreate: OK
+test linkunlink: OK
+test subdir: OK
+test bigwrite: OK
+test bigfile: OK
+test fourteen: OK
+test rmdot: OK
+test dirfile: OK
+test iref: OK
+test forktest: OK
+test sbrkbasic: OK
+test sbrkmuch: OK
+test kernmem: usertrap(): unexpected scause 0xd pid=6474
+test MAXVAplus: usertrap(): unexpected scause 0xf pid=6515
+test sbrkfail: OK
+test sbrkarg: OK
+test validatetest: OK
+test bsstest: OK
+test bigargtest: OK
+test argptest: OK
+test stacktest: usertrap(): unexpected scause 0xd pid=6560
+test nowrite: usertrap(): unexpected scause 0xf pid=6562
+test pgbug: OK
+test sbrkbugs: usertrap(): unexpected scause 0xc pid=6570
+test sbrklast: OK
+test sbrk8000: OK
+test badarg: OK
+test lazy_alloc: OK
+test lazy_unmap: usertrap(): unexpected scause 0xf pid=6578
+test lazy_copy: 
+test lazy_copy: 
 test copyin: OK
 test copyout: OK
 test copyinstr1: OK

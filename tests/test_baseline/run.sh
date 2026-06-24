@@ -3,7 +3,7 @@ set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
-XV6_DIR="$ROOT_DIR/xv6-riscv_src"
+XV6_DIR="$ROOT_DIR/src"
 LOG_DIR="$SCRIPT_DIR/logs"
 
 TEST_LOG="$LOG_DIR/usertests-quick.log"

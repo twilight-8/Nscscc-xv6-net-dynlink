@@ -19,10 +19,10 @@ __pycache__/
 .gdbinit
 
 # Generated xv6 binaries and build products
-xv6-riscv_src/kernel/kernel
-xv6-riscv_src/mkfs/mkfs
-xv6-riscv_src/user/_*
-xv6-riscv_src/user/usys.S
+src/kernel/kernel
+src/mkfs/mkfs
+src/user/_*
+src/user/usys.S
 
 # Temporary outputs
 *.tmp

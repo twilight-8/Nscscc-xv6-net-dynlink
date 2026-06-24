@@ -11,7 +11,7 @@
 |---|---|
 | 主机环境 | Windows + WSL Ubuntu-24.04 |
 | 目标平台 | qemu-riscv64 |
-| 源码目录 | `xv6-riscv_src` |
+| 源码目录 | `src` |
 | 主要镜像 | `fs.img` |
 | ext2 镜像 | `ext2.img`，追加到 `fs.img` 后半部分 |
 | 当前阶段 | A/B/C 已完成，C4 已修正显式挂载语义 |
@@ -35,7 +35,7 @@
 执行命令：
 
 ```sh
-cd xv6-riscv_src
+cd src
 python3 test-xv6.py usertests -q
 ```
 
@@ -99,7 +99,7 @@ test2: succeed
 执行命令：
 
 ```sh
-cd xv6-riscv_src
+cd src
 dd if=fs.img of=/tmp/xv6-ext2-check.img bs=1024 skip=2000 count=4096 status=none
 e2fsck -fn /tmp/xv6-ext2-check.img
 ```

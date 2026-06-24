@@ -8,7 +8,7 @@
 - Version: xv6-riscv rev5
 - Source: https://github.com/mit-pdos/xv6-riscv/releases/tag/xv6-riscv-rev5
 - License: MIT License
-- Local license: `xv6-riscv_src/LICENSE`
+- Local license: `src/LICENSE`
 
 我们保留原始 xv6 的 MIT License。
 
