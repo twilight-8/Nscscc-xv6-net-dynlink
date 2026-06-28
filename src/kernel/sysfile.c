@@ -222,6 +222,14 @@ sys_unlink(void)
   if(namecmp(name, ".") == 0 || namecmp(name, "..") == 0)
     goto bad;
 
+  if(dp->fstype != FS_XV6){
+    if(vfs_unlink(dp, name) < 0)
+      goto bad;
+    iunlockput(dp);
+    end_op();
+    return 0;
+  }
+
   if((ip = dirlookup(dp, name, &off)) == 0)
     goto bad;
   ilock(ip);

@@ -253,6 +253,14 @@ vfs_create(struct inode *dp, char *name, short type, short major, short minor)
 }
 
 int
+vfs_unlink(struct inode *dp, char *name)
+{
+  if(dp == 0 || dp->ops == 0 || dp->ops->unlink == 0)
+    return -1;
+  return dp->ops->unlink(dp, name);
+}
+
+int
 vfs_readi(struct inode *ip, int user_dst, uint64 dst, uint off, uint n)
 {
   if(ip == 0 || ip->ops == 0 || ip->ops->read == 0)

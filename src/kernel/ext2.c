@@ -102,6 +102,7 @@ static struct ext2_fs ext2fs;
 
 static struct inode_ops ext2_inode_ops;
 static struct fs_ops ext2_fs_ops;
+static void ext2_itrunc(struct inode *ip);
 
 static uint
 ext2_min(uint a, uint b)
@@ -482,6 +483,85 @@ ext2_lookup(struct inode *dp, char *name)
 }
 
 static int
+ext2_find_dirent(struct inode *dp, char *name, struct ext2_dirent *out,
+                 uint *entry_off)
+{
+  struct ext2_fs *fs = (struct ext2_fs*)dp->mnt->fs_private;
+  uchar buf[BSIZE];
+  struct ext2_dirent *de;
+  uint off, bno, pos;
+
+  if(dp->type != T_DIR)
+    return -1;
+
+  for(off = 0; off < dp->size; off += fs->block_size){
+    bno = ext2_bmap(dp, off / fs->block_size, 0);
+    if(bno == 0)
+      continue;
+    if(block_read_bytes(fs->dev, ext2_block_offset(fs, bno),
+                        buf, fs->block_size) < 0)
+      return -1;
+    for(pos = 0; pos < fs->block_size; ){
+      de = (struct ext2_dirent*)(buf + pos);
+      if(de->rec_len < 8 || pos + de->rec_len > fs->block_size)
+        break;
+      if(de->inode != 0 && de->name_len <= DIRSIZ &&
+         ext2_nameeq(name, de->name, de->name_len)){
+        if(out)
+          *out = *de;
+        if(entry_off)
+          *entry_off = ext2_block_offset(fs, bno) + pos;
+        return 0;
+      }
+      pos += de->rec_len;
+    }
+  }
+
+  return -1;
+}
+
+static int
+ext2_remove_dirent(struct ext2_fs *fs, uint entry_off)
+{
+  struct ext2_dirent de;
+
+  if(block_read_bytes(fs->dev, entry_off, (uchar*)&de, 8) < 0)
+    return -1;
+  de.inode = 0;
+  return block_write_bytes(fs->dev, entry_off, (uchar*)&de, 8) == 8 ? 0 : -1;
+}
+
+static int
+ext2_is_dir_empty(struct inode *ip)
+{
+  struct ext2_fs *fs = (struct ext2_fs*)ip->mnt->fs_private;
+  uchar buf[BSIZE];
+  struct ext2_dirent *de;
+  uint off, bno, pos;
+
+  for(off = 0; off < ip->size; off += fs->block_size){
+    bno = ext2_bmap(ip, off / fs->block_size, 0);
+    if(bno == 0)
+      continue;
+    if(block_read_bytes(fs->dev, ext2_block_offset(fs, bno),
+                        buf, fs->block_size) < 0)
+      return 0;
+    for(pos = 0; pos < fs->block_size; ){
+      de = (struct ext2_dirent*)(buf + pos);
+      if(de->rec_len < 8 || pos + de->rec_len > fs->block_size)
+        break;
+      if(de->inode != 0 &&
+         !ext2_nameeq(".", de->name, de->name_len) &&
+         !ext2_nameeq("..", de->name, de->name_len))
+        return 0;
+      pos += de->rec_len;
+    }
+  }
+
+  return 1;
+}
+
+static int
 ext2_dir_add(struct inode *dp, char *name, uint inum, uchar file_type)
 {
   struct ext2_fs *fs = (struct ext2_fs*)dp->mnt->fs_private;
@@ -625,6 +705,45 @@ ext2_create(struct inode *dp, char *name, short type, short major, short minor)
   }
 
   return ext2_iget(dp->mnt, inum);
+}
+
+static int
+ext2_unlink(struct inode *dp, char *name)
+{
+  struct ext2_fs *fs = (struct ext2_fs*)dp->mnt->fs_private;
+  struct ext2_dirent de;
+  struct inode *ip;
+  uint entry_off;
+
+  if(ext2_find_dirent(dp, name, &de, &entry_off) < 0)
+    return -1;
+
+  ip = ext2_iget(dp->mnt, de.inode);
+  if(ip == 0)
+    return -1;
+
+  ilock(ip);
+  if(ip->type == T_DIR && !ext2_is_dir_empty(ip)){
+    iunlockput(ip);
+    return -1;
+  }
+
+  if(ext2_remove_dirent(fs, entry_off) < 0){
+    iunlockput(ip);
+    return -1;
+  }
+
+  if(ip->type == T_DIR){
+    dp->nlink--;
+    ext2_sync_inode(dp);
+  }
+
+  ext2_itrunc(ip);
+  ip->nlink = 0;
+  ext2_sync_inode(ip);
+  ext2_free_inode(fs, ip->inum);
+  iunlockput(ip);
+  return 0;
 }
 
 static int
@@ -819,6 +938,7 @@ static struct inode_ops ext2_inode_ops = {
   .trunc = ext2_itrunc,
   .lookup = ext2_lookup,
   .create = ext2_create,
+  .unlink = ext2_unlink,
 };
 
 static struct fs_ops ext2_fs_ops = {

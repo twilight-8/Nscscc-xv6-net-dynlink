@@ -231,6 +231,14 @@ fat32_free_after(struct fat32_fs *fs, uint first)
   }
 }
 
+static void
+fat32_free_chain(struct fat32_fs *fs, uint first)
+{
+  fat32_free_after(fs, first);
+  if(first >= 2)
+    fat32_write_fat(fs, first, 0);
+}
+
 static uint
 fat32_cluster_at(struct inode *ip, uint index, int alloc)
 {
@@ -793,6 +801,69 @@ fat32_create(struct inode *dp, char *name, short type, short major, short minor)
   return fat32_iget(dp->mnt, &de, entry_off);
 }
 
+static int
+fat32_is_dir_empty(struct inode *ip)
+{
+  struct fat32_fs *fs = (struct fat32_fs*)ip->mnt->fs_private;
+  struct fat32_dirent de;
+  uint clus, next, pos, off;
+
+  clus = ip->addrs[0];
+  while(clus >= 2){
+    for(pos = 0; pos < fs->cluster_size; pos += sizeof(de)){
+      off = fat32_clus_offset(fs, clus) + pos;
+      if(fat32_read_entry(fs, off, &de) < 0)
+        return 0;
+      if(de.name[0] == 0x00)
+        return 1;
+      if(!fat32_is_valid_entry(&de))
+        continue;
+      if(!(de.name[0] == '.' && de.name[1] == ' ') &&
+         !(de.name[0] == '.' && de.name[1] == '.' && de.name[2] == ' '))
+        return 0;
+    }
+    if(fat32_read_fat(fs, clus, &next) < 0 || fat32_is_eoc(next))
+      break;
+    clus = next;
+  }
+
+  return 1;
+}
+
+static int
+fat32_unlink(struct inode *dp, char *name)
+{
+  struct fat32_fs *fs = (struct fat32_fs*)dp->mnt->fs_private;
+  struct fat32_dirent de;
+  struct inode *ip;
+  uchar name83[11];
+  uint entry_off, clus;
+
+  if(fat32_name83(name, name83) < 0)
+    return -1;
+  if(fat32_find_entry(dp, name83, &de, &entry_off) < 0)
+    return -1;
+
+  ip = fat32_iget(dp->mnt, &de, entry_off);
+  if(ip == 0)
+    return -1;
+
+  ilock(ip);
+  if(ip->type == T_DIR && !fat32_is_dir_empty(ip)){
+    iunlockput(ip);
+    return -1;
+  }
+
+  clus = ip->addrs[0];
+  fat32_remove_entry(fs, entry_off);
+  fat32_free_chain(fs, clus);
+  ip->nlink = 0;
+  ip->size = 0;
+  ip->addrs[0] = 0;
+  iunlockput(ip);
+  return 0;
+}
+
 static struct inode_ops fat32_inode_ops = {
   .read = fat32_readi,
   .write = fat32_writei,
@@ -800,6 +871,7 @@ static struct inode_ops fat32_inode_ops = {
   .trunc = fat32_itrunc,
   .lookup = fat32_lookup,
   .create = fat32_create,
+  .unlink = fat32_unlink,
 };
 
 static struct fs_ops fat32_fs_ops = {
