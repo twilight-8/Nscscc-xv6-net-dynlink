@@ -36,6 +36,7 @@ struct mount {
   enum fs_type fstype;
   uint dev;
   struct inode *mountpoint;
+  struct inode *parent;
   struct inode *root;
   struct fs_ops *fsops;
   void *fs_private;

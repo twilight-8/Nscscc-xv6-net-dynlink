@@ -103,8 +103,9 @@ vfs_mount(char *fstype, char *path, int dev)
 {
   enum fs_type type;
   struct fs_ops *ops;
-  struct inode *mp;
+  struct inode *mp, *parent;
   struct mount *mnt;
+  char name[DIRSIZ];
   int free, i;
 
   if(fstype == 0 || path == 0 || dev <= 0)
@@ -120,7 +121,13 @@ vfs_mount(char *fstype, char *path, int dev)
 
   begin_op();
 
+  if((parent = nameiparent(path, name)) == 0){
+    end_op();
+    return -1;
+  }
+
   if((mp = namei(path)) == 0){
+    iput(parent);
     end_op();
     return -1;
   }
@@ -128,6 +135,7 @@ vfs_mount(char *fstype, char *path, int dev)
   ilock(mp);
   if(mp->type != T_DIR){
     iunlockput(mp);
+    iput(parent);
     end_op();
     return -1;
   }
@@ -142,6 +150,7 @@ vfs_mount(char *fstype, char *path, int dev)
        mtable.mount[i].mountpoint->inum == mp->inum){
       release(&mtable.lock);
       iput(mp);
+      iput(parent);
       end_op();
       return -1;
     }
@@ -152,6 +161,7 @@ vfs_mount(char *fstype, char *path, int dev)
   if(free < 0){
     release(&mtable.lock);
     iput(mp);
+    iput(parent);
     end_op();
     return -1;
   }
@@ -162,6 +172,7 @@ vfs_mount(char *fstype, char *path, int dev)
   mnt->fstype = type;
   mnt->dev = dev;
   mnt->mountpoint = mp;
+  mnt->parent = parent;
   mnt->root = 0;
   mnt->fsops = ops;
   mnt->fs_private = 0;
@@ -172,6 +183,7 @@ vfs_mount(char *fstype, char *path, int dev)
     memset(mnt, 0, sizeof(*mnt));
     release(&mtable.lock);
     iput(mp);
+    iput(parent);
     end_op();
     return -1;
   }
@@ -208,8 +220,27 @@ vfs_mountpoint(struct inode *ip)
 struct inode*
 vfs_lookup(struct inode *dp, char *name)
 {
+  struct mount *mnt;
+  struct inode *parent;
+  int i;
+
   if(dp == 0 || dp->ops == 0 || dp->ops->lookup == 0)
     return 0;
+
+  if(namecmp(name, "..") == 0){
+    acquire(&mtable.lock);
+    for(i = 1; i < NMOUNT; i++){
+      mnt = &mtable.mount[i];
+      if(mnt->used && mnt->root != 0 && mnt->parent != 0 &&
+         mnt->root->dev == dp->dev && mnt->root->inum == dp->inum){
+        parent = mnt->parent;
+        release(&mtable.lock);
+        return idup(parent);
+      }
+    }
+    release(&mtable.lock);
+  }
+
   return dp->ops->lookup(dp, name);
 }
 
