@@ -1,9 +1,8 @@
 K=kernel
 U=user
+ARCH ?= riscv
 
-OBJS = \
-  $K/entry.o \
-  $K/start.o \
+COMMON_OBJS = \
   $K/console.o \
   $K/printf.o \
   $K/uart.o \
@@ -11,11 +10,6 @@ OBJS = \
   $K/spinlock.o \
   $K/string.o \
   $K/main.o \
-  $K/vm.o \
-  $K/proc.o \
-  $K/swtch.o \
-  $K/trampoline.o \
-  $K/trap.o \
   $K/syscall.o \
   $K/sysproc.o \
   $K/bio.o \
@@ -29,17 +23,69 @@ OBJS = \
   $K/file.o \
   $K/pipe.o \
   $K/exec.o \
-  $K/sysfile.o \
+  $K/sysfile.o
+
+ifeq ($(ARCH),riscv)
+ARCH_OBJS = \
+  $K/entry.o \
+  $K/start.o \
+  $K/vm.o \
+  $K/proc.o \
+  $K/swtch.o \
+  $K/trampoline.o \
+  $K/trap.o \
   $K/kernelvec.o \
+  $K/hal.o \
   $K/plic.o \
   $K/virtio_disk.o
+KERNEL_LD = $K/kernel.ld
+USER_LD = $U/user.ld
+ARCH_CFLAGS = -DARCH_RISCV -mcmodel=medany
+ARCH_ASFLAGS =
+QEMU = qemu-system-riscv64
+RAMDISK_HDR =
+else ifeq ($(ARCH),loongarch)
+ARCH_OBJS = \
+  $K/arch/loongarch/entry.o \
+  $K/arch/loongarch/start.o \
+  $K/arch/loongarch/vm.o \
+  $K/proc.o \
+  $K/arch/loongarch/swtch.o \
+  $K/arch/loongarch/uservec.o \
+  $K/arch/loongarch/kernelvec.o \
+  $K/arch/loongarch/tlbrefill.o \
+  $K/arch/loongarch/merror.o \
+  $K/arch/loongarch/trap.o \
+  $K/arch/loongarch/hal.o \
+  $K/arch/loongarch/apic.o \
+  $K/arch/loongarch/extioi.o \
+  $K/arch/loongarch/ramdisk.o \
+  $K/arch/loongarch/ramdisk_img.o
+KERNEL_LD = $K/arch/loongarch/kernel.ld
+USER_LD = $K/arch/loongarch/user.ld
+ARCH_CFLAGS = -DARCH_LOONGARCH -I$K -I$K/arch/loongarch -march=loongarch64 -mabi=lp64s
+ARCH_ASFLAGS = -DARCH_LOONGARCH -I$K -I$K/arch/loongarch -march=loongarch64 -mabi=lp64s
+QEMU = qemu-system-loongarch64
+RAMDISK_HDR =
+else
+$(error unsupported ARCH=$(ARCH))
+endif
 
-# riscv64-unknown-elf- or riscv64-linux-gnu-
-# perhaps in /opt/riscv/bin
-#TOOLPREFIX = 
+OBJS = $(ARCH_OBJS) $(COMMON_OBJS)
+ARCH_STAMP = .arch-$(ARCH)
+
+$(ARCH_STAMP):
+	rm -f */*.o */*/*.o */*.d */*/*.d
+	rm -f .arch-*
+	touch $@
+
+$(OBJS): $(ARCH_STAMP)
+
+%.o: $(ARCH_STAMP)
 
 # Try to infer the correct TOOLPREFIX if not set
 ifndef TOOLPREFIX
+ifeq ($(ARCH),riscv)
 TOOLPREFIX := $(shell if riscv64-unknown-elf-objdump -i 2>&1 | grep 'elf64-big' >/dev/null 2>&1; \
 	then echo 'riscv64-unknown-elf-'; \
 	elif riscv64-elf-objdump -i 2>&1 | grep 'elf64-big' >/dev/null 2>&1; \
@@ -52,12 +98,32 @@ TOOLPREFIX := $(shell if riscv64-unknown-elf-objdump -i 2>&1 | grep 'elf64-big' 
 	echo "*** Error: Couldn't find a riscv64 version of GCC/binutils." 1>&2; \
 	echo "*** To turn off this error, run 'gmake TOOLPREFIX= ...'." 1>&2; \
 	echo "***" 1>&2; exit 1; fi)
+else ifeq ($(ARCH),loongarch)
+TOOLPREFIX := $(shell if loongarch64-linux-gnu-objdump -i >/dev/null 2>&1; \
+	then echo 'loongarch64-linux-gnu-'; \
+	elif loongarch64-unknown-linux-gnu-objdump -i >/dev/null 2>&1; \
+	then echo 'loongarch64-unknown-linux-gnu-'; \
+	else echo ''; fi)
+endif
 endif
 
-QEMU = qemu-system-riscv64
+ifeq ($(ARCH),loongarch)
+ifeq ($(TOOLPREFIX),)
+$(error Couldn't find a loongarch64 GCC/binutils; set TOOLPREFIX=... ARCH=loongarch)
+endif
+endif
+
 MIN_QEMU_VERSION = 7.2
 
+ifeq ($(ARCH),loongarch)
+CC := $(shell if command -v $(TOOLPREFIX)gcc >/dev/null 2>&1; \
+	then echo $(TOOLPREFIX)gcc; \
+	elif command -v $(TOOLPREFIX)gcc-14 >/dev/null 2>&1; \
+	then echo $(TOOLPREFIX)gcc-14; \
+	else echo $(TOOLPREFIX)gcc; fi)
+else
 CC = $(TOOLPREFIX)gcc
+endif
 AS = $(TOOLPREFIX)gas
 LD = $(TOOLPREFIX)ld
 OBJCOPY = $(TOOLPREFIX)objcopy
@@ -65,7 +131,7 @@ OBJDUMP = $(TOOLPREFIX)objdump
 
 CFLAGS = -Wall -Werror -O -fno-omit-frame-pointer -ggdb -gdwarf-2
 CFLAGS += -MD
-CFLAGS += -mcmodel=medany
+CFLAGS += $(ARCH_CFLAGS)
 CFLAGS += -ffreestanding
 CFLAGS += -fno-common -nostdlib
 CFLAGS += -fno-builtin-strncpy -fno-builtin-strncmp -fno-builtin-strlen -fno-builtin-memset
@@ -87,21 +153,29 @@ endif
 
 LDFLAGS = -z max-page-size=4096
 
-$K/kernel: $(OBJS) $K/kernel.ld
-	$(LD) $(LDFLAGS) -T $K/kernel.ld -o $K/kernel $(OBJS) 
+$K/kernel: $(OBJS) $(KERNEL_LD) $(RAMDISK_HDR)
+	$(LD) $(LDFLAGS) -T $(KERNEL_LD) -o $K/kernel $(OBJS) 
 	$(OBJDUMP) -S $K/kernel > $K/kernel.asm
 	$(OBJDUMP) -t $K/kernel | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > $K/kernel.sym
 
+$K/arch/loongarch/ramdisk_img.o: fs.img
+	$(OBJCOPY) -I binary -O elf64-loongarch -B loongarch \
+	  --rename-section .data=.ramdisk,alloc,load,data,contents \
+	  --set-section-alignment .ramdisk=4096 \
+	  fs.img $@
+
 $K/%.o: $K/%.S
-	$(CC) -g -c -o $@ $<
+	$(CC) $(ARCH_ASFLAGS) -g -c -o $@ $<
 
 tags: $(OBJS)
 	etags kernel/*.S kernel/*.c
 
 ULIB = $U/ulib.o $U/usys.o $U/printf.o $U/umalloc.o
 
-_%: %.o $(ULIB) $U/user.ld
-	$(LD) $(LDFLAGS) -T $U/user.ld -o $@ $< $(ULIB)
+$(ULIB): $(ARCH_STAMP)
+
+_%: %.o $(ULIB) $(USER_LD)
+	$(LD) $(LDFLAGS) -T $(USER_LD) -o $@ $< $(ULIB)
 	$(OBJDUMP) -S $@ > $*.asm
 	$(OBJDUMP) -t $@ | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > $*.sym
 
@@ -172,12 +246,14 @@ fs.img: mkfs/mkfs README hello.c tests/hello.c $(UPROGS) $(EXT2IMG) $(FAT32IMG)
 	cat $(EXT2IMG) >> fs.img
 	cat $(FAT32IMG) >> fs.img
 
--include kernel/*.d user/*.d
+-include kernel/*.d kernel/arch/loongarch/*.d user/*.d
 
 clean: 
 	rm -f *.tex *.dvi *.idx *.aux *.log *.ind *.ilg \
 	*/*.o */*.d */*.asm */*.sym \
 	$K/kernel fs.img \
+	$K/arch/loongarch/ramdisk_img.o \
+	.arch-* \
 	$(EXT2IMG) \
 	$(FAT32IMG) \
 	mkfs/mkfs mkfs/mkfat32 .gdbinit \
@@ -194,10 +270,14 @@ ifndef CPUS
 CPUS := 3
 endif
 
+ifeq ($(ARCH),loongarch)
+QEMUOPTS = -machine virt -kernel $K/kernel -m 1G -smp $(CPUS) -nographic -no-reboot
+else
 QEMUOPTS = -machine virt -bios none -kernel $K/kernel -m 128M -smp $(CPUS) -nographic
 QEMUOPTS += -global virtio-mmio.force-legacy=false
 QEMUOPTS += -drive file=fs.img,if=none,format=raw,id=x0
 QEMUOPTS += -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0
+endif
 
 qemu: check-qemu-version $K/kernel fs.img
 	$(QEMU) $(QEMUOPTS)

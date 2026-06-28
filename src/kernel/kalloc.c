@@ -27,7 +27,11 @@ void
 kinit()
 {
   initlock(&kmem.lock, "kmem");
+#ifdef ARCH_LOONGARCH
+  freerange((void*)RAMBASE, (void*)RAMSTOP);
+#else
   freerange(end, (void*)PHYSTOP);
+#endif
 }
 
 void

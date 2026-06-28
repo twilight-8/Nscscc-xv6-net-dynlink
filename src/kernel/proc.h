@@ -13,9 +13,13 @@ struct context {
   uint64 s6;
   uint64 s7;
   uint64 s8;
+#ifndef ARCH_LOONGARCH
   uint64 s9;
   uint64 s10;
   uint64 s11;
+#else
+  uint64 fp;
+#endif
 };
 
 // Per-CPU state.
@@ -40,6 +44,46 @@ extern struct cpu cpus[NCPU];
 // the trapframe includes callee-saved user registers like s0-s11 because the
 // return-to-user path via usertrapret() doesn't return through
 // the entire kernel call stack.
+#ifdef ARCH_LOONGARCH
+struct trapframe {
+  /*   0 */ uint64 ra;
+  /*   8 */ uint64 tp;
+  /*  16 */ uint64 sp;
+  /*  24 */ uint64 a0;
+  /*  32 */ uint64 a1;
+  /*  40 */ uint64 a2;
+  /*  48 */ uint64 a3;
+  /*  56 */ uint64 a4;
+  /*  64 */ uint64 a5;
+  /*  72 */ uint64 a6;
+  /*  80 */ uint64 a7;
+  /*  88 */ uint64 t0;
+  /*  96 */ uint64 t1;
+  /* 104 */ uint64 t2;
+  /* 112 */ uint64 t3;
+  /* 120 */ uint64 t4;
+  /* 128 */ uint64 t5;
+  /* 136 */ uint64 t6;
+  /* 144 */ uint64 t7;
+  /* 152 */ uint64 t8;
+  /* 160 */ uint64 r21;
+  /* 168 */ uint64 fp;
+  /* 176 */ uint64 s0;
+  /* 184 */ uint64 s1;
+  /* 192 */ uint64 s2;
+  /* 200 */ uint64 s3;
+  /* 208 */ uint64 s4;
+  /* 216 */ uint64 s5;
+  /* 224 */ uint64 s6;
+  /* 232 */ uint64 s7;
+  /* 240 */ uint64 s8;
+  /* 248 */ uint64 kernel_sp;
+  /* 256 */ uint64 kernel_trap;
+  /* 264 */ uint64 era;
+  /* 272 */ uint64 kernel_hartid;
+  /* 280 */ uint64 kernel_pgdl;
+};
+#else
 struct trapframe {
   /*   0 */ uint64 kernel_satp;   // kernel page table
   /*   8 */ uint64 kernel_sp;     // top of process's kernel stack
@@ -78,6 +122,7 @@ struct trapframe {
   /* 272 */ uint64 t5;
   /* 280 */ uint64 t6;
 };
+#endif
 
 enum procstate { UNUSED, USED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 
