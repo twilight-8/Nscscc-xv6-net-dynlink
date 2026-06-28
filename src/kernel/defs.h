@@ -86,6 +86,7 @@ struct mount*   vfs_mountpoint(struct inode*);
 struct inode*   vfs_lookup(struct inode*, char*);
 struct inode*   vfs_create(struct inode*, char*, short, short, short);
 int             vfs_unlink(struct inode*, char*);
+int             vfs_link(struct inode*, struct inode*, char*);
 int             vfs_readi(struct inode*, int, uint64, uint, uint);
 int             vfs_writei(struct inode*, int, uint64, uint, uint);
 void            vfs_stati(struct inode*, struct stat*);

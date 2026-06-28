@@ -864,6 +864,15 @@ fat32_unlink(struct inode *dp, char *name)
   return 0;
 }
 
+static int
+fat32_link(struct inode *ip, struct inode *dp, char *name)
+{
+  (void)ip;
+  (void)dp;
+  (void)name;
+  return -1;
+}
+
 static struct inode_ops fat32_inode_ops = {
   .read = fat32_readi,
   .write = fat32_writei,
@@ -872,6 +881,7 @@ static struct inode_ops fat32_inode_ops = {
   .lookup = fat32_lookup,
   .create = fat32_create,
   .unlink = fat32_unlink,
+  .link = fat32_link,
 };
 
 static struct fs_ops fat32_fs_ops = {

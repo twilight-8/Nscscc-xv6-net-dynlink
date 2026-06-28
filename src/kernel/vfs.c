@@ -21,6 +21,33 @@ xv6_lookup(struct inode *dp, char *name)
   return dirlookup(dp, name, 0);
 }
 
+static int
+xv6_link(struct inode *ip, struct inode *dp, char *name)
+{
+  ilock(ip);
+  if(ip->type == T_DIR){
+    iunlock(ip);
+    return -1;
+  }
+
+  ip->nlink++;
+  iupdate(ip);
+  iunlock(ip);
+
+  ilock(dp);
+  if(dp->dev != ip->dev || dirlink(dp, name, ip->inum) < 0){
+    iunlock(dp);
+    ilock(ip);
+    ip->nlink--;
+    iupdate(ip);
+    iunlock(ip);
+    return -1;
+  }
+  iunlock(dp);
+
+  return 0;
+}
+
 static struct inode_ops xv6_inode_ops = {
   .read = readi,
   .write = writei,
@@ -28,6 +55,7 @@ static struct inode_ops xv6_inode_ops = {
   .trunc = itrunc,
   .lookup = xv6_lookup,
   .create = 0,
+  .link = xv6_link,
 };
 
 static int
@@ -258,6 +286,16 @@ vfs_unlink(struct inode *dp, char *name)
   if(dp == 0 || dp->ops == 0 || dp->ops->unlink == 0)
     return -1;
   return dp->ops->unlink(dp, name);
+}
+
+int
+vfs_link(struct inode *ip, struct inode *dp, char *name)
+{
+  if(ip == 0 || dp == 0 || ip->ops == 0 || ip->ops->link == 0)
+    return -1;
+  if(ip->fstype != dp->fstype || ip->dev != dp->dev)
+    return -1;
+  return ip->ops->link(ip, dp, name);
 }
 
 int

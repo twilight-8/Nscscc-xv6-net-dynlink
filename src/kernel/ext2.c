@@ -757,6 +757,15 @@ ext2_unlink(struct inode *dp, char *name)
 }
 
 static int
+ext2_link(struct inode *ip, struct inode *dp, char *name)
+{
+  (void)ip;
+  (void)dp;
+  (void)name;
+  return -1;
+}
+
+static int
 ext2_readi(struct inode *ip, int user_dst, uint64 dst, uint off, uint n)
 {
   struct ext2_fs *fs = (struct ext2_fs*)ip->mnt->fs_private;
@@ -949,6 +958,7 @@ static struct inode_ops ext2_inode_ops = {
   .lookup = ext2_lookup,
   .create = ext2_create,
   .unlink = ext2_unlink,
+  .link = ext2_link,
 };
 
 static struct fs_ops ext2_fs_ops = {
