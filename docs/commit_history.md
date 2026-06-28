@@ -170,6 +170,36 @@ cat hello.c > /mnt/hello.c
 - ext2 `test1/test2` 回归：通过。
 - `python3 test-xv6.py -q usertests`：`ALL TESTS PASSED`。
 
+## 阶段 E：轻量 HAL 与 LoongArch64 启动
+
+主要目标：
+
+在不大幅重构 xv6 原有结构的前提下，引入足够薄的 HAL，使同一套 VFS 和文件系统代码可以同时运行在 RISC-V 与 LoongArch64 上。当前阶段优先打通 LoongArch64 启动、trap、进程切换、用户态 shell 和块设备访问路径。
+
+主要改动：
+
+- 新增 `ARCH=riscv/loongarch` 构建选项，默认仍为 RISC-V。
+- 将中断初始化、外部中断 claim/complete 和块设备读写收敛到 `hal_*` 接口。
+- RISC-V 平台保持原有 PLIC 与 virtio 块设备路径，继续读写宿主机 `fs.img`。
+- 新增 `kernel/arch/loongarch/`，放置 LoongArch64 启动、trap、页表、上下文切换、中断控制器和链接脚本。
+- LoongArch64 平台使用 APIC/EXTIOI 处理中断，使用链接进内核的 `fs.img` ramdisk 作为块设备后端。
+- 调整 `bio.c`、`main.c`、`trap.c`、`proc.c`、`exec.c` 等少量公共路径，使平台差异集中到 HAL 和 `arch/loongarch` 目录中。
+- 用户态 syscall stub 根据架构生成 RISC-V `ecall` 或 LoongArch64 `syscall` 指令。
+
+阶段边界：
+
+- LoongArch64 当前使用 ramdisk，文件写入只修改本次 QEMU 运行期间的内存镜像，不会回写宿主机 `fs.img`。
+- 暂不实现 LoongArch64 下的 virtio/PCI 块设备驱动。
+- LoongArch64 目前完成启动 smoke test，完整 `usertests -q` 和指定 VFS 测试仍需后续补充。
+- HAL 只覆盖当前真正需要的平台差异，不引入复杂设备模型或过重抽象。
+
+验证结果：
+
+- `cd src && make ARCH=loongarch kernel/kernel`：通过。
+- `cd src && make ARCH=loongarch CPUS=1 qemu`：可以启动到 shell。
+- LoongArch64 shell 中执行 `ls`：可以列出 ramdisk 根目录内容。
+- `make test_baseline && make run`：RISC-V baseline 回归 PASS。
+
 ## 当前阶段总览
 
 ```mermaid
@@ -179,8 +209,9 @@ flowchart LR
     SB["阶段 B：挂载表与块设备接口"]
     SC["阶段 C：ext2 最小文件系统支持"]
     SD["阶段 D：fat32 文件系统支持"]
+    SE["阶段 E：轻量 HAL 与 LoongArch64 启动"]
 
-    S0 --> SA --> SB --> SC --> SD
+    S0 --> SA --> SB --> SC --> SD --> SE
 ```
 
 - 阶段 0：建立项目基线，保留原 xv6 测试能力。
@@ -188,10 +219,9 @@ flowchart LR
 - 阶段 B：引入挂载表和块设备接口，使 `/mnt` 可切换到 ext2。
 - 阶段 C：实现 ext2 最小文件系统支持，`test1/test2` 通过。
 - 阶段 D：接入 fat32 镜像、设备映射和 BPB 识别，完成短文件名目录遍历与普通文件读写，并通过边界测试收口。
+- 阶段 E：引入轻量 HAL，RISC-V 继续使用 PLIC/virtio，LoongArch64 使用 APIC/EXTIOI 与 ramdisk 启动到 shell。
 
 ## 后续提交方向
 
-- `hal: introduce architecture abstraction layer`
-- `loongarch: bring up xv6 kernel on qemu-loongarch`
 - `docs: finalize design demo and test report`
 - `submit: generate final diff against xv6-riscv rev5`

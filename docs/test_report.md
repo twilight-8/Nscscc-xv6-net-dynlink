@@ -5,18 +5,19 @@
 - 加入 VFS 和 ext2 后，原 xv6 行为不能退化。
 - 显式挂载 ext2 到 `/mnt` 后，ext2 最小读写路径必须能通过公开测试风格的跨文件系统复制。
 - 显式挂载 fat32 到 `/fat` 后，fat32 的目录遍历、普通文件创建、读取、覆盖写入和子目录访问可用。
+- 引入 HAL 后，RISC-V 回归测试仍通过，LoongArch64 可以在 QEMU 中启动到 shell 并访问 ramdisk 文件系统。
 
 ## 1. 测试环境
 
 | 项目 | 内容 |
 |---|---|
 | 主机环境 | Windows + WSL Ubuntu-24.04 |
-| 目标平台 | qemu-riscv64 |
+| 目标平台 | qemu-riscv64、qemu-system-loongarch64 |
 | 源码目录 | `src` |
 | 主要镜像 | `fs.img` |
 | ext2 镜像 | `ext2.img`，追加到 `fs.img` 后半部分 |
 | fat32 镜像 | `fat32.img`，追加到 ext2 区域之后 |
-| 当前阶段 | A/B/C/C4/D0-D4 已完成 |
+| 当前阶段 | A/B/C/C4/D0-D4/E 已完成 |
 
 ## 2. 测试总览
 
@@ -31,6 +32,8 @@
 | fat32 最小读写闭环 | 确认 fat32 目录和普通文件读写可用 | `cat/ls/echo/mkdir` 组合测试 | PASS |
 | fat32 边界测试 | 确认空文件、覆盖写、跨 cluster、小目录和长文件名拒绝 | D4 命令组 | PASS |
 | 项目 baseline 入口 | 确认根目录脚本仍可工作 | `make test_baseline && make run` | PASS |
+| LoongArch64 构建 | 确认 LA 内核可编译 | `cd src && make ARCH=loongarch kernel/kernel` | PASS |
+| LoongArch64 启动 | 确认 LA 内核可启动到 shell 并访问根目录 | `cd src && make ARCH=loongarch CPUS=1 qemu` 后执行 `ls` | PASS |
 
 ## 3. 原始 xv6 回归测试
 
@@ -227,14 +230,40 @@ xv6 is a re-implementation
 - 原始 xv6 测试与 VFS 公开路径测试可以同时通过。
 - ext2 镜像经过写入后仍能通过 `e2fsck -fn` 检查。
 - 根目录 baseline 脚本 `make test_baseline && make run` 可以通过。
+- LoongArch64 内核可以构建并启动到 shell，`ls` 可读取 ramdisk 中的根目录内容。
 
-## 9. 当前未覆盖内容
+## 9. LoongArch64 HAL 启动测试
+
+测试目的：
+
+确认新增 HAL 和 LoongArch64 架构代码可以完成内核启动、进程切换、用户态 shell 进入，以及通过 ramdisk 访问 `fs.img` 内容。
+
+执行命令：
+
+```sh
+cd src
+make ARCH=loongarch kernel/kernel
+make ARCH=loongarch CPUS=1 qemu
+```
+
+在 shell 中执行：
+
+```sh
+ls
+```
+
+结论：
+
+LoongArch64 可以启动到 xv6 shell，并能列出根目录内容。当前 LA 块设备后端是内嵌 ramdisk，写入只影响本次 QEMU 运行期间的内存镜像，不会回写宿主机 `fs.img`。
+
+## 10. 当前未覆盖内容
 
 这些内容尚未作为当前阶段完成目标：
 
 - fat32 长文件名、`unlink/link/rename` 和完整时间戳语义。
-- LoongArch 平台测试。
+- LoongArch64 下的完整 `usertests -q` 和指定 VFS 测试。
+- LoongArch64 下持久化写回宿主机 `fs.img` 的 virtio/PCI 块设备支持。
 - ext2 完整语义测试，例如复杂目录、link/unlink、权限、时间戳、多块组。
 - 长时间压力测试和异常断电恢复测试。
 
-后续进入 fat32 和 HAL 阶段后，需要继续扩展本测试报告。
+后续扩展 LoongArch64 块设备和完整测试后，需要继续扩展本测试报告。

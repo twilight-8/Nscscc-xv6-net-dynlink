@@ -6,9 +6,9 @@
 
 ## 当前阶段
 
-当前处于 Commit 1(第一次提交)：基础状态与仓库结构设计。
+当前已经完成 VFS、ext2、fat32 和轻量 HAL 的阶段性实现。
 
-本阶段不修改内核功能代码，只完成基础说明、合规说明和目录结构设计。
+RISC-V 平台继续使用 virtio 块设备读写 `fs.img`；LoongArch64 平台已能在 QEMU 中启动到 shell，并通过内嵌 ramdisk 访问同一份文件系统镜像。LoongArch64 下的文件写入发生在运行时内存中的 ramdisk，不会回写到宿主机 `fs.img`。
 
 ## 目标
 
@@ -67,7 +67,27 @@
 
 ##### 快速开始：
 
-`make test_baseline && make run`：测试基本功能并记录日志
+```sh
+make test_baseline && make run
+```
+
+该命令在 RISC-V QEMU 环境中运行 xv6-riscv rev5 自带 `usertests -q` 回归测试。
+
+手动启动 RISC-V：
+
+```sh
+cd src
+make qemu
+```
+
+手动启动 LoongArch64：
+
+```sh
+cd src
+make ARCH=loongarch CPUS=1 qemu
+```
+
+LoongArch64 当前使用 ramdisk，适合验证启动、shell、VFS 和文件系统读写路径；如果需要把写入持久化到宿主机 `fs.img`，后续需要补充 LoongArch64 下的 virtio/PCI 块设备支持。
 
 
 ## 提交辅助材料
