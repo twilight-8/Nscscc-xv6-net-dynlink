@@ -225,6 +225,8 @@ ext2_sync_inode(struct inode *ip)
 {
   struct ext2_fs *fs = (struct ext2_fs*)ip->mnt->fs_private;
   struct ext2_dinode di;
+  uchar buf[BSIZE];
+  uint *indirect;
   uint blocks;
   int i;
 
@@ -241,8 +243,16 @@ ext2_sync_inode(struct inode *ip)
       blocks++;
   }
   di.i_block[12] = ip->addrs[NDIRECT];
-  if(ip->addrs[NDIRECT])
+  if(ip->addrs[NDIRECT]){
     blocks++;
+    if(block_read_bytes(fs->dev, ext2_block_offset(fs, ip->addrs[NDIRECT]),
+                        buf, fs->block_size) == fs->block_size){
+      indirect = (uint*)buf;
+      for(i = 0; i < fs->block_size / sizeof(uint); i++)
+        if(indirect[i])
+          blocks++;
+    }
+  }
   di.i_block[13] = 0;
   di.i_block[14] = 0;
   di.i_blocks = blocks * (fs->block_size / 512);
