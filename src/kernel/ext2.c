@@ -746,12 +746,17 @@ ext2_unlink(struct inode *dp, char *name)
   if(ip->type == T_DIR){
     dp->nlink--;
     ext2_sync_inode(dp);
+    ip->nlink = 0;
+  } else if(ip->nlink > 0){
+    ip->nlink--;
   }
 
-  ext2_itrunc(ip);
-  ip->nlink = 0;
-  ext2_sync_inode(ip);
-  ext2_free_inode(fs, ip->inum);
+  if(ip->nlink == 0){
+    ext2_itrunc(ip);
+    ext2_free_inode(fs, ip->inum);
+  } else {
+    ext2_sync_inode(ip);
+  }
   iunlockput(ip);
   return 0;
 }
@@ -759,10 +764,30 @@ ext2_unlink(struct inode *dp, char *name)
 static int
 ext2_link(struct inode *ip, struct inode *dp, char *name)
 {
-  (void)ip;
-  (void)dp;
-  (void)name;
-  return -1;
+  if(ip->type != T_FILE || dp->type != T_DIR)
+    return -1;
+
+  ilock(ip);
+  ip->nlink++;
+  if(ext2_sync_inode(ip) < 0){
+    ip->nlink--;
+    iunlock(ip);
+    return -1;
+  }
+  iunlock(ip);
+
+  ilock(dp);
+  if(ext2_dir_add(dp, name, ip->inum, EXT2_FT_REG_FILE) < 0){
+    iunlock(dp);
+    ilock(ip);
+    ip->nlink--;
+    ext2_sync_inode(ip);
+    iunlock(ip);
+    return -1;
+  }
+  iunlock(dp);
+
+  return 0;
 }
 
 static int
