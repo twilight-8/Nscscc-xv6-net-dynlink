@@ -19,6 +19,7 @@
 #define EXT2_S_IFDIR      0x4000
 
 #define EXT2_FT_REG_FILE  1
+#define EXT2_FT_DIR       2
 
 struct ext2_super {
   uint s_inodes_count;
@@ -377,6 +378,33 @@ ext2_alloc_inode(struct ext2_fs *fs)
   return 0;
 }
 
+static void
+ext2_free_inode(struct ext2_fs *fs, uint inum)
+{
+  uchar bitmap[BSIZE];
+  struct ext2_dinode di;
+  uint bit;
+
+  if(inum == 0)
+    return;
+  if(block_read_bytes(fs->dev, ext2_block_offset(fs, fs->gd.bg_inode_bitmap),
+                      bitmap, BSIZE) < 0)
+    return;
+  bit = inum - 1;
+  if(ext2_test_bit(bitmap, bit)){
+    ext2_clear_bit(bitmap, bit);
+    block_write_bytes(fs->dev, ext2_block_offset(fs, fs->gd.bg_inode_bitmap),
+                      bitmap, BSIZE);
+    fs->sb.s_free_inodes_count++;
+    fs->gd.bg_free_inodes_count++;
+    ext2_write_super(fs);
+    ext2_write_group(fs);
+  }
+
+  memset(&di, 0, sizeof(di));
+  ext2_write_dinode(fs, inum, &di);
+}
+
 static uint
 ext2_bmap(struct inode *ip, uint bn, int alloc)
 {
@@ -454,7 +482,7 @@ ext2_lookup(struct inode *dp, char *name)
 }
 
 static int
-ext2_dir_add(struct inode *dp, char *name, uint inum)
+ext2_dir_add(struct inode *dp, char *name, uint inum, uchar file_type)
 {
   struct ext2_fs *fs = (struct ext2_fs*)dp->mnt->fs_private;
   uchar buf[BSIZE];
@@ -483,7 +511,7 @@ ext2_dir_add(struct inode *dp, char *name, uint inum)
         newde->inode = inum;
         newde->rec_len = de->rec_len - actual;
         newde->name_len = namelen;
-        newde->file_type = EXT2_FT_REG_FILE;
+        newde->file_type = file_type;
         memmove(newde->name, name, namelen);
         de->rec_len = actual;
         return block_write_bytes(fs->dev, ext2_block_offset(fs, bno),
@@ -501,7 +529,7 @@ ext2_dir_add(struct inode *dp, char *name, uint inum)
   de->inode = inum;
   de->rec_len = fs->block_size;
   de->name_len = namelen;
-  de->file_type = EXT2_FT_REG_FILE;
+  de->file_type = file_type;
   memmove(de->name, name, namelen);
   if(block_write_bytes(fs->dev, ext2_block_offset(fs, bno),
                        buf, fs->block_size) != fs->block_size)
@@ -511,17 +539,45 @@ ext2_dir_add(struct inode *dp, char *name, uint inum)
   return 0;
 }
 
+static int
+ext2_init_dir(struct ext2_fs *fs, uint inum, uint parent, uint bno)
+{
+  uchar buf[BSIZE];
+  struct ext2_dirent *de;
+  uint dotlen;
+
+  memset(buf, 0, sizeof(buf));
+
+  dotlen = ext2_align4(8 + 1);
+  de = (struct ext2_dirent*)buf;
+  de->inode = inum;
+  de->rec_len = dotlen;
+  de->name_len = 1;
+  de->file_type = EXT2_FT_DIR;
+  memmove(de->name, ".", 1);
+
+  de = (struct ext2_dirent*)(buf + dotlen);
+  de->inode = parent;
+  de->rec_len = fs->block_size - dotlen;
+  de->name_len = 2;
+  de->file_type = EXT2_FT_DIR;
+  memmove(de->name, "..", 2);
+
+  return block_write_bytes(fs->dev, ext2_block_offset(fs, bno),
+                           buf, fs->block_size) == fs->block_size ? 0 : -1;
+}
+
 static struct inode*
 ext2_create(struct inode *dp, char *name, short type, short major, short minor)
 {
   struct ext2_fs *fs = (struct ext2_fs*)dp->mnt->fs_private;
   struct ext2_dinode di;
-  uint inum;
+  uint inum, bno = 0;
 
   (void)major;
   (void)minor;
 
-  if(type != T_FILE)
+  if(type != T_FILE && type != T_DIR)
     return 0;
 
   inum = ext2_alloc_inode(fs);
@@ -529,13 +585,44 @@ ext2_create(struct inode *dp, char *name, short type, short major, short minor)
     return 0;
 
   memset(&di, 0, sizeof(di));
-  di.i_mode = ext2_type_to_mode(T_FILE);
-  di.i_links_count = 1;
-  if(ext2_write_dinode(fs, inum, &di) < 0)
-    return 0;
+  di.i_mode = ext2_type_to_mode(type);
+  di.i_links_count = type == T_DIR ? 2 : 1;
 
-  if(ext2_dir_add(dp, name, inum) < 0)
+  if(type == T_DIR){
+    bno = ext2_alloc_block(fs);
+    if(bno == 0){
+      ext2_free_inode(fs, inum);
+      return 0;
+    }
+    if(ext2_init_dir(fs, inum, dp->inum, bno) < 0){
+      ext2_free_block(fs, bno);
+      ext2_free_inode(fs, inum);
+      return 0;
+    }
+    di.i_size = fs->block_size;
+    di.i_blocks = fs->block_size / 512;
+    di.i_block[0] = bno;
+  }
+
+  if(ext2_write_dinode(fs, inum, &di) < 0){
+    if(type == T_DIR)
+      ext2_free_block(fs, bno);
+    ext2_free_inode(fs, inum);
     return 0;
+  }
+
+  if(ext2_dir_add(dp, name, inum,
+                  type == T_DIR ? EXT2_FT_DIR : EXT2_FT_REG_FILE) < 0){
+    if(type == T_DIR)
+      ext2_free_block(fs, bno);
+    ext2_free_inode(fs, inum);
+    return 0;
+  }
+
+  if(type == T_DIR){
+    dp->nlink++;
+    ext2_sync_inode(dp);
+  }
 
   return ext2_iget(dp->mnt, inum);
 }
