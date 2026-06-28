@@ -544,8 +544,42 @@ static int
 ext2_readi(struct inode *ip, int user_dst, uint64 dst, uint off, uint n)
 {
   struct ext2_fs *fs = (struct ext2_fs*)ip->mnt->fs_private;
+  struct dirent xde;
   uchar buf[BSIZE];
-  uint tot, m, bno;
+  struct ext2_dirent *de;
+  uint tot, m, bno, want, seen, pos;
+
+  if(ip->type == T_DIR){
+    if(n < sizeof(xde) || off % sizeof(xde) != 0)
+      return 0;
+    want = off / sizeof(xde);
+    seen = 0;
+    for(off = 0; off < ip->size; off += fs->block_size){
+      bno = ext2_bmap(ip, off / fs->block_size, 0);
+      if(bno == 0)
+        continue;
+      if(block_read_bytes(fs->dev, ext2_block_offset(fs, bno),
+                          buf, fs->block_size) < 0)
+        return -1;
+      for(pos = 0; pos < fs->block_size; ){
+        de = (struct ext2_dirent*)(buf + pos);
+        if(de->rec_len < 8 || pos + de->rec_len > fs->block_size)
+          break;
+        if(de->inode != 0 && de->name_len <= DIRSIZ){
+          if(seen++ == want){
+            memset(&xde, 0, sizeof(xde));
+            xde.inum = de->inode;
+            memmove(xde.name, de->name, de->name_len);
+            if(either_copyout(user_dst, dst, (char*)&xde, sizeof(xde)) < 0)
+              return -1;
+            return sizeof(xde);
+          }
+        }
+        pos += de->rec_len;
+      }
+    }
+    return 0;
+  }
 
   if(off > ip->size || off + n < off)
     return 0;
