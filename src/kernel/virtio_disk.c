@@ -16,8 +16,157 @@
 #include "buf.h"
 #include "virtio.h"
 
+#ifdef ARCH_LOONGARCH
+void virtio_pci_init(void);
+uint8 virtio_pci_get_status(void);
+void virtio_pci_set_status(uint8);
+uint64 virtio_pci_get_features(void);
+void virtio_pci_set_features(uint64);
+void virtio_pci_select_queue(uint16);
+uint16 virtio_pci_queue_max(void);
+uint16 virtio_pci_queue_ready(void);
+void virtio_pci_set_queue_num(uint16);
+void virtio_pci_set_queue_desc(uint64);
+void virtio_pci_set_queue_avail(uint64);
+void virtio_pci_set_queue_used(uint64);
+void virtio_pci_set_queue_ready(uint16);
+void virtio_pci_notify(uint16);
+void virtio_pci_intr_ack(void);
+#else
 // the address of virtio mmio register r.
 #define R(r) ((volatile uint32 *)(VIRTIO0 + (r)))
+#endif
+
+static uint64
+virtio_dma_addr(void *addr)
+{
+#ifdef ARCH_LOONGARCH
+  return ((uint64)addr) & ~DMWIN_MASK;
+#else
+  return (uint64)addr;
+#endif
+}
+
+static uint8
+virtio_get_status(void)
+{
+#ifdef ARCH_LOONGARCH
+  return virtio_pci_get_status();
+#else
+  return *R(VIRTIO_MMIO_STATUS);
+#endif
+}
+
+static void
+virtio_set_status(uint8 status)
+{
+#ifdef ARCH_LOONGARCH
+  virtio_pci_set_status(status);
+#else
+  *R(VIRTIO_MMIO_STATUS) = status;
+#endif
+}
+
+static uint64
+virtio_get_features(void)
+{
+#ifdef ARCH_LOONGARCH
+  return virtio_pci_get_features();
+#else
+  return *R(VIRTIO_MMIO_DEVICE_FEATURES);
+#endif
+}
+
+static void
+virtio_set_features(uint64 features)
+{
+#ifdef ARCH_LOONGARCH
+  virtio_pci_set_features(features);
+#else
+  *R(VIRTIO_MMIO_DRIVER_FEATURES) = features;
+#endif
+}
+
+static void
+virtio_select_queue(uint16 queue)
+{
+#ifdef ARCH_LOONGARCH
+  virtio_pci_select_queue(queue);
+#else
+  *R(VIRTIO_MMIO_QUEUE_SEL) = queue;
+#endif
+}
+
+static uint16
+virtio_queue_max(void)
+{
+#ifdef ARCH_LOONGARCH
+  return virtio_pci_queue_max();
+#else
+  return *R(VIRTIO_MMIO_QUEUE_NUM_MAX);
+#endif
+}
+
+static uint16
+virtio_queue_ready(void)
+{
+#ifdef ARCH_LOONGARCH
+  return virtio_pci_queue_ready();
+#else
+  return *R(VIRTIO_MMIO_QUEUE_READY);
+#endif
+}
+
+static void
+virtio_setup_queue(uint16 queue, uint16 num, void *desc, void *avail, void *used)
+{
+#ifdef ARCH_LOONGARCH
+  virtio_pci_select_queue(queue);
+  virtio_pci_set_queue_num(num);
+  virtio_pci_set_queue_desc(virtio_dma_addr(desc));
+  virtio_pci_set_queue_avail(virtio_dma_addr(avail));
+  virtio_pci_set_queue_used(virtio_dma_addr(used));
+#else
+  *R(VIRTIO_MMIO_QUEUE_NUM) = num;
+  *R(VIRTIO_MMIO_QUEUE_DESC_LOW) = virtio_dma_addr(desc);
+  *R(VIRTIO_MMIO_QUEUE_DESC_HIGH) = virtio_dma_addr(desc) >> 32;
+  *R(VIRTIO_MMIO_DRIVER_DESC_LOW) = virtio_dma_addr(avail);
+  *R(VIRTIO_MMIO_DRIVER_DESC_HIGH) = virtio_dma_addr(avail) >> 32;
+  *R(VIRTIO_MMIO_DEVICE_DESC_LOW) = virtio_dma_addr(used);
+  *R(VIRTIO_MMIO_DEVICE_DESC_HIGH) = virtio_dma_addr(used) >> 32;
+#endif
+}
+
+static void
+virtio_set_queue_ready(uint16 ready)
+{
+#ifdef ARCH_LOONGARCH
+  virtio_pci_set_queue_ready(ready);
+#else
+  *R(VIRTIO_MMIO_QUEUE_READY) = ready;
+#endif
+}
+
+static void
+virtio_notify(uint16 queue)
+{
+#ifdef ARCH_LOONGARCH
+  virtio_pci_notify(queue);
+#else
+  (void)queue;
+  *R(VIRTIO_MMIO_QUEUE_NOTIFY) = 0;
+#endif
+}
+
+static void
+virtio_intr_ack(void)
+{
+#ifdef ARCH_LOONGARCH
+  virtio_pci_intr_ack();
+#else
+  *R(VIRTIO_MMIO_INTERRUPT_ACK) = *R(VIRTIO_MMIO_INTERRUPT_STATUS) & 0x3;
+#endif
+}
 
 static struct disk {
   // a set (not a ring) of DMA descriptors, with which the
@@ -65,26 +214,34 @@ virtio_disk_init(void)
 
   initlock(&disk.vdisk_lock, "virtio_disk");
 
+#ifdef ARCH_LOONGARCH
+  virtio_pci_init();
+#else
   if(*R(VIRTIO_MMIO_MAGIC_VALUE) != 0x74726976 ||
      *R(VIRTIO_MMIO_VERSION) != 2 ||
      *R(VIRTIO_MMIO_DEVICE_ID) != 2 ||
      *R(VIRTIO_MMIO_VENDOR_ID) != 0x554d4551){
     panic("could not find virtio disk");
   }
+#endif
   
   // reset device
-  *R(VIRTIO_MMIO_STATUS) = status;
+  virtio_set_status(status);
+#ifdef ARCH_LOONGARCH
+  while(virtio_get_status() != 0)
+    ;
+#endif
 
   // set ACKNOWLEDGE status bit
   status |= VIRTIO_CONFIG_S_ACKNOWLEDGE;
-  *R(VIRTIO_MMIO_STATUS) = status;
+  virtio_set_status(status);
 
   // set DRIVER status bit
   status |= VIRTIO_CONFIG_S_DRIVER;
-  *R(VIRTIO_MMIO_STATUS) = status;
+  virtio_set_status(status);
 
   // negotiate features
-  uint64 features = *R(VIRTIO_MMIO_DEVICE_FEATURES);
+  uint64 features = virtio_get_features();
   features &= ~(1 << VIRTIO_BLK_F_RO);
   features &= ~(1 << VIRTIO_BLK_F_SCSI);
   features &= ~(1 << VIRTIO_BLK_F_CONFIG_WCE);
@@ -92,26 +249,34 @@ virtio_disk_init(void)
   features &= ~(1 << VIRTIO_F_ANY_LAYOUT);
   features &= ~(1 << VIRTIO_RING_F_EVENT_IDX);
   features &= ~(1 << VIRTIO_RING_F_INDIRECT_DESC);
-  *R(VIRTIO_MMIO_DRIVER_FEATURES) = features;
+#ifdef ARCH_LOONGARCH
+  features &= (1ULL << VIRTIO_F_VERSION_1);
+#endif
+  virtio_set_features(features);
 
   // tell device that feature negotiation is complete.
   status |= VIRTIO_CONFIG_S_FEATURES_OK;
-  *R(VIRTIO_MMIO_STATUS) = status;
+  virtio_set_status(status);
 
   // re-read status to ensure FEATURES_OK is set.
-  status = *R(VIRTIO_MMIO_STATUS);
+  status = virtio_get_status();
   if(!(status & VIRTIO_CONFIG_S_FEATURES_OK))
     panic("virtio disk FEATURES_OK unset");
 
   // initialize queue 0.
-  *R(VIRTIO_MMIO_QUEUE_SEL) = 0;
+  virtio_select_queue(0);
 
   // ensure queue 0 is not in use.
-  if(*R(VIRTIO_MMIO_QUEUE_READY))
+  if(virtio_queue_ready()){
+#ifdef ARCH_LOONGARCH
+    virtio_set_queue_ready(0);
+#else
     panic("virtio disk should not be ready");
+#endif
+  }
 
   // check maximum queue size.
-  uint32 max = *R(VIRTIO_MMIO_QUEUE_NUM_MAX);
+  uint32 max = virtio_queue_max();
   if(max == 0)
     panic("virtio disk has no queue 0");
   if(max < NUM)
@@ -127,19 +292,11 @@ virtio_disk_init(void)
   memset(disk.avail, 0, PGSIZE);
   memset(disk.used, 0, PGSIZE);
 
-  // set queue size.
-  *R(VIRTIO_MMIO_QUEUE_NUM) = NUM;
-
-  // write physical addresses.
-  *R(VIRTIO_MMIO_QUEUE_DESC_LOW) = (uint64)disk.desc;
-  *R(VIRTIO_MMIO_QUEUE_DESC_HIGH) = (uint64)disk.desc >> 32;
-  *R(VIRTIO_MMIO_DRIVER_DESC_LOW) = (uint64)disk.avail;
-  *R(VIRTIO_MMIO_DRIVER_DESC_HIGH) = (uint64)disk.avail >> 32;
-  *R(VIRTIO_MMIO_DEVICE_DESC_LOW) = (uint64)disk.used;
-  *R(VIRTIO_MMIO_DEVICE_DESC_HIGH) = (uint64)disk.used >> 32;
+  // set queue size and addresses.
+  virtio_setup_queue(0, NUM, disk.desc, disk.avail, disk.used);
 
   // queue is ready.
-  *R(VIRTIO_MMIO_QUEUE_READY) = 0x1;
+  virtio_set_queue_ready(0x1);
 
   // all NUM descriptors start out unused.
   for(int i = 0; i < NUM; i++)
@@ -147,7 +304,7 @@ virtio_disk_init(void)
 
   // tell device we're completely ready.
   status |= VIRTIO_CONFIG_S_DRIVER_OK;
-  *R(VIRTIO_MMIO_STATUS) = status;
+  virtio_set_status(status);
 
   // plic.c and trap.c arrange for interrupts from VIRTIO0_IRQ.
 }
@@ -251,12 +408,12 @@ virtio_disk_rw(struct buf *b, int write)
   buf0->reserved = 0;
   buf0->sector = sector;
 
-  disk.desc[idx[0]].addr = (uint64) buf0;
+  disk.desc[idx[0]].addr = virtio_dma_addr(buf0);
   disk.desc[idx[0]].len = sizeof(struct virtio_blk_req);
   disk.desc[idx[0]].flags = VRING_DESC_F_NEXT;
   disk.desc[idx[0]].next = idx[1];
 
-  disk.desc[idx[1]].addr = (uint64) b->data;
+  disk.desc[idx[1]].addr = virtio_dma_addr(b->data);
   disk.desc[idx[1]].len = BSIZE;
   if(write)
     disk.desc[idx[1]].flags = 0; // device reads b->data
@@ -266,7 +423,7 @@ virtio_disk_rw(struct buf *b, int write)
   disk.desc[idx[1]].next = idx[2];
 
   disk.info[idx[0]].status = 0xff; // device writes 0 on success
-  disk.desc[idx[2]].addr = (uint64) &disk.info[idx[0]].status;
+  disk.desc[idx[2]].addr = virtio_dma_addr(&disk.info[idx[0]].status);
   disk.desc[idx[2]].len = 1;
   disk.desc[idx[2]].flags = VRING_DESC_F_WRITE; // device writes the status
   disk.desc[idx[2]].next = 0;
@@ -285,7 +442,7 @@ virtio_disk_rw(struct buf *b, int write)
 
   __sync_synchronize();
 
-  *R(VIRTIO_MMIO_QUEUE_NOTIFY) = 0; // value is queue number
+  virtio_notify(0); // value is queue number
 
   // Wait for virtio_disk_intr() to say request has finished.
   while(b->disk == 1) {
@@ -309,7 +466,7 @@ virtio_disk_intr()
   // the "used" ring, in which case we may process the new
   // completion entries in this interrupt, and have nothing to do
   // in the next interrupt, which is harmless.
-  *R(VIRTIO_MMIO_INTERRUPT_ACK) = *R(VIRTIO_MMIO_INTERRUPT_STATUS) & 0x3;
+  virtio_intr_ack();
 
   __sync_synchronize();
 

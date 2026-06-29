@@ -44,6 +44,8 @@
 #define VIRTIO_F_ANY_LAYOUT         27
 #define VIRTIO_RING_F_INDIRECT_DESC 28
 #define VIRTIO_RING_F_EVENT_IDX     29
+#define VIRTIO_F_VERSION_1          32
+#define VIRTIO_F_RING_PACKED        34
 
 // this many virtio descriptors.
 // must be a power of two.

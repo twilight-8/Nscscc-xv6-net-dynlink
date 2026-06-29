@@ -59,8 +59,8 @@ ARCH_OBJS = \
   $K/arch/loongarch/hal.o \
   $K/arch/loongarch/apic.o \
   $K/arch/loongarch/extioi.o \
-  $K/arch/loongarch/ramdisk.o \
-  $K/arch/loongarch/ramdisk_img.o
+  $K/arch/loongarch/virtio_pci.o \
+  $K/virtio_disk.o
 KERNEL_LD = $K/arch/loongarch/kernel.ld
 USER_LD = $K/arch/loongarch/user.ld
 ARCH_CFLAGS = -DARCH_LOONGARCH -I$K -I$K/arch/loongarch -march=loongarch64 -mabi=lp64s
@@ -271,7 +271,9 @@ CPUS := 3
 endif
 
 ifeq ($(ARCH),loongarch)
-QEMUOPTS = -machine virt -kernel $K/kernel -m 1G -smp $(CPUS) -nographic -no-reboot
+QEMUOPTS = -machine virt -kernel $K/kernel -m 1G -smp $(CPUS) -nographic -no-reboot -net none
+QEMUOPTS += -drive file=fs.img,if=none,format=raw,id=x0
+QEMUOPTS += -device virtio-blk-pci,drive=x0,disable-legacy=on,vectors=0
 else
 QEMUOPTS = -machine virt -bios none -kernel $K/kernel -m 128M -smp $(CPUS) -nographic
 QEMUOPTS += -global virtio-mmio.force-legacy=false

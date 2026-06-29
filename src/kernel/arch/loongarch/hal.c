@@ -35,11 +35,11 @@ hal_irq_complete(int irq)
 void
 hal_disk_init(void)
 {
-  ramdiskinit();
+  virtio_disk_init();
 }
 
 void
 hal_disk_rw(struct buf *b, int write)
 {
-  ramdiskrw(b, write);
+  virtio_disk_rw(b, write);
 }

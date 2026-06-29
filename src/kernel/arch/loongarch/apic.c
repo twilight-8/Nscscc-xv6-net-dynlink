@@ -11,11 +11,14 @@
 void
 apic_init(void)
 {
-  *(volatile uint64*)(LS7A_INT_MASK_REG) = ~(0x1UL << UART0_IRQ);
+  uint64 mask = (0x1UL << UART0_IRQ) | (0x1UL << VIRTIO0_IRQ);
+
+  *(volatile uint64*)(LS7A_INT_MASK_REG) = ~mask;
 
   *(volatile uint64*)(LS7A_INT_EDGE_REG) = (0x1UL << UART0_IRQ);
 
   *(volatile uint8*)(LS7A_INT_HTMSI_VEC_REG + UART0_IRQ) = UART0_IRQ;
+  *(volatile uint8*)(LS7A_INT_HTMSI_VEC_REG + VIRTIO0_IRQ) = VIRTIO0_IRQ;
 
   *(volatile uint64*)(LS7A_INT_POL_REG) = 0x0UL;
 
