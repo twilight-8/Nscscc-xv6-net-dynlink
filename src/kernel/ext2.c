@@ -19,6 +19,7 @@
 #define EXT2_S_IFDIR      0x4000
 
 #define EXT2_FT_REG_FILE  1
+#define EXT2_FT_DIR       2
 
 struct ext2_super {
   uint s_inodes_count;
@@ -101,6 +102,7 @@ static struct ext2_fs ext2fs;
 
 static struct inode_ops ext2_inode_ops;
 static struct fs_ops ext2_fs_ops;
+static void ext2_itrunc(struct inode *ip);
 
 static uint
 ext2_min(uint a, uint b)
@@ -223,6 +225,8 @@ ext2_sync_inode(struct inode *ip)
 {
   struct ext2_fs *fs = (struct ext2_fs*)ip->mnt->fs_private;
   struct ext2_dinode di;
+  uchar buf[BSIZE];
+  uint *indirect;
   uint blocks;
   int i;
 
@@ -239,8 +243,16 @@ ext2_sync_inode(struct inode *ip)
       blocks++;
   }
   di.i_block[12] = ip->addrs[NDIRECT];
-  if(ip->addrs[NDIRECT])
+  if(ip->addrs[NDIRECT]){
     blocks++;
+    if(block_read_bytes(fs->dev, ext2_block_offset(fs, ip->addrs[NDIRECT]),
+                        buf, fs->block_size) == fs->block_size){
+      indirect = (uint*)buf;
+      for(i = 0; i < fs->block_size / sizeof(uint); i++)
+        if(indirect[i])
+          blocks++;
+    }
+  }
   di.i_block[13] = 0;
   di.i_block[14] = 0;
   di.i_blocks = blocks * (fs->block_size / 512);
@@ -377,6 +389,33 @@ ext2_alloc_inode(struct ext2_fs *fs)
   return 0;
 }
 
+static void
+ext2_free_inode(struct ext2_fs *fs, uint inum)
+{
+  uchar bitmap[BSIZE];
+  struct ext2_dinode di;
+  uint bit;
+
+  if(inum == 0)
+    return;
+  if(block_read_bytes(fs->dev, ext2_block_offset(fs, fs->gd.bg_inode_bitmap),
+                      bitmap, BSIZE) < 0)
+    return;
+  bit = inum - 1;
+  if(ext2_test_bit(bitmap, bit)){
+    ext2_clear_bit(bitmap, bit);
+    block_write_bytes(fs->dev, ext2_block_offset(fs, fs->gd.bg_inode_bitmap),
+                      bitmap, BSIZE);
+    fs->sb.s_free_inodes_count++;
+    fs->gd.bg_free_inodes_count++;
+    ext2_write_super(fs);
+    ext2_write_group(fs);
+  }
+
+  memset(&di, 0, sizeof(di));
+  ext2_write_dinode(fs, inum, &di);
+}
+
 static uint
 ext2_bmap(struct inode *ip, uint bn, int alloc)
 {
@@ -454,7 +493,86 @@ ext2_lookup(struct inode *dp, char *name)
 }
 
 static int
-ext2_dir_add(struct inode *dp, char *name, uint inum)
+ext2_find_dirent(struct inode *dp, char *name, struct ext2_dirent *out,
+                 uint *entry_off)
+{
+  struct ext2_fs *fs = (struct ext2_fs*)dp->mnt->fs_private;
+  uchar buf[BSIZE];
+  struct ext2_dirent *de;
+  uint off, bno, pos;
+
+  if(dp->type != T_DIR)
+    return -1;
+
+  for(off = 0; off < dp->size; off += fs->block_size){
+    bno = ext2_bmap(dp, off / fs->block_size, 0);
+    if(bno == 0)
+      continue;
+    if(block_read_bytes(fs->dev, ext2_block_offset(fs, bno),
+                        buf, fs->block_size) < 0)
+      return -1;
+    for(pos = 0; pos < fs->block_size; ){
+      de = (struct ext2_dirent*)(buf + pos);
+      if(de->rec_len < 8 || pos + de->rec_len > fs->block_size)
+        break;
+      if(de->inode != 0 && de->name_len <= DIRSIZ &&
+         ext2_nameeq(name, de->name, de->name_len)){
+        if(out)
+          *out = *de;
+        if(entry_off)
+          *entry_off = ext2_block_offset(fs, bno) + pos;
+        return 0;
+      }
+      pos += de->rec_len;
+    }
+  }
+
+  return -1;
+}
+
+static int
+ext2_remove_dirent(struct ext2_fs *fs, uint entry_off)
+{
+  struct ext2_dirent de;
+
+  if(block_read_bytes(fs->dev, entry_off, (uchar*)&de, 8) < 0)
+    return -1;
+  de.inode = 0;
+  return block_write_bytes(fs->dev, entry_off, (uchar*)&de, 8) == 8 ? 0 : -1;
+}
+
+static int
+ext2_is_dir_empty(struct inode *ip)
+{
+  struct ext2_fs *fs = (struct ext2_fs*)ip->mnt->fs_private;
+  uchar buf[BSIZE];
+  struct ext2_dirent *de;
+  uint off, bno, pos;
+
+  for(off = 0; off < ip->size; off += fs->block_size){
+    bno = ext2_bmap(ip, off / fs->block_size, 0);
+    if(bno == 0)
+      continue;
+    if(block_read_bytes(fs->dev, ext2_block_offset(fs, bno),
+                        buf, fs->block_size) < 0)
+      return 0;
+    for(pos = 0; pos < fs->block_size; ){
+      de = (struct ext2_dirent*)(buf + pos);
+      if(de->rec_len < 8 || pos + de->rec_len > fs->block_size)
+        break;
+      if(de->inode != 0 &&
+         !ext2_nameeq(".", de->name, de->name_len) &&
+         !ext2_nameeq("..", de->name, de->name_len))
+        return 0;
+      pos += de->rec_len;
+    }
+  }
+
+  return 1;
+}
+
+static int
+ext2_dir_add(struct inode *dp, char *name, uint inum, uchar file_type)
 {
   struct ext2_fs *fs = (struct ext2_fs*)dp->mnt->fs_private;
   uchar buf[BSIZE];
@@ -483,7 +601,7 @@ ext2_dir_add(struct inode *dp, char *name, uint inum)
         newde->inode = inum;
         newde->rec_len = de->rec_len - actual;
         newde->name_len = namelen;
-        newde->file_type = EXT2_FT_REG_FILE;
+        newde->file_type = file_type;
         memmove(newde->name, name, namelen);
         de->rec_len = actual;
         return block_write_bytes(fs->dev, ext2_block_offset(fs, bno),
@@ -501,7 +619,7 @@ ext2_dir_add(struct inode *dp, char *name, uint inum)
   de->inode = inum;
   de->rec_len = fs->block_size;
   de->name_len = namelen;
-  de->file_type = EXT2_FT_REG_FILE;
+  de->file_type = file_type;
   memmove(de->name, name, namelen);
   if(block_write_bytes(fs->dev, ext2_block_offset(fs, bno),
                        buf, fs->block_size) != fs->block_size)
@@ -511,17 +629,45 @@ ext2_dir_add(struct inode *dp, char *name, uint inum)
   return 0;
 }
 
+static int
+ext2_init_dir(struct ext2_fs *fs, uint inum, uint parent, uint bno)
+{
+  uchar buf[BSIZE];
+  struct ext2_dirent *de;
+  uint dotlen;
+
+  memset(buf, 0, sizeof(buf));
+
+  dotlen = ext2_align4(8 + 1);
+  de = (struct ext2_dirent*)buf;
+  de->inode = inum;
+  de->rec_len = dotlen;
+  de->name_len = 1;
+  de->file_type = EXT2_FT_DIR;
+  memmove(de->name, ".", 1);
+
+  de = (struct ext2_dirent*)(buf + dotlen);
+  de->inode = parent;
+  de->rec_len = fs->block_size - dotlen;
+  de->name_len = 2;
+  de->file_type = EXT2_FT_DIR;
+  memmove(de->name, "..", 2);
+
+  return block_write_bytes(fs->dev, ext2_block_offset(fs, bno),
+                           buf, fs->block_size) == fs->block_size ? 0 : -1;
+}
+
 static struct inode*
 ext2_create(struct inode *dp, char *name, short type, short major, short minor)
 {
   struct ext2_fs *fs = (struct ext2_fs*)dp->mnt->fs_private;
   struct ext2_dinode di;
-  uint inum;
+  uint inum, bno = 0;
 
   (void)major;
   (void)minor;
 
-  if(type != T_FILE)
+  if(type != T_FILE && type != T_DIR)
     return 0;
 
   inum = ext2_alloc_inode(fs);
@@ -529,23 +675,161 @@ ext2_create(struct inode *dp, char *name, short type, short major, short minor)
     return 0;
 
   memset(&di, 0, sizeof(di));
-  di.i_mode = ext2_type_to_mode(T_FILE);
-  di.i_links_count = 1;
-  if(ext2_write_dinode(fs, inum, &di) < 0)
-    return 0;
+  di.i_mode = ext2_type_to_mode(type);
+  di.i_links_count = type == T_DIR ? 2 : 1;
 
-  if(ext2_dir_add(dp, name, inum) < 0)
+  if(type == T_DIR){
+    bno = ext2_alloc_block(fs);
+    if(bno == 0){
+      ext2_free_inode(fs, inum);
+      return 0;
+    }
+    if(ext2_init_dir(fs, inum, dp->inum, bno) < 0){
+      ext2_free_block(fs, bno);
+      ext2_free_inode(fs, inum);
+      return 0;
+    }
+    di.i_size = fs->block_size;
+    di.i_blocks = fs->block_size / 512;
+    di.i_block[0] = bno;
+  }
+
+  if(ext2_write_dinode(fs, inum, &di) < 0){
+    if(type == T_DIR)
+      ext2_free_block(fs, bno);
+    ext2_free_inode(fs, inum);
     return 0;
+  }
+
+  if(ext2_dir_add(dp, name, inum,
+                  type == T_DIR ? EXT2_FT_DIR : EXT2_FT_REG_FILE) < 0){
+    if(type == T_DIR)
+      ext2_free_block(fs, bno);
+    ext2_free_inode(fs, inum);
+    return 0;
+  }
+
+  if(type == T_DIR){
+    dp->nlink++;
+    ext2_sync_inode(dp);
+  }
 
   return ext2_iget(dp->mnt, inum);
+}
+
+static int
+ext2_unlink(struct inode *dp, char *name)
+{
+  struct ext2_fs *fs = (struct ext2_fs*)dp->mnt->fs_private;
+  struct ext2_dirent de;
+  struct inode *ip;
+  uint entry_off;
+
+  if(ext2_find_dirent(dp, name, &de, &entry_off) < 0)
+    return -1;
+
+  ip = ext2_iget(dp->mnt, de.inode);
+  if(ip == 0)
+    return -1;
+
+  ilock(ip);
+  if(ip->type == T_DIR && !ext2_is_dir_empty(ip)){
+    iunlockput(ip);
+    return -1;
+  }
+
+  if(ext2_remove_dirent(fs, entry_off) < 0){
+    iunlockput(ip);
+    return -1;
+  }
+
+  if(ip->type == T_DIR){
+    dp->nlink--;
+    ext2_sync_inode(dp);
+    ip->nlink = 0;
+  } else if(ip->nlink > 0){
+    ip->nlink--;
+  }
+
+  if(ip->nlink == 0){
+    ext2_itrunc(ip);
+    ext2_free_inode(fs, ip->inum);
+  } else {
+    ext2_sync_inode(ip);
+  }
+  iunlockput(ip);
+  return 0;
+}
+
+static int
+ext2_link(struct inode *ip, struct inode *dp, char *name)
+{
+  if(ip->type != T_FILE || dp->type != T_DIR)
+    return -1;
+
+  ilock(ip);
+  ip->nlink++;
+  if(ext2_sync_inode(ip) < 0){
+    ip->nlink--;
+    iunlock(ip);
+    return -1;
+  }
+  iunlock(ip);
+
+  ilock(dp);
+  if(ext2_dir_add(dp, name, ip->inum, EXT2_FT_REG_FILE) < 0){
+    iunlock(dp);
+    ilock(ip);
+    ip->nlink--;
+    ext2_sync_inode(ip);
+    iunlock(ip);
+    return -1;
+  }
+  iunlock(dp);
+
+  return 0;
 }
 
 static int
 ext2_readi(struct inode *ip, int user_dst, uint64 dst, uint off, uint n)
 {
   struct ext2_fs *fs = (struct ext2_fs*)ip->mnt->fs_private;
+  struct dirent xde;
   uchar buf[BSIZE];
-  uint tot, m, bno;
+  struct ext2_dirent *de;
+  uint tot, m, bno, want, seen, pos;
+
+  if(ip->type == T_DIR){
+    if(n < sizeof(xde) || off % sizeof(xde) != 0)
+      return 0;
+    want = off / sizeof(xde);
+    seen = 0;
+    for(off = 0; off < ip->size; off += fs->block_size){
+      bno = ext2_bmap(ip, off / fs->block_size, 0);
+      if(bno == 0)
+        continue;
+      if(block_read_bytes(fs->dev, ext2_block_offset(fs, bno),
+                          buf, fs->block_size) < 0)
+        return -1;
+      for(pos = 0; pos < fs->block_size; ){
+        de = (struct ext2_dirent*)(buf + pos);
+        if(de->rec_len < 8 || pos + de->rec_len > fs->block_size)
+          break;
+        if(de->inode != 0 && de->name_len <= DIRSIZ){
+          if(seen++ == want){
+            memset(&xde, 0, sizeof(xde));
+            xde.inum = de->inode;
+            memmove(xde.name, de->name, de->name_len);
+            if(either_copyout(user_dst, dst, (char*)&xde, sizeof(xde)) < 0)
+              return -1;
+            return sizeof(xde);
+          }
+        }
+        pos += de->rec_len;
+      }
+    }
+    return 0;
+  }
 
   if(off > ip->size || off + n < off)
     return 0;
@@ -698,6 +982,8 @@ static struct inode_ops ext2_inode_ops = {
   .trunc = ext2_itrunc,
   .lookup = ext2_lookup,
   .create = ext2_create,
+  .unlink = ext2_unlink,
+  .link = ext2_link,
 };
 
 static struct fs_ops ext2_fs_ops = {

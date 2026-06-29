@@ -21,6 +21,33 @@ xv6_lookup(struct inode *dp, char *name)
   return dirlookup(dp, name, 0);
 }
 
+static int
+xv6_link(struct inode *ip, struct inode *dp, char *name)
+{
+  ilock(ip);
+  if(ip->type == T_DIR){
+    iunlock(ip);
+    return -1;
+  }
+
+  ip->nlink++;
+  iupdate(ip);
+  iunlock(ip);
+
+  ilock(dp);
+  if(dp->dev != ip->dev || dirlink(dp, name, ip->inum) < 0){
+    iunlock(dp);
+    ilock(ip);
+    ip->nlink--;
+    iupdate(ip);
+    iunlock(ip);
+    return -1;
+  }
+  iunlock(dp);
+
+  return 0;
+}
+
 static struct inode_ops xv6_inode_ops = {
   .read = readi,
   .write = writei,
@@ -28,6 +55,7 @@ static struct inode_ops xv6_inode_ops = {
   .trunc = itrunc,
   .lookup = xv6_lookup,
   .create = 0,
+  .link = xv6_link,
 };
 
 static int
@@ -103,8 +131,9 @@ vfs_mount(char *fstype, char *path, int dev)
 {
   enum fs_type type;
   struct fs_ops *ops;
-  struct inode *mp;
+  struct inode *mp, *parent;
   struct mount *mnt;
+  char name[DIRSIZ];
   int free, i;
 
   if(fstype == 0 || path == 0 || dev <= 0)
@@ -120,7 +149,13 @@ vfs_mount(char *fstype, char *path, int dev)
 
   begin_op();
 
+  if((parent = nameiparent(path, name)) == 0){
+    end_op();
+    return -1;
+  }
+
   if((mp = namei(path)) == 0){
+    iput(parent);
     end_op();
     return -1;
   }
@@ -128,6 +163,7 @@ vfs_mount(char *fstype, char *path, int dev)
   ilock(mp);
   if(mp->type != T_DIR){
     iunlockput(mp);
+    iput(parent);
     end_op();
     return -1;
   }
@@ -142,6 +178,7 @@ vfs_mount(char *fstype, char *path, int dev)
        mtable.mount[i].mountpoint->inum == mp->inum){
       release(&mtable.lock);
       iput(mp);
+      iput(parent);
       end_op();
       return -1;
     }
@@ -152,6 +189,7 @@ vfs_mount(char *fstype, char *path, int dev)
   if(free < 0){
     release(&mtable.lock);
     iput(mp);
+    iput(parent);
     end_op();
     return -1;
   }
@@ -162,6 +200,7 @@ vfs_mount(char *fstype, char *path, int dev)
   mnt->fstype = type;
   mnt->dev = dev;
   mnt->mountpoint = mp;
+  mnt->parent = parent;
   mnt->root = 0;
   mnt->fsops = ops;
   mnt->fs_private = 0;
@@ -172,6 +211,7 @@ vfs_mount(char *fstype, char *path, int dev)
     memset(mnt, 0, sizeof(*mnt));
     release(&mtable.lock);
     iput(mp);
+    iput(parent);
     end_op();
     return -1;
   }
@@ -208,8 +248,27 @@ vfs_mountpoint(struct inode *ip)
 struct inode*
 vfs_lookup(struct inode *dp, char *name)
 {
+  struct mount *mnt;
+  struct inode *parent;
+  int i;
+
   if(dp == 0 || dp->ops == 0 || dp->ops->lookup == 0)
     return 0;
+
+  if(namecmp(name, "..") == 0){
+    acquire(&mtable.lock);
+    for(i = 1; i < NMOUNT; i++){
+      mnt = &mtable.mount[i];
+      if(mnt->used && mnt->root != 0 && mnt->parent != 0 &&
+         mnt->root->dev == dp->dev && mnt->root->inum == dp->inum){
+        parent = mnt->parent;
+        release(&mtable.lock);
+        return idup(parent);
+      }
+    }
+    release(&mtable.lock);
+  }
+
   return dp->ops->lookup(dp, name);
 }
 
@@ -219,6 +278,30 @@ vfs_create(struct inode *dp, char *name, short type, short major, short minor)
   if(dp == 0 || dp->ops == 0 || dp->ops->create == 0)
     return 0;
   return dp->ops->create(dp, name, type, major, minor);
+}
+
+int
+vfs_unlink(struct inode *dp, char *name)
+{
+  if(dp == 0 || dp->ops == 0 || dp->ops->unlink == 0)
+    return -1;
+  return dp->ops->unlink(dp, name);
+}
+
+int
+vfs_link(struct inode *ip, struct inode *dp, char *name)
+{
+  struct inode *old;
+
+  if(ip == 0 || dp == 0 || ip->ops == 0 || ip->ops->link == 0)
+    return -1;
+  if(ip->fstype != dp->fstype || ip->dev != dp->dev)
+    return -1;
+  if((old = vfs_lookup(dp, name)) != 0){
+    iput(old);
+    return -1;
+  }
+  return ip->ops->link(ip, dp, name);
 }
 
 int

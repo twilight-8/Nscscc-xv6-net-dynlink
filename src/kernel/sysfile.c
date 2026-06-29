@@ -139,6 +139,7 @@ sys_link(void)
 {
   char name[DIRSIZ], new[MAXPATH], old[MAXPATH];
   struct inode *dp, *ip;
+  int r;
 
   if(argstr(0, old, MAXPATH) < 0 || argstr(1, new, MAXPATH) < 0)
     return -1;
@@ -149,38 +150,17 @@ sys_link(void)
     return -1;
   }
 
-  ilock(ip);
-  if(ip->type == T_DIR){
-    iunlockput(ip);
+  if((dp = nameiparent(new, name)) == 0){
+    iput(ip);
     end_op();
     return -1;
   }
-
-  ip->nlink++;
-  iupdate(ip);
-  iunlock(ip);
-
-  if((dp = nameiparent(new, name)) == 0)
-    goto bad;
-  ilock(dp);
-  if(dp->dev != ip->dev || dirlink(dp, name, ip->inum) < 0){
-    iunlockput(dp);
-    goto bad;
-  }
-  iunlockput(dp);
+  r = vfs_link(ip, dp, name);
+  iput(dp);
   iput(ip);
 
   end_op();
-
-  return 0;
-
-bad:
-  ilock(ip);
-  ip->nlink--;
-  iupdate(ip);
-  iunlockput(ip);
-  end_op();
-  return -1;
+  return r;
 }
 
 // Is the directory dp empty except for "." and ".." ?
@@ -221,6 +201,14 @@ sys_unlink(void)
   // Cannot unlink "." or "..".
   if(namecmp(name, ".") == 0 || namecmp(name, "..") == 0)
     goto bad;
+
+  if(dp->fstype != FS_XV6){
+    if(vfs_unlink(dp, name) < 0)
+      goto bad;
+    iunlockput(dp);
+    end_op();
+    return 0;
+  }
 
   if((ip = dirlookup(dp, name, &off)) == 0)
     goto bad;

@@ -24,6 +24,8 @@ struct inode_ops {
   void (*trunc)(struct inode *ip);
   struct inode *(*lookup)(struct inode *dp, char *name);
   struct inode *(*create)(struct inode *dp, char *name, short type, short major, short minor);
+  int  (*unlink)(struct inode *dp, char *name);
+  int  (*link)(struct inode *ip, struct inode *dp, char *name);
 };
 
 // Per-filesystem operations. Each backend validates and initializes a mount.
@@ -36,6 +38,7 @@ struct mount {
   enum fs_type fstype;
   uint dev;
   struct inode *mountpoint;
+  struct inode *parent;
   struct inode *root;
   struct fs_ops *fsops;
   void *fs_private;
