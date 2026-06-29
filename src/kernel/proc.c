@@ -18,7 +18,9 @@ struct spinlock pid_lock;
 extern void forkret(void);
 static void freeproc(struct proc *p);
 
+#ifndef ARCH_LOONGARCH
 extern char trampoline[]; // trampoline.S
+#endif
 
 // helps ensure that wakeups of wait()ing
 // parents are not lost. helps obey the
@@ -183,6 +185,7 @@ proc_pagetable(struct proc *p)
   if(pagetable == 0)
     return 0;
 
+#ifndef ARCH_LOONGARCH
   // map the trampoline code (for system call return)
   // at the highest user virtual address.
   // only the supervisor uses it, on the way
@@ -192,12 +195,20 @@ proc_pagetable(struct proc *p)
     uvmfree(pagetable, 0);
     return 0;
   }
+#endif
 
   // map the trapframe page just below the trampoline page, for
   // trampoline.S.
+#ifdef ARCH_LOONGARCH
+  if(mappages(pagetable, TRAPFRAME, PGSIZE,
+              (uint64)(p->trapframe), PTE_P | PTE_W | PTE_MAT | PTE_D) < 0){
+#else
   if(mappages(pagetable, TRAPFRAME, PGSIZE,
               (uint64)(p->trapframe), PTE_R | PTE_W) < 0){
+#endif
+#ifndef ARCH_LOONGARCH
     uvmunmap(pagetable, TRAMPOLINE, 1, 0);
+#endif
     uvmfree(pagetable, 0);
     return 0;
   }
@@ -210,7 +221,9 @@ proc_pagetable(struct proc *p)
 void
 proc_freepagetable(pagetable_t pagetable, uint64 sz)
 {
+#ifndef ARCH_LOONGARCH
   uvmunmap(pagetable, TRAMPOLINE, 1, 0);
+#endif
   uvmunmap(pagetable, TRAPFRAME, 1, 0);
   uvmfree(pagetable, sz);
 }
@@ -454,7 +467,7 @@ scheduler(void)
     }
     if(found == 0) {
       // nothing to run; stop running on this core until an interrupt.
-      asm volatile("wfi");
+      cpu_idle();
     }
   }
 }
@@ -502,7 +515,11 @@ yield(void)
 void
 forkret(void)
 {
+#ifndef ARCH_LOONGARCH
   extern char userret[];
+#else
+  extern void usertrapret(void);
+#endif
   static int first = 1;
   struct proc *p = myproc();
 
@@ -528,10 +545,14 @@ forkret(void)
   }
 
   // return to user space, mimicing usertrap()'s return.
+#ifdef ARCH_LOONGARCH
+  usertrapret();
+#else
   prepare_return();
   uint64 satp = MAKE_SATP(p->pagetable);
   uint64 trampoline_userret = TRAMPOLINE + (userret - trampoline);
   ((void (*)(uint64))trampoline_userret)(satp);
+#endif
 }
 
 // Sleep on channel chan, releasing condition lock lk.

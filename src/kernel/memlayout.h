@@ -1,3 +1,29 @@
+#ifdef ARCH_LOONGARCH
+
+#define DMWIN_MASK 0x9000000000000000
+
+#define UART0 (0x1fe001e0UL | DMWIN_MASK)
+#define UART0_IRQ 2
+
+#define LS7A_PCH_REG_BASE (0x10000000UL | DMWIN_MASK)
+#define LS7A_INT_MASK_REG (LS7A_PCH_REG_BASE + 0x020)
+#define LS7A_INT_EDGE_REG (LS7A_PCH_REG_BASE + 0x060)
+#define LS7A_INT_CLEAR_REG (LS7A_PCH_REG_BASE + 0x080)
+#define LS7A_INT_HTMSI_VEC_REG (LS7A_PCH_REG_BASE + 0x200)
+#define LS7A_INT_STATUS_REG (LS7A_PCH_REG_BASE + 0x3a0)
+#define LS7A_INT_POL_REG (LS7A_PCH_REG_BASE + 0x3e0)
+
+#define KERNBASE (0x9000000000200000UL)
+#define RAMBASE (0x90000000UL | DMWIN_MASK)
+#define PHYSTOP (RAMBASE + 128*1024*1024)
+#define RAMSTOP PHYSTOP
+
+#define KSTACK(p) (TRAPFRAME - ((p)+1)* 2*PGSIZE)
+#define TRAPFRAME (MAXVA - PGSIZE)
+#define TRAMPOLINE TRAPFRAME
+
+#else
+
 // Physical memory layout
 
 // qemu -machine virt is set up like this,
@@ -57,3 +83,5 @@
 //   TRAPFRAME (p->trapframe, used by the trampoline)
 //   TRAMPOLINE (the same page as in the kernel)
 #define TRAPFRAME (TRAMPOLINE - PGSIZE)
+
+#endif

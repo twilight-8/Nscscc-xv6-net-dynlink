@@ -22,6 +22,23 @@ void            bunpin(struct buf*);
 int             block_read_bytes(uint, uint, uchar*, uint);
 int             block_write_bytes(uint, uint, uchar*, uint);
 
+// hal.c
+void            hal_disk_init(void);
+void            hal_disk_rw(struct buf*, int);
+void            hal_intr_init(void);
+void            hal_intr_inithart(void);
+int             hal_irq_claim(void);
+void            hal_irq_complete(int);
+
+// LoongArch platform helpers.
+void            apicinit(void);
+void            apic_complete(uint64);
+uint64          extioi_claim(void);
+void            extioi_complete(uint64);
+void            extioiinit(void);
+void            ramdiskinit(void);
+void            ramdiskrw(struct buf*, int);
+
 // console.c
 void            consoleinit(void);
 void            consoleintr(int);

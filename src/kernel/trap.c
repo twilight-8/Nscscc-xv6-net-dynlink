@@ -191,7 +191,7 @@ devintr()
     // this is a supervisor external interrupt, via PLIC.
 
     // irq indicates which device interrupted.
-    int irq = plic_claim();
+    int irq = hal_irq_claim();
 
     if(irq == UART0_IRQ){
       uartintr();
@@ -205,7 +205,7 @@ devintr()
     // interrupt at a time; tell the PLIC the device is
     // now allowed to interrupt again.
     if(irq)
-      plic_complete(irq);
+      hal_irq_complete(irq);
 
     return 1;
   } else if(scause == 0x8000000000000005L){
@@ -216,4 +216,3 @@ devintr()
     return 0;
   }
 }
-

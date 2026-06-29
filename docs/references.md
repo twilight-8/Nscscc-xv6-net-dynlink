@@ -17,7 +17,8 @@
 - RISC-V specifications  
   https://riscv.org/technical/specifications/
 
-LoongArch 资料将在 HAL 阶段补充。
+- LoongArch Reference Manual  
+  https://loongson.github.io/LoongArch-Documentation/LoongArch-Vol1-EN.html
 
 ## Tests
 
@@ -30,4 +31,7 @@ ext2 和 fat32 格式资料将在对应实现阶段补充。
 
 ## Previous Projects
 
-Commit 1 阶段未复制往届项目代码。
+- xv6-loongarch-exp  
+  https://github.com/SKT-CPUOS/xv6-loongarch-exp.git
+
+LoongArch64 启动、trap、页表和中断相关代码参考该项目，并按当前 xv6-riscv rev5 与本项目 VFS/HAL 结构做了裁剪和适配。

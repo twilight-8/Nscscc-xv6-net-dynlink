@@ -131,7 +131,11 @@ kexec(char *path, char **argv)
   oldpagetable = p->pagetable;
   p->pagetable = pagetable;
   p->sz = sz;
+#ifdef ARCH_LOONGARCH
+  p->trapframe->era = elf.entry;  // initial program counter = main
+#else
   p->trapframe->epc = elf.entry;  // initial program counter = main
+#endif
   p->trapframe->sp = sp; // initial stack pointer
   proc_freepagetable(oldpagetable, oldsz);
 
@@ -165,6 +169,9 @@ loadseg(pagetable_t pagetable, uint64 va, struct inode *ip, uint offset, uint sz
       n = sz - i;
     else
       n = PGSIZE;
+#ifdef ARCH_LOONGARCH
+    pa |= DMWIN_MASK;
+#endif
     if(readi(ip, 0, (uint64)pa, offset+i, n) != n)
       return -1;
   }

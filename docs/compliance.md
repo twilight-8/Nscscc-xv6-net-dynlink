@@ -29,6 +29,8 @@
 | MIT xv6-riscv rev5 | 基础系统 | 是 |
 | xv6-riscv book | 学习 xv6 结构 | 否 |
 | RISC-V specifications | 架构参考 | 否 |
+| LoongArch Reference Manual | 架构参考 | 否 |
+| xv6-loongarch-exp | 移植代码参考 | 是，后续有修改 |
 | xv6-extend-vfs tests | 指定测试 | 后续复制测试文件 |
 
 

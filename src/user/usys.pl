@@ -16,9 +16,15 @@ sub entry {
 	print ".global $name\n";
 	print "$name:\n";
     }
+    print "#ifdef ARCH_LOONGARCH\n";
+    print " li.d \$a7, SYS_${name}\n";
+    print " syscall 0\n";
+    print " jirl \$zero, \$ra, 0\n";
+    print "#else\n";
     print " li a7, SYS_${name}\n";
     print " ecall\n";
     print " ret\n";
+    print "#endif\n";
 }
 	
 entry("fork");

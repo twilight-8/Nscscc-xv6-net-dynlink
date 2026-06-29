@@ -13,21 +13,23 @@
 - 将 ext2 镜像追加在 `fs.img` 后半部分，通过逻辑设备号 `EXT2DEV` 访问，避免大规模改动 virtio 设备模型。
 - 接入 fat32 镜像和 `FAT32DEV`，并实现 fat32 短文件名目录遍历、普通文件读取、创建、写入和截断。
 - 对 fat32 做了一轮精巧性审查和边界测试，确认当前实现保持在教学型最小闭环内。
+- 引入轻量 HAL，使 RISC-V 继续使用 PLIC/virtio，LoongArch64 使用 APIC/EXTIOI 和内嵌 ramdisk。
 
 设计原则：
 
 - 小步接入：先保证 xv6 原行为稳定，再逐步接入 ext2。
 - 接口薄：VFS 只提供当前测试和后续扩展真正需要的入口。
+- HAL 薄：只抽象中断初始化、外部中断 claim/complete 和块设备读写，避免把教学代码拆得过散。
 - 后端集中：ext2 逻辑集中放在 `kernel/ext2.c`，减少对原 xv6 文件系统的污染。
 - 可展示：保留清晰的 `mkdir /mnt`、`mount ext2 /mnt`、跨文件系统复制路径，方便 demo 展示。
 
 ## 2. 总体结构
 
-当前系统可以理解为三层：
+当前文件系统可以理解为三层：
 
 - 上层：系统调用和路径解析，例如 `open/read/write/stat/mkdir`。
 - 中层：VFS 分发层，根据 inode 所属文件系统选择不同操作表。
-- 下层：具体文件系统后端，包括原 xv6 文件系统、ext2 文件系统和 fat32 文件系统。
+- 文件系统后端：原 xv6 文件系统、ext2 文件系统和 fat32 文件系统。
 
 ```mermaid
 flowchart TD
@@ -47,12 +49,17 @@ flowchart TD
     OPS -->|FS_EXT2| EXT2[ext2.c<br/>lookup/create/read/write/trunc/stat]
     OPS -->|FS_FAT32| FAT32[fat32.c<br/>lookup/create/read/write/trunc/stat]
 
-    XV6 --> BIO[bio / virtio_disk]
+    XV6 --> BIO[bio]
     EXT2 --> BLK[block_read_bytes<br/>block_write_bytes]
     FAT32 --> BLK
     BLK --> BIO
 
-    BIO --> IMG[fs.img]
+    BIO --> HAL[HAL<br/>hal_disk_rw]
+    HAL -->|RISC-V| VIRTIO[virtio_disk]
+    HAL -->|LoongArch64| RAM[ramdisk]
+
+    VIRTIO --> IMG[fs.img]
+    RAM --> IMG
     IMG --> XIMG[前 2000 blocks<br/>xv6 文件系统]
     IMG --> EIMG[后 4096 blocks<br/>ext2 镜像]
     IMG --> FIMG[再后续区域<br/>fat32 镜像]
@@ -216,12 +223,15 @@ sequenceDiagram
 | `kernel/vfs.c` | 实现 VFS 初始化、挂载表、wrapper 分发 |
 | `kernel/ext2.c` | 实现 ext2 最小文件系统后端 |
 | `kernel/fat32.c` | 实现 fat32 挂载识别、目录遍历和普通文件读写 |
+| `kernel/hal.c` | RISC-V 平台 HAL，连接 PLIC 和 virtio 块设备 |
+| `kernel/arch/loongarch/` | LoongArch64 启动、trap、页表、切换、中断和 ramdisk 后端 |
 | `kernel/fs.c` | 保留 xv6 原文件系统逻辑，并在路径解析处接入 VFS |
 | `kernel/sysfile.c` | 在 open/create/mkdir 等路径中接入 VFS |
 | `kernel/file.h` | 扩展内存 inode 的 VFS 字段 |
-| `kernel/virtio_disk.c` | 将 `EXT2DEV/FAT32DEV` 映射到 `fs.img` 后续镜像区域 |
+| `kernel/bio.c` | 通过 `hal_disk_rw()` 访问具体块设备 |
+| `kernel/virtio_disk.c` | RISC-V 下将 `EXT2DEV/FAT32DEV` 映射到 `fs.img` 后续镜像区域 |
 | `kernel/param.h` | 定义 `EXT2DEV/FAT32DEV` 和镜像偏移 |
-| `Makefile` | 编译 VFS/ext2/fat32，并生成、追加 ext2 和 fat32 镜像 |
+| `Makefile` | 编译 VFS/ext2/fat32，支持 `ARCH=riscv` 和 `ARCH=loongarch` |
 | `mkfs/mkfat32.c` | 生成最小空 fat32 镜像，避免依赖宿主机 `mkfs.fat` |
 
 ## 9. 当前状态与后续计划
@@ -250,8 +260,21 @@ D0 重新核对公开测试后确认：当前公开样例仍主要围绕 ext2 `/
 - 暂不维护完整时间戳、权限和 FSInfo 空闲计数。
 - 当前实现面向赛题演示和公开测试风格中的普通文件路径，保持代码集中和可讲清。
 
-当前阶段 A/B/C/D 已经完成并通过测试。后续计划：
+### 阶段 E：轻量 HAL 与 LoongArch64 启动
 
-- 阶段 E：整理 HAL 接口，为 LoongArch 移植做准备。
+当前已完成：
+
+- 新增 `hal_disk_rw()`、`hal_intr_init()`、`hal_irq_claim()` 等薄接口。
+- RISC-V 路径保持 PLIC 和 virtio 块设备，`fs.img` 可由 QEMU virtio 实际读写。
+- LoongArch64 路径接入 APIC/EXTIOI，并使用链接进内核的 `fs.img` ramdisk 作为块设备。
+- LoongArch64 已能在 `qemu-system-loongarch64` 启动到 shell，基本目录访问可用。
+
+阶段边界：
+
+- LoongArch64 当前使用 ramdisk，写入只修改运行时内存，不回写宿主机 `fs.img`。
+- 暂不实现 LoongArch64 virtio/PCI 块设备，后续如需持久化写入再单独补充。
+
+当前阶段 A/B/C/C4/D0-D4/E 已经完成并通过阶段性测试。后续建议：
+
 - 阶段 F：在 RISC-V 和 LoongArch 上分别跑原始 xv6 测试与 VFS 测试。
 - 阶段 G：整理最终文档、Demo、diff 文件和答辩材料。

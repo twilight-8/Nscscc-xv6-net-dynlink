@@ -36,7 +36,6 @@ plan/
 # Root Makefile stores the selected test here.
 .last-test
 
-# Logs: keep curated contest logs under tests/logs/
+# Logs
 *.log
-!tests/**/logs/*.log
 !tests/**/logs/README.md
