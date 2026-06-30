@@ -75,10 +75,10 @@ test2
 
 ```mermaid
 flowchart LR
-    A[hello.c in xv6 root] --> B[/hello.c<br/>xv6]
-    P[ext2.img 预置 hello.c] --> C[/mnt/hello.c<br/>ext2]
+    A["hello.c in xv6 root"] --> B["/hello.c<br>xv6"]
+    P["ext2.img 预置 hello.c"] --> C["/mnt/hello.c<br>ext2"]
     C -->|test1 copy| B
-    C -->|test1 copy| D[/tests/hello.c<br/>xv6]
+    C -->|test1 copy| D["/tests/hello.c<br>xv6"]
     B -->|test1 copy| C
     D -->|test1 copy| C
     A -->|test2 write/read| C
