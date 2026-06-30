@@ -250,7 +250,8 @@ fs.img: mkfs/mkfs README hello.c tests/hello.c $(UPROGS) $(EXT2IMG) $(FAT32IMG)
 
 clean: 
 	rm -f *.tex *.dvi *.idx *.aux *.log *.ind *.ilg \
-	*/*.o */*.d */*.asm */*.sym \
+	*/*.o */*/*.o */*/*/*.o */*.d */*/*.d */*/*/*.d \
+	*/*.asm */*/*.asm */*/*/*.asm */*.sym */*/*.sym */*/*/*.sym \
 	$K/kernel fs.img \
 	$K/arch/loongarch/ramdisk_img.o \
 	.arch-* \
