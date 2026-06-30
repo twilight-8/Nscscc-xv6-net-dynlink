@@ -16,15 +16,17 @@ This test checks the current minimal ext2 support through the VFS layer.
 From the repository root:
 
 ```sh
-make test_ext2
+make ext2
 make run
 ```
 
 Or:
 
 ```sh
-make test_ext2 && make run
+make ext2 && make run
 ```
+
+The old `make test_ext2` target is kept as a compatibility alias.
 
 ## Commands
 

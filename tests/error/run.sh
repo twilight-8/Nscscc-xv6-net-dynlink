@@ -11,14 +11,14 @@ RESULT_LOG="$LOG_DIR/result.log"
 mkdir -p "$LOG_DIR"
 
 if [ ! -f "$XV6_DIR/fs.img" ]; then
-  echo "[error_path] fs.img not found"
-  echo "Use: make test_error_path"
+  echo "[error] fs.img not found"
+  echo "Use: make error"
   exit 1
 fi
 
-echo "[error_path] running QEMU command test"
+echo "[error] running QEMU command test"
 python3 "$ROOT_DIR/tests/runner/run_qemu_case.py" \
-  --case error_path \
+  --case error \
   --xv6-dir "$XV6_DIR" \
   --commands "$SCRIPT_DIR/cmds.sh" \
   --log "$RAW_LOG" \
@@ -46,8 +46,8 @@ fi
   echo "Raw Log: $RAW_LOG"
 } > "$RESULT_LOG"
 
-echo "[error_path] result: $result"
-echo "[error_path] logs: $LOG_DIR"
+echo "[error] result: $result"
+echo "[error] logs: $LOG_DIR"
 
 if [ "$result" != "PASS" ]; then
   exit 1

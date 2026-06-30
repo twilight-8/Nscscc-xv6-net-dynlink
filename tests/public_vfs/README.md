@@ -14,20 +14,22 @@
 在仓库根目录执行：
 
 ```sh
-make test_public_vfs
+make public_vfs
 make run
 ```
 
 也可以连写：
 
 ```sh
-make test_public_vfs && make run
+make public_vfs && make run
 ```
 
 其中：
 
-- `make test_public_vfs`：清理并构建 RISC-V 内核和 `fs.img`，同时生成 ext2/fat32 镜像。
+- `make public_vfs`：清理并构建 RISC-V 内核和 `fs.img`，同时生成 ext2/fat32 镜像。
 - `make run`：启动 QEMU，读取 `tests/public_vfs/cmds.sh`，自动向 xv6 shell 输入测试命令。
+
+旧入口 `make test_public_vfs` 仍保留为兼容别名。
 
 ## 测试命令
 

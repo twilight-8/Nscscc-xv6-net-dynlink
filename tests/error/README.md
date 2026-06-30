@@ -1,4 +1,4 @@
-# error_path
+# error
 
 This test checks that invalid VFS operations fail cleanly instead of crashing the kernel.
 
@@ -15,22 +15,24 @@ This test checks that invalid VFS operations fail cleanly instead of crashing th
 From the repository root:
 
 ```sh
-make test_error_path
+make error
 make run
 ```
 
 Or:
 
 ```sh
-make test_error_path && make run
+make error && make run
 ```
+
+The old `make test_error_path` target is kept as a compatibility alias.
 
 ## Commands
 
 The xv6 shell commands are stored in:
 
 ```text
-tests/error_path/cmds.sh
+tests/error/cmds.sh
 ```
 
 ## Pass Criteria
@@ -55,5 +57,5 @@ Rejected output:
 Runtime logs are written to:
 
 ```text
-tests/error_path/logs/
+tests/error/logs/
 ```

@@ -1,4 +1,4 @@
-# error_path logs
+# error logs
 
 This directory stores local runtime logs for the error-path test.
 

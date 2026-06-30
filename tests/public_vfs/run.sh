@@ -12,7 +12,7 @@ mkdir -p "$LOG_DIR"
 
 if [ ! -f "$XV6_DIR/fs.img" ]; then
   echo "[public_vfs] fs.img not found"
-  echo "Use: make test_public_vfs"
+  echo "Use: make public_vfs"
   exit 1
 fi
 

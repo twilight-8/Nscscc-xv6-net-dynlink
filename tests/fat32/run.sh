@@ -12,7 +12,7 @@ mkdir -p "$LOG_DIR"
 
 if [ ! -f "$XV6_DIR/fs.img" ]; then
   echo "[fat32] fs.img not found"
-  echo "Use: make test_fat32"
+  echo "Use: make fat32"
   exit 1
 fi
 

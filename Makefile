@@ -3,7 +3,7 @@ SHELL := /bin/bash
 XV6_DIR := src
 STATE_FILE := .last-test
 
-.PHONY: test_baseline test_public_vfs test_ext2 test_fat32 test_error_path run
+.PHONY: test_baseline public_vfs ext2 fat32 error test_public_vfs test_ext2 test_fat32 test_error_path run
 
 test_baseline:
 	@set -eu; \
@@ -46,7 +46,7 @@ test_baseline:
 	echo "[test_baseline] prepare done"; \
 	echo "Next command: make run"
 
-test_public_vfs:
+public_vfs:
 	@set -eu; \
 	TEST_NAME="public_vfs"; \
 	TEST_DIR="tests/$$TEST_NAME"; \
@@ -84,7 +84,7 @@ test_public_vfs:
 	echo "[public_vfs] prepare done"; \
 	echo "Next command: make run"
 
-test_ext2:
+ext2:
 	@set -eu; \
 	TEST_NAME="ext2"; \
 	TEST_DIR="tests/$$TEST_NAME"; \
@@ -123,7 +123,7 @@ test_ext2:
 	echo "[ext2] prepare done"; \
 	echo "Next command: make run"
 
-test_fat32:
+fat32:
 	@set -eu; \
 	TEST_NAME="fat32"; \
 	TEST_DIR="tests/$$TEST_NAME"; \
@@ -161,13 +161,13 @@ test_fat32:
 	echo "[fat32] prepare done"; \
 	echo "Next command: make run"
 
-test_error_path:
+error:
 	@set -eu; \
-	TEST_NAME="error_path"; \
+	TEST_NAME="error"; \
 	TEST_DIR="tests/$$TEST_NAME"; \
 	LOG_DIR="$$TEST_DIR/logs"; \
 	mkdir -p "$$LOG_DIR"; \
-	echo "[error_path] record environment"; \
+	echo "[error] record environment"; \
 	{ \
 		echo "Test Name: $$TEST_NAME"; \
 		echo "Date: $$(date -Iseconds)"; \
@@ -187,7 +187,7 @@ test_error_path:
 		git rev-parse --short HEAD 2>/dev/null || echo "unknown"; \
 		git status --short 2>/dev/null || true; \
 	} > "$$LOG_DIR/env.log" 2>&1; \
-	echo "[error_path] build xv6 fs image"; \
+	echo "[error] build xv6 fs image"; \
 	( \
 		cd "$(XV6_DIR)" && \
 		make clean && \
@@ -196,14 +196,19 @@ test_error_path:
 		make fs.img \
 	) > "$$LOG_DIR/build.log" 2>&1; \
 	printf "%s\n" "$$TEST_NAME" > "$(STATE_FILE)"; \
-	echo "[error_path] prepare done"; \
+	echo "[error] prepare done"; \
 	echo "Next command: make run"
+
+test_public_vfs: public_vfs
+test_ext2: ext2
+test_fat32: fat32
+test_error_path: error
 
 run:
 	@set -eu; \
 	if [ ! -f "$(STATE_FILE)" ]; then \
 		echo "No prepared test."; \
-		echo "Use: make test_baseline or make test_public_vfs"; \
+		echo "Use: make test_baseline, make public_vfs, make ext2, make fat32, or make error"; \
 		exit 1; \
 	fi; \
 	TEST_NAME="$$(cat "$(STATE_FILE)")"; \
@@ -212,6 +217,6 @@ run:
 		public_vfs) bash "tests/public_vfs/run.sh" ;; \
 		ext2) bash "tests/ext2/run.sh" ;; \
 		fat32) bash "tests/fat32/run.sh" ;; \
-		error_path) bash "tests/error_path/run.sh" ;; \
+		error) bash "tests/error/run.sh" ;; \
 		*) echo "Unknown prepared test: $$TEST_NAME"; exit 1 ;; \
 	esac

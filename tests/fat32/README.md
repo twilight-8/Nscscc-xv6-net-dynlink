@@ -16,15 +16,17 @@ This test checks the current minimal FAT32 support through the VFS layer.
 From the repository root:
 
 ```sh
-make test_fat32
+make fat32
 make run
 ```
 
 Or:
 
 ```sh
-make test_fat32 && make run
+make fat32 && make run
 ```
+
+The old `make test_fat32` target is kept as a compatibility alias.
 
 ## Commands
 

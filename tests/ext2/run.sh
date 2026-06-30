@@ -12,7 +12,7 @@ mkdir -p "$LOG_DIR"
 
 if [ ! -f "$XV6_DIR/fs.img" ]; then
   echo "[ext2] fs.img not found"
-  echo "Use: make test_ext2"
+  echo "Use: make ext2"
   exit 1
 fi
 
