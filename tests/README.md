@@ -52,6 +52,34 @@ make test_public_vfs && make run
 - `test_baseline`：运行 xv6 自带 `usertests -q`，验证基础行为不退化。
 - `public_vfs`：显式 `mount ext2 /mnt` 后运行公开风格 `test1/test2`，验证 ext2 与 xv6 之间的跨文件系统复制。
 
+## 双架构手动验证
+
+RISC-V：
+
+```sh
+cd src
+make ARCH=riscv CPUS=1 qemu
+```
+
+LoongArch64：
+
+```sh
+cd src
+make ARCH=loongarch CPUS=1 qemu
+```
+
+进入 xv6 shell 后执行：
+
+```sh
+usertests -q
+mkdir /mnt
+mount ext2 /mnt 2
+test1
+test2
+```
+
+当前 RISC-V 与 LoongArch64 均已通过上述 `usertests -q` 和 `test1/test2` 验证。
+
 ## 日志
 
 各测试点的 `logs/` 目录用于保存本地运行日志。日志文件属于运行产物，不纳入版本控制；仓库只保留 `logs/README.md`。

@@ -132,7 +132,7 @@ cat hello.c > /mnt/hello.c
 阶段边界：
 
 - fat32 当前只支持 8.3 短文件名。
-- 暂不支持 fat32 下的 `unlink/link/rename`。
+- 支持基础 `unlink`；`link/rename` 不支持。
 - 暂不维护完整时间戳、权限和 FSInfo 空闲计数。
 
 验证结果：
@@ -154,7 +154,7 @@ cat hello.c > /mnt/hello.c
 - 移除 `fat32_writei()` 中不必要的预读逻辑。底层 `block_write_bytes()` 已经能处理局部写入，所以这里可以直接 `copyin` 后写入，代码更短，磁盘访问也更少。
 - 移除未使用的 FAT32 属性宏，保持 `fat32.c` 更干净。
 - 保持 VFS 接口不变，没有为 fat32 额外增加新抽象。
-- 明确 fat32 当前边界：只支持 8.3 短文件名，不支持长文件名、`unlink/link/rename` 和完整时间戳维护。
+- 明确 fat32 当前边界：只支持 8.3 短文件名，支持基础 `unlink`，不支持长文件名、`link/rename` 和完整时间戳维护。
 
 补充测试：
 
@@ -182,15 +182,15 @@ cat hello.c > /mnt/hello.c
 - 将中断初始化、外部中断 claim/complete 和块设备读写收敛到 `hal_*` 接口。
 - RISC-V 平台保持原有 PLIC 与 virtio 块设备路径，继续读写宿主机 `fs.img`。
 - 新增 `kernel/arch/loongarch/`，放置 LoongArch64 启动、trap、页表、上下文切换、中断控制器和链接脚本。
-- LoongArch64 平台使用 APIC/EXTIOI 处理中断，使用链接进内核的 `fs.img` ramdisk 作为块设备后端。
+- LoongArch64 平台使用 APIC/EXTIOI 处理中断，初期使用链接进内核的 `fs.img` ramdisk 作为块设备后端。
 - 调整 `bio.c`、`main.c`、`trap.c`、`proc.c`、`exec.c` 等少量公共路径，使平台差异集中到 HAL 和 `arch/loongarch` 目录中。
 - 用户态 syscall stub 根据架构生成 RISC-V `ecall` 或 LoongArch64 `syscall` 指令。
 
 阶段边界：
 
-- LoongArch64 当前使用 ramdisk，文件写入只修改本次 QEMU 运行期间的内存镜像，不会回写宿主机 `fs.img`。
-- 暂不实现 LoongArch64 下的 virtio/PCI 块设备驱动。
-- LoongArch64 目前完成启动 smoke test，完整 `usertests -q` 和指定 VFS 测试仍需后续补充。
+- 该阶段初期 LoongArch64 使用 ramdisk，文件写入只修改本次 QEMU 运行期间的内存镜像；该限制已在阶段 F 通过 virtio-pci 取消。
+- LoongArch64 下的 virtio-pci 块设备驱动留到后续阶段 F 实现。
+- LoongArch64 在该阶段完成启动 smoke test，完整 `usertests -q` 和指定 VFS 测试在阶段 G 补齐。
 - HAL 只覆盖当前真正需要的平台差异，不引入复杂设备模型或过重抽象。
 
 验证结果：
@@ -199,6 +199,45 @@ cat hello.c > /mnt/hello.c
 - `cd src && make ARCH=loongarch CPUS=1 qemu`：可以启动到 shell。
 - LoongArch64 shell 中执行 `ls`：可以列出 ramdisk 根目录内容。
 - `make test_baseline && make run`：RISC-V baseline 回归 PASS。
+
+## 阶段 F：LoongArch64 virtio-pci 块设备
+
+主要目标：
+
+让 LoongArch64 尽量复用 RISC-V 的 virtio 磁盘路径，避免 ramdisk 后端无法持久写回 `fs.img` 的限制。
+
+主要改动：
+
+- 新增 LoongArch64 下的 PCI ECAM 扫描和 BAR 映射逻辑，用于发现 QEMU virt 机器上的 virtio-blk-pci 设备。
+- 复用公共 `virtio_disk.c` 队列和请求处理逻辑，RISC-V 使用 virtio-mmio，LoongArch64 使用 virtio-pci。
+- 将 LoongArch64 QEMU 参数切换为 `-device virtio-blk-pci`，使磁盘访问落到宿主机 `fs.img`。
+- 接入 `VIRTIO0_IRQ` 的 APIC/EXTIOI 路由和完成路径，使磁盘 I/O 使用中断唤醒而不是长期轮询。
+
+验证结果：
+
+- `cd src && make ARCH=loongarch kernel/kernel`：通过。
+- `cd src && make ARCH=loongarch CPUS=1 qemu`：可以启动到 shell。
+- LoongArch64 shell 中执行 `mount ext2 /mnt 2` 后，`test1/test2` 通过。
+
+## 阶段 G：LoongArch64 回归测试修复
+
+主要目标：
+
+补齐 LoongArch64 在 xv6 原始 `usertests -q` 中暴露出的虚拟内存和 TLB refill 语义差异。
+
+主要改动：
+
+- 扩大 LoongArch64 用户虚拟地址范围，避免大地址 `sbrk` 测试撞到 trapframe 映射。
+- 对齐 RISC-V lazy allocation 语义，使 `uvmunmap()`、`uvmcopy()` 和 `vmfault()` 能处理未实际分配的 lazy 页。
+- 修正 LoongArch64 用户页权限，避免只读文本段被错误写入。
+- 修复 `tlbrefill.S` 中页表目录项基址处理，从依赖 `addi.d -1` 改为清低 12 位，避免 lazy fault 补映射后仍反复异常。
+
+验证结果：
+
+- LoongArch64 `usertests -q`：`ALL TESTS PASSED`。
+- LoongArch64 显式 `mount ext2 /mnt 2` 后，`test1/test2`：通过。
+- RISC-V `usertests -q`：`ALL TESTS PASSED`。
+- RISC-V 显式 `mount ext2 /mnt 2` 后，`test1/test2`：通过。
 
 ## 当前阶段总览
 
@@ -210,8 +249,10 @@ flowchart LR
     SC["阶段 C：ext2 最小文件系统支持"]
     SD["阶段 D：fat32 文件系统支持"]
     SE["阶段 E：轻量 HAL 与 LoongArch64 启动"]
+    SF["阶段 F：LoongArch64 virtio-pci 块设备"]
+    SG["阶段 G：LoongArch64 回归测试修复"]
 
-    S0 --> SA --> SB --> SC --> SD --> SE
+    S0 --> SA --> SB --> SC --> SD --> SE --> SF --> SG
 ```
 
 - 阶段 0：建立项目基线，保留原 xv6 测试能力。
@@ -220,6 +261,8 @@ flowchart LR
 - 阶段 C：实现 ext2 最小文件系统支持，`test1/test2` 通过。
 - 阶段 D：接入 fat32 镜像、设备映射和 BPB 识别，完成短文件名目录遍历与普通文件读写，并通过边界测试收口。
 - 阶段 E：引入轻量 HAL，RISC-V 继续使用 PLIC/virtio，LoongArch64 使用 APIC/EXTIOI 与 ramdisk 启动到 shell。
+- 阶段 F：LoongArch64 接入 virtio-pci，复用公共 virtio 磁盘路径并支持写回 `fs.img`。
+- 阶段 G：修复 LoongArch64 虚拟内存和 TLB refill 问题，两架构均通过 `usertests -q` 和 `test1/test2`。
 
 ## 后续提交方向
 

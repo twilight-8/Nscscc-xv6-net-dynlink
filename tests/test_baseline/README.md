@@ -1,10 +1,10 @@
 # test_baseline
 
-> 本测试点用于验证官方 xv6-riscv rev5 基线源码在 RISC-V QEMU 环境中的基础行为。
+> 本测试点用于对当前改造后的项目运行 xv6-riscv rev5 自带回归测试，确认原有行为不退化。
 
 ## 测试目标
 
-在不修改内核功能代码的前提下，运行 xv6 自带的 `usertests -q`，确认后续 VFS/HAL 修改前的基线状态。
+运行 xv6 自带的 `usertests -q`，确认当前 VFS/HAL/ext2/fat32 改动没有破坏 xv6 原有进程、内存、文件系统和系统调用行为。
 
 ## 运行方式
 
@@ -23,7 +23,7 @@ make test_baseline && make run
 
 其中：
 
-- `make test_baseline`：记录环境信息，清理并构建 xv6 基线镜像。
+- `make test_baseline`：记录环境信息，清理并构建当前项目镜像。
 - `make run`：启动 QEMU，运行 xv6 自带 `usertests -q`。
 
 ## 日志

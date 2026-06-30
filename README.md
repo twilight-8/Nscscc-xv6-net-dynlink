@@ -8,7 +8,7 @@
 
 当前已经完成 VFS、ext2、fat32 和轻量 HAL 的阶段性实现。
 
-RISC-V 平台继续使用 virtio 块设备读写 `fs.img`；LoongArch64 平台已能在 QEMU 中启动到 shell，并通过内嵌 ramdisk 访问同一份文件系统镜像。LoongArch64 下的文件写入发生在运行时内存中的 ramdisk，不会回写到宿主机 `fs.img`。
+RISC-V 平台继续使用 virtio-mmio 块设备读写 `fs.img`；LoongArch64 平台已接入 virtio-pci 块设备，同样可以在 QEMU 中读写 `fs.img`。两个平台均已通过 xv6-riscv rev5 自带 `usertests -q`，并在显式挂载 ext2 后通过 `test1`、`test2`。
 
 ## 目标
 
@@ -33,9 +33,9 @@ RISC-V 平台继续使用 virtio 块设备读写 `fs.img`；LoongArch64 平台�
 ├── README.md
 ├── .gitignore
 ├── docs/                     # 仓库的文档说明，对整体设计、测试结果、迭代记录等进行了简要说明
-├── tests/                    # 源码详细测试记录(测试样例、脚本等)
+├── tests/                    # 测试样例、脚本和日志说明
 ├── submit/                   # 竞赛提交辅助材料
-└── src/            # 源码
+└── src/                      # 源码
 ```
 
 ## 文档
@@ -64,6 +64,7 @@ RISC-V 平台继续使用 virtio 块设备读写 `fs.img`；LoongArch64 平台�
 ##### 目前包括：
 
 - `test_baseline/`：对基础功能进行测试
+- `public_vfs/`：对公开 VFS 风格的 `test1/test2` 进行测试
 
 ##### 快速开始：
 
@@ -87,7 +88,15 @@ cd src
 make ARCH=loongarch CPUS=1 qemu
 ```
 
-LoongArch64 当前使用 ramdisk，适合验证启动、shell、VFS 和文件系统读写路径；如果需要把写入持久化到宿主机 `fs.img`，后续需要补充 LoongArch64 下的 virtio/PCI 块设备支持。
+LoongArch64 当前使用 virtio-pci 块设备访问 `fs.img`。在 shell 中可以执行：
+
+```sh
+usertests -q
+mkdir /mnt
+mount ext2 /mnt 2
+test1
+test2
+```
 
 
 ## 提交辅助材料
