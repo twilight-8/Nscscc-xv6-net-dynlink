@@ -6,6 +6,7 @@
 #include "spinlock.h"
 #include "sleeplock.h"
 #include "fs.h"
+#include "buf.h"
 #include "file.h"
 #include "vfs.h"
 
@@ -15,6 +16,7 @@
 #define EXT2_N_BLOCKS     15
 #define EXT2_NAME_MAX     255
 
+#define EXT2_S_IFMT       0xF000
 #define EXT2_S_IFREG      0x8000
 #define EXT2_S_IFDIR      0x4000
 
@@ -171,9 +173,16 @@ ext2_write_dinode(struct ext2_fs *fs, uint inum, struct ext2_dinode *di)
 static short
 ext2_mode_to_type(ushort mode)
 {
-  if((mode & EXT2_S_IFDIR) == EXT2_S_IFDIR)
+  if((mode & EXT2_S_IFMT) == EXT2_S_IFDIR)
     return T_DIR;
   return T_FILE;
+}
+
+static int
+ext2_supported_mode(ushort mode)
+{
+  mode &= EXT2_S_IFMT;
+  return mode == EXT2_S_IFDIR || mode == EXT2_S_IFREG;
 }
 
 static ushort
@@ -214,6 +223,10 @@ ext2_iget(struct mount *mnt, uint inum)
     return 0;
   if(di.i_mode == 0)
     return 0;
+  if(!ext2_supported_mode(di.i_mode))
+    return 0;
+  if(di.i_block[13] || di.i_block[14])
+    return 0;
 
   ip = iget(mnt->dev, inum);
   ext2_fill_inode(ip, mnt, &di);
@@ -225,7 +238,7 @@ ext2_sync_inode(struct inode *ip)
 {
   struct ext2_fs *fs = (struct ext2_fs*)ip->mnt->fs_private;
   struct ext2_dinode di;
-  uchar buf[BSIZE];
+  struct buf *bp;
   uint *indirect;
   uint blocks;
   int i;
@@ -245,16 +258,13 @@ ext2_sync_inode(struct inode *ip)
   di.i_block[12] = ip->addrs[NDIRECT];
   if(ip->addrs[NDIRECT]){
     blocks++;
-    if(block_read_bytes(fs->dev, ext2_block_offset(fs, ip->addrs[NDIRECT]),
-                        buf, fs->block_size) == fs->block_size){
-      indirect = (uint*)buf;
-      for(i = 0; i < fs->block_size / sizeof(uint); i++)
-        if(indirect[i])
-          blocks++;
-    }
+    bp = bread(fs->dev, ip->addrs[NDIRECT]);
+    indirect = (uint*)bp->data;
+    for(i = 0; i < fs->block_size / sizeof(uint); i++)
+      if(indirect[i])
+        blocks++;
+    brelse(bp);
   }
-  di.i_block[13] = 0;
-  di.i_block[14] = 0;
   di.i_blocks = blocks * (fs->block_size / 512);
 
   if(ext2_write_dinode(fs, ip->inum, &di) < 0)
@@ -299,70 +309,70 @@ ext2_clear_bit(uchar *buf, uint bit)
 static uint
 ext2_alloc_block(struct ext2_fs *fs)
 {
-  uchar bitmap[BSIZE];
+  struct buf *bp, *dbp;
+  uchar *bitmap;
   uint i, blockno, start;
 
-  if(block_read_bytes(fs->dev, ext2_block_offset(fs, fs->gd.bg_block_bitmap),
-                      bitmap, BSIZE) < 0)
-    return 0;
+  bp = bread(fs->dev, fs->gd.bg_block_bitmap);
+  bitmap = (uchar*)bp->data;
 
   start = fs->sb.s_first_data_block;
   for(i = 0; i < fs->sb.s_blocks_per_group; i++){
     if(!ext2_test_bit(bitmap, i)){
       ext2_set_bit(bitmap, i);
       blockno = start + i;
-      if(block_write_bytes(fs->dev,
-                           ext2_block_offset(fs, fs->gd.bg_block_bitmap),
-                           bitmap, BSIZE) < 0)
-        return 0;
+      bwrite(bp);
+      brelse(bp);
       if(fs->sb.s_free_blocks_count)
         fs->sb.s_free_blocks_count--;
       if(fs->gd.bg_free_blocks_count)
         fs->gd.bg_free_blocks_count--;
       ext2_write_super(fs);
       ext2_write_group(fs);
-      memset(bitmap, 0, BSIZE);
-      block_write_bytes(fs->dev, ext2_block_offset(fs, blockno),
-                        bitmap, BSIZE);
+      dbp = bread(fs->dev, blockno);
+      memset(dbp->data, 0, BSIZE);
+      bwrite(dbp);
+      brelse(dbp);
       return blockno;
     }
   }
 
+  brelse(bp);
   return 0;
 }
 
 static void
 ext2_free_block(struct ext2_fs *fs, uint blockno)
 {
-  uchar bitmap[BSIZE];
+  struct buf *bp;
+  uchar *bitmap;
   uint bit;
 
   if(blockno == 0)
     return;
-  if(block_read_bytes(fs->dev, ext2_block_offset(fs, fs->gd.bg_block_bitmap),
-                      bitmap, BSIZE) < 0)
-    return;
+  bp = bread(fs->dev, fs->gd.bg_block_bitmap);
+  bitmap = (uchar*)bp->data;
   bit = blockno - fs->sb.s_first_data_block;
   if(ext2_test_bit(bitmap, bit)){
     ext2_clear_bit(bitmap, bit);
-    block_write_bytes(fs->dev, ext2_block_offset(fs, fs->gd.bg_block_bitmap),
-                      bitmap, BSIZE);
+    bwrite(bp);
     fs->sb.s_free_blocks_count++;
     fs->gd.bg_free_blocks_count++;
     ext2_write_super(fs);
     ext2_write_group(fs);
   }
+  brelse(bp);
 }
 
 static uint
 ext2_alloc_inode(struct ext2_fs *fs)
 {
-  uchar bitmap[BSIZE];
+  struct buf *bp;
+  uchar *bitmap;
   uint i, inum, first;
 
-  if(block_read_bytes(fs->dev, ext2_block_offset(fs, fs->gd.bg_inode_bitmap),
-                      bitmap, BSIZE) < 0)
-    return 0;
+  bp = bread(fs->dev, fs->gd.bg_inode_bitmap);
+  bitmap = (uchar*)bp->data;
 
   first = fs->sb.s_first_ino;
   if(first == 0)
@@ -372,10 +382,8 @@ ext2_alloc_inode(struct ext2_fs *fs)
     if(!ext2_test_bit(bitmap, i)){
       ext2_set_bit(bitmap, i);
       inum = i + 1;
-      if(block_write_bytes(fs->dev,
-                           ext2_block_offset(fs, fs->gd.bg_inode_bitmap),
-                           bitmap, BSIZE) < 0)
-        return 0;
+      bwrite(bp);
+      brelse(bp);
       if(fs->sb.s_free_inodes_count)
         fs->sb.s_free_inodes_count--;
       if(fs->gd.bg_free_inodes_count)
@@ -386,31 +394,32 @@ ext2_alloc_inode(struct ext2_fs *fs)
     }
   }
 
+  brelse(bp);
   return 0;
 }
 
 static void
 ext2_free_inode(struct ext2_fs *fs, uint inum)
 {
-  uchar bitmap[BSIZE];
+  struct buf *bp;
+  uchar *bitmap;
   struct ext2_dinode di;
   uint bit;
 
   if(inum == 0)
     return;
-  if(block_read_bytes(fs->dev, ext2_block_offset(fs, fs->gd.bg_inode_bitmap),
-                      bitmap, BSIZE) < 0)
-    return;
+  bp = bread(fs->dev, fs->gd.bg_inode_bitmap);
+  bitmap = (uchar*)bp->data;
   bit = inum - 1;
   if(ext2_test_bit(bitmap, bit)){
     ext2_clear_bit(bitmap, bit);
-    block_write_bytes(fs->dev, ext2_block_offset(fs, fs->gd.bg_inode_bitmap),
-                      bitmap, BSIZE);
+    bwrite(bp);
     fs->sb.s_free_inodes_count++;
     fs->gd.bg_free_inodes_count++;
     ext2_write_super(fs);
     ext2_write_group(fs);
   }
+  brelse(bp);
 
   memset(&di, 0, sizeof(di));
   ext2_write_dinode(fs, inum, &di);
@@ -420,7 +429,7 @@ static uint
 ext2_bmap(struct inode *ip, uint bn, int alloc)
 {
   struct ext2_fs *fs = (struct ext2_fs*)ip->mnt->fs_private;
-  uchar buf[BSIZE];
+  struct buf *bp;
   uint *indirect;
   uint blockno;
 
@@ -442,21 +451,21 @@ ext2_bmap(struct inode *ip, uint bn, int alloc)
       return 0;
   }
 
-  if(block_read_bytes(fs->dev, ext2_block_offset(fs, ip->addrs[NDIRECT]),
-                      buf, fs->block_size) < 0)
-    return 0;
+  bp = bread(fs->dev, ip->addrs[NDIRECT]);
 
-  indirect = (uint*)buf;
+  indirect = (uint*)bp->data;
   blockno = indirect[bn];
   if(blockno == 0 && alloc){
     blockno = ext2_alloc_block(fs);
-    if(blockno == 0)
+    if(blockno == 0){
+      brelse(bp);
       return 0;
+    }
     indirect[bn] = blockno;
-    block_write_bytes(fs->dev, ext2_block_offset(fs, ip->addrs[NDIRECT]),
-                      buf, fs->block_size);
+    bwrite(bp);
   }
 
+  brelse(bp);
   return blockno;
 }
 
@@ -575,9 +584,10 @@ static int
 ext2_dir_add(struct inode *dp, char *name, uint inum, uchar file_type)
 {
   struct ext2_fs *fs = (struct ext2_fs*)dp->mnt->fs_private;
-  uchar buf[BSIZE];
+  struct buf *bp;
   struct ext2_dirent *de, *newde;
   uint off, bno, pos, namelen, need, actual;
+  int bad;
 
   namelen = ext2_namelen(name);
   if(namelen == 0 || namelen > EXT2_NAME_MAX)
@@ -588,42 +598,60 @@ ext2_dir_add(struct inode *dp, char *name, uint inum, uchar file_type)
     bno = ext2_bmap(dp, off / fs->block_size, 0);
     if(bno == 0)
       continue;
-    if(block_read_bytes(fs->dev, ext2_block_offset(fs, bno),
-                        buf, fs->block_size) < 0)
-      return -1;
+    bp = bread(fs->dev, bno);
+    bad = 0;
     for(pos = 0; pos < fs->block_size; ){
-      de = (struct ext2_dirent*)(buf + pos);
-      if(de->rec_len < 8 || pos + de->rec_len > fs->block_size)
+      de = (struct ext2_dirent*)(bp->data + pos);
+      if(de->rec_len < 8 || pos + de->rec_len > fs->block_size){
+        bad = 1;
         break;
+      }
       actual = ext2_align4(8 + de->name_len);
+      if(actual > de->rec_len){
+        bad = 1;
+        break;
+      }
+      if(de->inode == 0 && de->rec_len >= need){
+        de->inode = inum;
+        de->name_len = namelen;
+        de->file_type = file_type;
+        memmove(de->name, name, namelen);
+        bwrite(bp);
+        brelse(bp);
+        return 0;
+      }
       if(de->rec_len >= actual + need){
-        newde = (struct ext2_dirent*)(buf + pos + actual);
+        newde = (struct ext2_dirent*)(bp->data + pos + actual);
         newde->inode = inum;
         newde->rec_len = de->rec_len - actual;
         newde->name_len = namelen;
         newde->file_type = file_type;
         memmove(newde->name, name, namelen);
         de->rec_len = actual;
-        return block_write_bytes(fs->dev, ext2_block_offset(fs, bno),
-                                 buf, fs->block_size) == fs->block_size ? 0 : -1;
+        bwrite(bp);
+        brelse(bp);
+        return 0;
       }
       pos += de->rec_len;
     }
+    brelse(bp);
+    if(bad)
+      return -1;
   }
 
   bno = ext2_bmap(dp, dp->size / fs->block_size, 1);
   if(bno == 0)
     return -1;
-  memset(buf, 0, sizeof(buf));
-  de = (struct ext2_dirent*)buf;
+  bp = bread(fs->dev, bno);
+  memset(bp->data, 0, BSIZE);
+  de = (struct ext2_dirent*)bp->data;
   de->inode = inum;
   de->rec_len = fs->block_size;
   de->name_len = namelen;
   de->file_type = file_type;
   memmove(de->name, name, namelen);
-  if(block_write_bytes(fs->dev, ext2_block_offset(fs, bno),
-                       buf, fs->block_size) != fs->block_size)
-    return -1;
+  bwrite(bp);
+  brelse(bp);
   dp->size += fs->block_size;
   ext2_sync_inode(dp);
   return 0;
@@ -632,29 +660,31 @@ ext2_dir_add(struct inode *dp, char *name, uint inum, uchar file_type)
 static int
 ext2_init_dir(struct ext2_fs *fs, uint inum, uint parent, uint bno)
 {
-  uchar buf[BSIZE];
+  struct buf *bp;
   struct ext2_dirent *de;
   uint dotlen;
 
-  memset(buf, 0, sizeof(buf));
+  bp = bread(fs->dev, bno);
+  memset(bp->data, 0, BSIZE);
 
   dotlen = ext2_align4(8 + 1);
-  de = (struct ext2_dirent*)buf;
+  de = (struct ext2_dirent*)bp->data;
   de->inode = inum;
   de->rec_len = dotlen;
   de->name_len = 1;
   de->file_type = EXT2_FT_DIR;
   memmove(de->name, ".", 1);
 
-  de = (struct ext2_dirent*)(buf + dotlen);
+  de = (struct ext2_dirent*)(bp->data + dotlen);
   de->inode = parent;
   de->rec_len = fs->block_size - dotlen;
   de->name_len = 2;
   de->file_type = EXT2_FT_DIR;
   memmove(de->name, "..", 2);
 
-  return block_write_bytes(fs->dev, ext2_block_offset(fs, bno),
-                           buf, fs->block_size) == fs->block_size ? 0 : -1;
+  bwrite(bp);
+  brelse(bp);
+  return 0;
 }
 
 static struct inode*
@@ -764,6 +794,8 @@ ext2_unlink(struct inode *dp, char *name)
 static int
 ext2_link(struct inode *ip, struct inode *dp, char *name)
 {
+  struct inode *old;
+
   if(ip->type != T_FILE || dp->type != T_DIR)
     return -1;
 
@@ -777,6 +809,15 @@ ext2_link(struct inode *ip, struct inode *dp, char *name)
   iunlock(ip);
 
   ilock(dp);
+  if((old = ext2_lookup(dp, name)) != 0){
+    iput(old);
+    iunlock(dp);
+    ilock(ip);
+    ip->nlink--;
+    ext2_sync_inode(ip);
+    iunlock(ip);
+    return -1;
+  }
   if(ext2_dir_add(dp, name, ip->inum, EXT2_FT_REG_FILE) < 0){
     iunlock(dp);
     ilock(ip);
@@ -898,7 +939,7 @@ static void
 ext2_itrunc(struct inode *ip)
 {
   struct ext2_fs *fs = (struct ext2_fs*)ip->mnt->fs_private;
-  uchar buf[BSIZE];
+  struct buf *bp;
   uint *indirect;
   int i;
 
@@ -910,13 +951,12 @@ ext2_itrunc(struct inode *ip)
   }
 
   if(ip->addrs[NDIRECT]){
-    if(block_read_bytes(fs->dev, ext2_block_offset(fs, ip->addrs[NDIRECT]),
-                        buf, fs->block_size) == fs->block_size){
-      indirect = (uint*)buf;
-      for(i = 0; i < fs->block_size / sizeof(uint); i++)
-        if(indirect[i])
-          ext2_free_block(fs, indirect[i]);
-    }
+    bp = bread(fs->dev, ip->addrs[NDIRECT]);
+    indirect = (uint*)bp->data;
+    for(i = 0; i < fs->block_size / sizeof(uint); i++)
+      if(indirect[i])
+        ext2_free_block(fs, indirect[i]);
+    brelse(bp);
     ext2_free_block(fs, ip->addrs[NDIRECT]);
     ip->addrs[NDIRECT] = 0;
   }
@@ -943,6 +983,9 @@ ext2_mount(struct mount *mnt)
 
   block_size = 1024 << sb.s_log_block_size;
   if(block_size != BSIZE)
+    return -1;
+  if(sb.s_blocks_count > sb.s_blocks_per_group ||
+     sb.s_inodes_count > sb.s_inodes_per_group)
     return -1;
 
   inode_size = sb.s_inode_size;

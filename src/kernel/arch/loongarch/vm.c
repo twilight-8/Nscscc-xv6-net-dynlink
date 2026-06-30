@@ -4,7 +4,9 @@
 #include "elf.h"
 #include "loongarch.h"
 #include "defs.h"
+#include "spinlock.h"
 #include "fs.h"
+#include "proc.h"
 
 void
 tlbinit(void)
@@ -220,8 +222,11 @@ uint64
 vmfault(pagetable_t pagetable, uint64 va, int read)
 {
   char *mem;
+  struct proc *p = myproc();
 
-  if(va >= MAXVA)
+  (void)read;
+
+  if(va >= MAXVA || va >= p->sz)
     return 0;
   va = PGROUNDDOWN(va);
   if(walkaddr(pagetable, va) != 0)
@@ -342,11 +347,17 @@ int
 copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 {
   uint64 n, va0, pa0;
+  pte_t *pte;
 
   while(len > 0){
     va0 = PGROUNDDOWN(dstva);
     pa0 = walkaddr(pagetable, va0);
-    if(pa0 == 0)
+    if(pa0 == 0){
+      if((pa0 = vmfault(pagetable, va0, 0)) == 0)
+        return -1;
+    }
+    pte = walk(pagetable, va0, 0);
+    if(pte == 0 || (*pte & PTE_W) == 0)
       return -1;
     n = PGSIZE - (dstva - va0);
     if(n > len)
@@ -371,8 +382,10 @@ copyin(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len)
   while(len > 0){
     va0 = PGROUNDDOWN(srcva);
     pa0 = walkaddr(pagetable, va0);
-    if(pa0 == 0)
-      return -1;
+    if(pa0 == 0){
+      if((pa0 = vmfault(pagetable, va0, 1)) == 0)
+        return -1;
+    }
     n = PGSIZE - (srcva - va0);
     if(n > len)
       n = len;
@@ -398,8 +411,10 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
   while(got_null == 0 && max > 0){
     va0 = PGROUNDDOWN(srcva);
     pa0 = walkaddr(pagetable, va0);
-    if(pa0 == 0)
-      return -1;
+    if(pa0 == 0){
+      if((pa0 = vmfault(pagetable, va0, 1)) == 0)
+        return -1;
+    }
     n = PGSIZE - (srcva - va0);
     if(n > max)
       n = max;

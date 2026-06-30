@@ -291,16 +291,10 @@ vfs_unlink(struct inode *dp, char *name)
 int
 vfs_link(struct inode *ip, struct inode *dp, char *name)
 {
-  struct inode *old;
-
   if(ip == 0 || dp == 0 || ip->ops == 0 || ip->ops->link == 0)
     return -1;
   if(ip->fstype != dp->fstype || ip->dev != dp->dev)
     return -1;
-  if((old = vfs_lookup(dp, name)) != 0){
-    iput(old);
-    return -1;
-  }
   return ip->ops->link(ip, dp, name);
 }
 

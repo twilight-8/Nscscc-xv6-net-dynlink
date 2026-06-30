@@ -19,6 +19,24 @@ void userret(uint64, uint64);
 
 extern int devintr();
 
+#define LA_ECODE_PIL 0x1
+#define LA_ECODE_PIS 0x2
+#define LA_ECODE_SYS 0xb
+
+static int
+la_page_fault(uint32 ecode, int *read)
+{
+  if(ecode == LA_ECODE_PIL){
+    *read = 1;
+    return 1;
+  }
+  if(ecode == LA_ECODE_PIS){
+    *read = 0;
+    return 1;
+  }
+  return 0;
+}
+
 void
 trapinit(void)
 {
@@ -46,6 +64,8 @@ void
 usertrap(void)
 {
   int which_dev = 0;
+  uint32 ecode;
+  int read = 0;
 
   if((r_csr_prmd() & PRMD_PPLV) == 0)
     panic("usertrap: not from user mode");
@@ -58,8 +78,9 @@ usertrap(void)
   
   // save user program counter.
   p->trapframe->era = r_csr_era();
+  ecode = (r_csr_estat() & CSR_ESTAT_ECODE) >> 16;
   
-  if( ((r_csr_estat() & CSR_ESTAT_ECODE) >> 16) == 0xb){
+  if(ecode == LA_ECODE_SYS){
     // system call
 
     if(p->killed)
@@ -76,6 +97,9 @@ usertrap(void)
     syscall();
   } else if((which_dev = devintr()) != 0){
     // ok
+  } else if(la_page_fault(ecode, &read) &&
+            vmfault(p->pagetable, r_csr_badv(), read) != 0){
+    // page fault on lazily-allocated page
   } else {
     printf("usertrap(): unexpected trapcause %x pid=%d\n", r_csr_estat(), p->pid);
     printf("            era=0x%lx badv=0x%lx badi=0x%x sp=0x%lx crmd=0x%x prmd=0x%x\n",
