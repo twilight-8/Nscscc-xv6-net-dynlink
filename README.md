@@ -34,11 +34,11 @@ RISC-V 平台继续使用 virtio-mmio 块设备读写 `fs.img`；LoongArch64 平
 ├── .gitignore
 ├── docs/                     # 仓库的文档说明，对整体设计、测试结果、迭代记录等进行了简要说明
 ├── tests/                    # 测试样例、脚本和日志说明
-├── submit/                   # 竞赛提交辅助材料
+├── submit/                   # 竞赛提交材料
 └── src/                      # 源码
 ```
 
-## 文档
+## 文档 `docs/`
 
 > 对 `docs/` 的目录结构进行介绍
  
@@ -49,9 +49,35 @@ RISC-V 平台继续使用 virtio-mmio 块设备读写 `fs.img`；LoongArch64 平
 - `docs/references.md`：参考资料。
 - `docs/ai_usage.md`：AI 使用说明。
 
-## 详细测试材料
+## 提交材料 `submit/`
+
+> 对 `submit` 目录结构进行介绍
+
+- `xv6-vfs-hal-final.diff`：最终版本代码与初始 `xv6-riscv rev5` 源码之间的完整 diff。
+- `xv6-vfs-hal-final.diff.stat`：上述 diff 的统计摘要。
+- `diff.md`：diff 生成方式、总行数和 HAL/VFS 分类统计说明。
+- `README.md`：提交材料目录说明。
+- `final_slides.pdf`：最终设计文档的pdf版本
+- `final_slides.pptx`：团队分工和赛题推进ppt
+- `commit_history`：迭代历史
+- `test_report`：测试报告
+- `演示视频.mp4`：队伍演示视频
+
+## 详细测试材料 `tests/`
 
 > 对 `tests/` 目录结构进行介绍，该目录的详细结构见该目录内的 `README.md`
+
+##### 内容介绍
+
+- `test_baseline/`：xv6官方测试集测试
+- `public_vfs/`：赛题公开测试集测试
+- `ext2/`：ext2文件系统支持测试
+- `fat32/`：fat32文件系统支持测试
+- `error/`：输入错指令时的稳定性测试
+- `persist/`：镜像写入测试
+- `semantics/`：硬链接指令测试
+
+详细执行指令见`tests/`目录内的 `README.md`
 
 ##### 测试环境：
 
@@ -97,11 +123,6 @@ mount ext2 /mnt 2
 test1
 test2
 ```
-
-
-## 提交辅助材料
-
-> 对 `submit` 目录结构进行介绍
 
 ## 许可证与合规性说明
 
