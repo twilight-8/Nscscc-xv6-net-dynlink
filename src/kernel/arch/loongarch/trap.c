@@ -21,6 +21,10 @@ extern int devintr();
 
 #define LA_ECODE_PIL 0x1
 #define LA_ECODE_PIS 0x2
+#define LA_ECODE_PIF 0x3
+#define LA_ECODE_PME 0x4
+#define LA_ECODE_PPI 0x7
+#define LA_ECODE_ADE 0x8
 #define LA_ECODE_SYS 0xb
 
 static int
@@ -32,6 +36,11 @@ la_page_fault(uint32 ecode, int *read)
   }
   if(ecode == LA_ECODE_PIS){
     *read = 0;
+    return 1;
+  }
+  if(ecode == LA_ECODE_PIF || ecode == LA_ECODE_PME ||
+     ecode == LA_ECODE_PPI || ecode == LA_ECODE_ADE){
+    *read = ecode == LA_ECODE_PIF;
     return 1;
   }
   return 0;
