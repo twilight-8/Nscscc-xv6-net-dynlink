@@ -35,6 +35,7 @@ plan/
 
 # Root Makefile stores the selected test here.
 .last-test
+.last-test-arch
 
 # Logs
 *.log

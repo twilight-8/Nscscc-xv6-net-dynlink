@@ -36,10 +36,12 @@ def main():
     print(f"== xv6 VFS Test Runner: {args.case} ==")
     print(f"[case] commands: {args.commands}")
     print(f"[case] raw log:  {args.log}")
+    arch = os.environ.get("ARCH", "riscv")
+    print(f"[case] arch:     {arch}")
     print()
 
     qemu = subprocess.Popen(
-        ["make", "CPUS=1", "qemu"],
+        ["make", f"ARCH={arch}", "CPUS=1", "qemu"],
         cwd=args.xv6_dir,
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,

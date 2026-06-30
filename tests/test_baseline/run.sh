@@ -5,8 +5,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 XV6_DIR="$ROOT_DIR/src"
 LOG_DIR="$SCRIPT_DIR/logs"
+TEST_ARCH="${TEST_ARCH:-riscv}"
+LOG_SUFFIX=""
+if [ "$TEST_ARCH" != "riscv" ]; then
+  LOG_SUFFIX="-$TEST_ARCH"
+fi
 
-TEST_LOG="$LOG_DIR/usertests-quick.log"
+TEST_LOG="$LOG_DIR/usertests-quick$LOG_SUFFIX.log"
 RESULT_LOG="$LOG_DIR/result.log"
 
 mkdir -p "$LOG_DIR"
@@ -17,7 +22,7 @@ if [ ! -f "$XV6_DIR/fs.img" ]; then
   exit 1
 fi
 
-echo "[test_baseline] running usertests -q"
+echo "[test_baseline] running usertests -q on $TEST_ARCH"
 (
   cd "$XV6_DIR" || exit 1
   python3 test-xv6.py usertests -q

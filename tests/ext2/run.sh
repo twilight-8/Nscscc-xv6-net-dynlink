@@ -5,7 +5,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 XV6_DIR="$ROOT_DIR/src"
 LOG_DIR="$SCRIPT_DIR/logs"
-RAW_LOG="$LOG_DIR/qemu-ext2.log"
+TEST_ARCH="${TEST_ARCH:-riscv}"
+LOG_SUFFIX=""
+CASE_NAME="ext2"
+if [ "$TEST_ARCH" != "riscv" ]; then
+  LOG_SUFFIX="-$TEST_ARCH"
+  CASE_NAME="${TEST_ARCH}_ext2"
+fi
+RAW_LOG="$LOG_DIR/qemu-ext2$LOG_SUFFIX.log"
 RESULT_LOG="$LOG_DIR/result.log"
 
 mkdir -p "$LOG_DIR"
@@ -18,7 +25,7 @@ fi
 
 echo "[ext2] running QEMU command test"
 python3 "$ROOT_DIR/tests/runner/run_qemu_case.py" \
-  --case ext2 \
+  --case "$CASE_NAME" \
   --xv6-dir "$XV6_DIR" \
   --commands "$SCRIPT_DIR/cmds.sh" \
   --log "$RAW_LOG" \

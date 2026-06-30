@@ -2,8 +2,12 @@ SHELL := /bin/bash
 
 XV6_DIR := src
 STATE_FILE := .last-test
+ARCH_STATE_FILE := .last-test-arch
+TEST_ARCH ?= riscv
 
-.PHONY: test_baseline public_vfs ext2 fat32 error test_public_vfs test_ext2 test_fat32 test_error_path run
+.PHONY: test_baseline public_vfs ext2 fat32 error \
+	loongarch_baseline loongarch_public_vfs loongarch_ext2 loongarch_fat32 loongarch_error \
+	test_public_vfs test_ext2 test_fat32 test_error_path run
 
 test_baseline:
 	@set -eu; \
@@ -16,7 +20,7 @@ test_baseline:
 		echo "Test Name: $$TEST_NAME"; \
 		echo "Date: $$(date -Iseconds)"; \
 		echo "Target: xv6-riscv rev5 baseline"; \
-		echo "Platform: RISC-V"; \
+		echo "Platform: $(TEST_ARCH)"; \
 		echo; \
 		echo "== Host =="; \
 		uname -a; \
@@ -38,11 +42,12 @@ test_baseline:
 	echo "[test_baseline] build xv6 fs image"; \
 	( \
 		cd "$(XV6_DIR)" && \
-		make clean && \
-		make kernel/kernel && \
-		make fs.img \
+		make ARCH="$(TEST_ARCH)" clean && \
+		make ARCH="$(TEST_ARCH)" kernel/kernel && \
+		make ARCH="$(TEST_ARCH)" fs.img \
 	) > "$$LOG_DIR/build.log" 2>&1; \
 	printf "%s\n" "$$TEST_NAME" > "$(STATE_FILE)"; \
+	printf "%s\n" "$(TEST_ARCH)" > "$(ARCH_STATE_FILE)"; \
 	echo "[test_baseline] prepare done"; \
 	echo "Next command: make run"
 
@@ -57,7 +62,7 @@ public_vfs:
 		echo "Test Name: $$TEST_NAME"; \
 		echo "Date: $$(date -Iseconds)"; \
 		echo "Target: public VFS ext2 cross-filesystem tests"; \
-		echo "Platform: RISC-V"; \
+		echo "Platform: $(TEST_ARCH)"; \
 		echo; \
 		echo "== Host =="; \
 		uname -a; \
@@ -75,12 +80,13 @@ public_vfs:
 	echo "[public_vfs] build xv6 fs image"; \
 	( \
 		cd "$(XV6_DIR)" && \
-		make clean && \
-		make kernel/kernel && \
+		make ARCH="$(TEST_ARCH)" clean && \
+		make ARCH="$(TEST_ARCH)" kernel/kernel && \
 		rm -f fs.img ext2.img fat32.img && \
-		make fs.img \
+		make ARCH="$(TEST_ARCH)" fs.img \
 	) > "$$LOG_DIR/build.log" 2>&1; \
 	printf "%s\n" "$$TEST_NAME" > "$(STATE_FILE)"; \
+	printf "%s\n" "$(TEST_ARCH)" > "$(ARCH_STATE_FILE)"; \
 	echo "[public_vfs] prepare done"; \
 	echo "Next command: make run"
 
@@ -95,7 +101,7 @@ ext2:
 		echo "Test Name: $$TEST_NAME"; \
 		echo "Date: $$(date -Iseconds)"; \
 		echo "Target: ext2 mount/read/write/unlink smoke test"; \
-		echo "Platform: RISC-V"; \
+		echo "Platform: $(TEST_ARCH)"; \
 		echo; \
 		echo "== Host =="; \
 		uname -a; \
@@ -114,12 +120,13 @@ ext2:
 	echo "[ext2] build xv6 fs image"; \
 	( \
 		cd "$(XV6_DIR)" && \
-		make clean && \
-		make kernel/kernel && \
+		make ARCH="$(TEST_ARCH)" clean && \
+		make ARCH="$(TEST_ARCH)" kernel/kernel && \
 		rm -f fs.img ext2.img fat32.img && \
-		make fs.img \
+		make ARCH="$(TEST_ARCH)" fs.img \
 	) > "$$LOG_DIR/build.log" 2>&1; \
 	printf "%s\n" "$$TEST_NAME" > "$(STATE_FILE)"; \
+	printf "%s\n" "$(TEST_ARCH)" > "$(ARCH_STATE_FILE)"; \
 	echo "[ext2] prepare done"; \
 	echo "Next command: make run"
 
@@ -134,7 +141,7 @@ fat32:
 		echo "Test Name: $$TEST_NAME"; \
 		echo "Date: $$(date -Iseconds)"; \
 		echo "Target: FAT32 8.3 create/overwrite/unlink smoke test"; \
-		echo "Platform: RISC-V"; \
+		echo "Platform: $(TEST_ARCH)"; \
 		echo; \
 		echo "== Host =="; \
 		uname -a; \
@@ -152,12 +159,13 @@ fat32:
 	echo "[fat32] build xv6 fs image"; \
 	( \
 		cd "$(XV6_DIR)" && \
-		make clean && \
-		make kernel/kernel && \
+		make ARCH="$(TEST_ARCH)" clean && \
+		make ARCH="$(TEST_ARCH)" kernel/kernel && \
 		rm -f fs.img ext2.img fat32.img && \
-		make fs.img \
+		make ARCH="$(TEST_ARCH)" fs.img \
 	) > "$$LOG_DIR/build.log" 2>&1; \
 	printf "%s\n" "$$TEST_NAME" > "$(STATE_FILE)"; \
+	printf "%s\n" "$(TEST_ARCH)" > "$(ARCH_STATE_FILE)"; \
 	echo "[fat32] prepare done"; \
 	echo "Next command: make run"
 
@@ -172,7 +180,7 @@ error:
 		echo "Test Name: $$TEST_NAME"; \
 		echo "Date: $$(date -Iseconds)"; \
 		echo "Target: VFS invalid-operation stability test"; \
-		echo "Platform: RISC-V"; \
+		echo "Platform: $(TEST_ARCH)"; \
 		echo; \
 		echo "== Host =="; \
 		uname -a; \
@@ -190,14 +198,30 @@ error:
 	echo "[error] build xv6 fs image"; \
 	( \
 		cd "$(XV6_DIR)" && \
-		make clean && \
-		make kernel/kernel && \
+		make ARCH="$(TEST_ARCH)" clean && \
+		make ARCH="$(TEST_ARCH)" kernel/kernel && \
 		rm -f fs.img ext2.img fat32.img && \
-		make fs.img \
+		make ARCH="$(TEST_ARCH)" fs.img \
 	) > "$$LOG_DIR/build.log" 2>&1; \
 	printf "%s\n" "$$TEST_NAME" > "$(STATE_FILE)"; \
+	printf "%s\n" "$(TEST_ARCH)" > "$(ARCH_STATE_FILE)"; \
 	echo "[error] prepare done"; \
 	echo "Next command: make run"
+
+loongarch_baseline:
+	@$(MAKE) TEST_ARCH=loongarch test_baseline
+
+loongarch_public_vfs:
+	@$(MAKE) TEST_ARCH=loongarch public_vfs
+
+loongarch_ext2:
+	@$(MAKE) TEST_ARCH=loongarch ext2
+
+loongarch_fat32:
+	@$(MAKE) TEST_ARCH=loongarch fat32
+
+loongarch_error:
+	@$(MAKE) TEST_ARCH=loongarch error
 
 test_public_vfs: public_vfs
 test_ext2: ext2
@@ -212,11 +236,12 @@ run:
 		exit 1; \
 	fi; \
 	TEST_NAME="$$(cat "$(STATE_FILE)")"; \
+	TEST_ARCH="$$(cat "$(ARCH_STATE_FILE)" 2>/dev/null || echo riscv)"; \
 	case "$$TEST_NAME" in \
-		test_baseline) bash "tests/test_baseline/run.sh" ;; \
-		public_vfs) bash "tests/public_vfs/run.sh" ;; \
-		ext2) bash "tests/ext2/run.sh" ;; \
-		fat32) bash "tests/fat32/run.sh" ;; \
-		error) bash "tests/error/run.sh" ;; \
+		test_baseline) ARCH="$$TEST_ARCH" TEST_ARCH="$$TEST_ARCH" bash "tests/test_baseline/run.sh" ;; \
+		public_vfs) ARCH="$$TEST_ARCH" TEST_ARCH="$$TEST_ARCH" bash "tests/public_vfs/run.sh" ;; \
+		ext2) ARCH="$$TEST_ARCH" TEST_ARCH="$$TEST_ARCH" bash "tests/ext2/run.sh" ;; \
+		fat32) ARCH="$$TEST_ARCH" TEST_ARCH="$$TEST_ARCH" bash "tests/fat32/run.sh" ;; \
+		error) ARCH="$$TEST_ARCH" TEST_ARCH="$$TEST_ARCH" bash "tests/error/run.sh" ;; \
 		*) echo "Unknown prepared test: $$TEST_NAME"; exit 1 ;; \
 	esac

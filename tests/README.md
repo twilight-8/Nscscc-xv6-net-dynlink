@@ -72,6 +72,22 @@ make error && make run
 The old names `make test_public_vfs`, `make test_ext2`, `make test_fat32`, and
 `make test_error_path` are kept as compatibility aliases.
 
+## LoongArch Commands
+
+The same test flow can be prepared for LoongArch with short targets:
+
+```sh
+make loongarch_baseline && make run
+make loongarch_public_vfs && make run
+make loongarch_ext2 && make run
+make loongarch_fat32 && make run
+make loongarch_error && make run
+```
+
+These targets build `src` with `ARCH=loongarch`, record the selected
+architecture in `.last-test-arch`, and then `make run` launches the matching
+LoongArch QEMU command through the shared runner.
+
 ## Manual Dual-Architecture Checks
 
 RISC-V:
