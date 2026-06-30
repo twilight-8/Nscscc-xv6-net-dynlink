@@ -1,0 +1,6669 @@
+diff --git a/./xv6-riscv-src/.gitignore b/./src/.gitignore
+index aebb7d2..65c8776 100644
+--- a/./xv6-riscv-src/.gitignore
++++ b/./src/.gitignore
+@@ -11,8 +11,10 @@ entryother
+ initcode
+ initcode.out
+ kernelmemfs
+-mkfs
++mkfs/mkfs
++mkfs/mkfat32
+ kernel/kernel
+ user/usys.S
+ .gdbinit
++.arch-*
+ TAGS
+diff --git a/./xv6-riscv-src/Makefile b/./src/Makefile
+index 4e998d8..2f28041 100644
+--- a/./xv6-riscv-src/Makefile
++++ b/./src/Makefile
+@@ -1,9 +1,8 @@
+ K=kernel
+ U=user
++ARCH ?= riscv
+ 
+-OBJS = \
+-  $K/entry.o \
+-  $K/start.o \
++COMMON_OBJS = \
+   $K/console.o \
+   $K/printf.o \
+   $K/uart.o \
+@@ -11,31 +10,82 @@ OBJS = \
+   $K/spinlock.o \
+   $K/string.o \
+   $K/main.o \
+-  $K/vm.o \
+-  $K/proc.o \
+-  $K/swtch.o \
+-  $K/trampoline.o \
+-  $K/trap.o \
+   $K/syscall.o \
+   $K/sysproc.o \
+   $K/bio.o \
++  $K/block.o \
+   $K/fs.o \
++  $K/ext2.o \
++  $K/fat32.o \
++  $K/vfs.o \
+   $K/log.o \
+   $K/sleeplock.o \
+   $K/file.o \
+   $K/pipe.o \
+   $K/exec.o \
+-  $K/sysfile.o \
++  $K/sysfile.o
++
++ifeq ($(ARCH),riscv)
++ARCH_OBJS = \
++  $K/entry.o \
++  $K/start.o \
++  $K/vm.o \
++  $K/proc.o \
++  $K/swtch.o \
++  $K/trampoline.o \
++  $K/trap.o \
+   $K/kernelvec.o \
++  $K/hal.o \
+   $K/plic.o \
+   $K/virtio_disk.o
++KERNEL_LD = $K/kernel.ld
++USER_LD = $U/user.ld
++ARCH_CFLAGS = -DARCH_RISCV -mcmodel=medany
++ARCH_ASFLAGS =
++QEMU = qemu-system-riscv64
++RAMDISK_HDR =
++else ifeq ($(ARCH),loongarch)
++ARCH_OBJS = \
++  $K/arch/loongarch/entry.o \
++  $K/arch/loongarch/start.o \
++  $K/arch/loongarch/vm.o \
++  $K/proc.o \
++  $K/arch/loongarch/swtch.o \
++  $K/arch/loongarch/uservec.o \
++  $K/arch/loongarch/kernelvec.o \
++  $K/arch/loongarch/tlbrefill.o \
++  $K/arch/loongarch/merror.o \
++  $K/arch/loongarch/trap.o \
++  $K/arch/loongarch/hal.o \
++  $K/arch/loongarch/apic.o \
++  $K/arch/loongarch/extioi.o \
++  $K/arch/loongarch/virtio_pci.o \
++  $K/virtio_disk.o
++KERNEL_LD = $K/arch/loongarch/kernel.ld
++USER_LD = $K/arch/loongarch/user.ld
++ARCH_CFLAGS = -DARCH_LOONGARCH -I$K -I$K/arch/loongarch -march=loongarch64 -mabi=lp64s
++ARCH_ASFLAGS = -DARCH_LOONGARCH -I$K -I$K/arch/loongarch -march=loongarch64 -mabi=lp64s
++QEMU = qemu-system-loongarch64
++RAMDISK_HDR =
++else
++$(error unsupported ARCH=$(ARCH))
++endif
++
++OBJS = $(ARCH_OBJS) $(COMMON_OBJS)
++ARCH_STAMP = .arch-$(ARCH)
++
++$(ARCH_STAMP):
++	rm -f */*.o */*/*.o */*.d */*/*.d
++	rm -f .arch-*
++	touch $@
+ 
+-# riscv64-unknown-elf- or riscv64-linux-gnu-
+-# perhaps in /opt/riscv/bin
+-#TOOLPREFIX = 
++$(OBJS): $(ARCH_STAMP)
++
++%.o: $(ARCH_STAMP)
+ 
+ # Try to infer the correct TOOLPREFIX if not set
+ ifndef TOOLPREFIX
++ifeq ($(ARCH),riscv)
+ TOOLPREFIX := $(shell if riscv64-unknown-elf-objdump -i 2>&1 | grep 'elf64-big' >/dev/null 2>&1; \
+ 	then echo 'riscv64-unknown-elf-'; \
+ 	elif riscv64-elf-objdump -i 2>&1 | grep 'elf64-big' >/dev/null 2>&1; \
+@@ -48,12 +98,32 @@ TOOLPREFIX := $(shell if riscv64-unknown-elf-objdump -i 2>&1 | grep 'elf64-big'
+ 	echo "*** Error: Couldn't find a riscv64 version of GCC/binutils." 1>&2; \
+ 	echo "*** To turn off this error, run 'gmake TOOLPREFIX= ...'." 1>&2; \
+ 	echo "***" 1>&2; exit 1; fi)
++else ifeq ($(ARCH),loongarch)
++TOOLPREFIX := $(shell if loongarch64-linux-gnu-objdump -i >/dev/null 2>&1; \
++	then echo 'loongarch64-linux-gnu-'; \
++	elif loongarch64-unknown-linux-gnu-objdump -i >/dev/null 2>&1; \
++	then echo 'loongarch64-unknown-linux-gnu-'; \
++	else echo ''; fi)
++endif
++endif
++
++ifeq ($(ARCH),loongarch)
++ifeq ($(TOOLPREFIX),)
++$(error Couldn't find a loongarch64 GCC/binutils; set TOOLPREFIX=... ARCH=loongarch)
++endif
+ endif
+ 
+-QEMU = qemu-system-riscv64
+ MIN_QEMU_VERSION = 7.2
+ 
++ifeq ($(ARCH),loongarch)
++CC := $(shell if command -v $(TOOLPREFIX)gcc >/dev/null 2>&1; \
++	then echo $(TOOLPREFIX)gcc; \
++	elif command -v $(TOOLPREFIX)gcc-14 >/dev/null 2>&1; \
++	then echo $(TOOLPREFIX)gcc-14; \
++	else echo $(TOOLPREFIX)gcc; fi)
++else
+ CC = $(TOOLPREFIX)gcc
++endif
+ AS = $(TOOLPREFIX)gas
+ LD = $(TOOLPREFIX)ld
+ OBJCOPY = $(TOOLPREFIX)objcopy
+@@ -61,7 +131,7 @@ OBJDUMP = $(TOOLPREFIX)objdump
+ 
+ CFLAGS = -Wall -Werror -O -fno-omit-frame-pointer -ggdb -gdwarf-2
+ CFLAGS += -MD
+-CFLAGS += -mcmodel=medany
++CFLAGS += $(ARCH_CFLAGS)
+ CFLAGS += -ffreestanding
+ CFLAGS += -fno-common -nostdlib
+ CFLAGS += -fno-builtin-strncpy -fno-builtin-strncmp -fno-builtin-strlen -fno-builtin-memset
+@@ -83,21 +153,29 @@ endif
+ 
+ LDFLAGS = -z max-page-size=4096
+ 
+-$K/kernel: $(OBJS) $K/kernel.ld
+-	$(LD) $(LDFLAGS) -T $K/kernel.ld -o $K/kernel $(OBJS) 
++$K/kernel: $(OBJS) $(KERNEL_LD) $(RAMDISK_HDR)
++	$(LD) $(LDFLAGS) -T $(KERNEL_LD) -o $K/kernel $(OBJS) 
+ 	$(OBJDUMP) -S $K/kernel > $K/kernel.asm
+ 	$(OBJDUMP) -t $K/kernel | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > $K/kernel.sym
+ 
++$K/arch/loongarch/ramdisk_img.o: fs.img
++	$(OBJCOPY) -I binary -O elf64-loongarch -B loongarch \
++	  --rename-section .data=.ramdisk,alloc,load,data,contents \
++	  --set-section-alignment .ramdisk=4096 \
++	  fs.img $@
++
+ $K/%.o: $K/%.S
+-	$(CC) -g -c -o $@ $<
++	$(CC) $(ARCH_ASFLAGS) -g -c -o $@ $<
+ 
+ tags: $(OBJS)
+ 	etags kernel/*.S kernel/*.c
+ 
+ ULIB = $U/ulib.o $U/usys.o $U/printf.o $U/umalloc.o
+ 
+-_%: %.o $(ULIB) $U/user.ld
+-	$(LD) $(LDFLAGS) -T $U/user.ld -o $@ $< $(ULIB)
++$(ULIB): $(ARCH_STAMP)
++
++_%: %.o $(ULIB) $(USER_LD)
++	$(LD) $(LDFLAGS) -T $(USER_LD) -o $@ $< $(ULIB)
+ 	$(OBJDUMP) -S $@ > $*.asm
+ 	$(OBJDUMP) -t $@ | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > $*.sym
+ 
+@@ -116,6 +194,9 @@ $U/_forktest: $U/forktest.o $(ULIB)
+ mkfs/mkfs: mkfs/mkfs.c $K/fs.h $K/param.h
+ 	gcc -I. -o mkfs/mkfs mkfs/mkfs.c
+ 
++mkfs/mkfat32: mkfs/mkfat32.c
++	gcc -Wall -Werror -O -o mkfs/mkfat32 mkfs/mkfat32.c
++
+ # Prevent deletion of intermediate files, e.g. cat.o, after first build, so
+ # that disk image changes after first build are persistent until clean.  More
+ # details:
+@@ -132,9 +213,12 @@ UPROGS=\
+ 	$U/_ln\
+ 	$U/_ls\
+ 	$U/_mkdir\
++	$U/_mount\
+ 	$U/_rm\
+ 	$U/_sh\
+ 	$U/_stressfs\
++	$U/_test1\
++	$U/_test2\
+ 	$U/_usertests\
+ 	$U/_grind\
+ 	$U/_wc\
+@@ -143,16 +227,37 @@ UPROGS=\
+ 	$U/_forphan\
+ 	$U/_dorphan\
+ 
+-fs.img: mkfs/mkfs README $(UPROGS)
+-	mkfs/mkfs fs.img README $(UPROGS)
++EXT2IMG = ext2.img
++EXT2_BLOCKS = 4096
++FAT32IMG = fat32.img
++
++$(EXT2IMG): hello.c
++	rm -f $(EXT2IMG)
++	dd if=/dev/zero of=$(EXT2IMG) bs=1024 count=$(EXT2_BLOCKS)
++	mkfs.ext2 -F -q -b 1024 -I 128 -m 0 $(EXT2IMG)
++	debugfs -w -R "write hello.c hello.c" $(EXT2IMG)
+ 
+--include kernel/*.d user/*.d
++$(FAT32IMG): mkfs/mkfat32
++	rm -f $(FAT32IMG)
++	mkfs/mkfat32 $(FAT32IMG)
++
++fs.img: mkfs/mkfs README hello.c tests/hello.c $(UPROGS) $(EXT2IMG) $(FAT32IMG)
++	mkfs/mkfs fs.img README hello.c tests/hello.c $(UPROGS)
++	cat $(EXT2IMG) >> fs.img
++	cat $(FAT32IMG) >> fs.img
++
++-include kernel/*.d kernel/arch/loongarch/*.d user/*.d
+ 
+ clean: 
+ 	rm -f *.tex *.dvi *.idx *.aux *.log *.ind *.ilg \
+-	*/*.o */*.d */*.asm */*.sym \
++	*/*.o */*/*.o */*/*/*.o */*.d */*/*.d */*/*/*.d \
++	*/*.asm */*/*.asm */*/*/*.asm */*.sym */*/*.sym */*/*/*.sym \
+ 	$K/kernel fs.img \
+-	mkfs/mkfs .gdbinit \
++	$K/arch/loongarch/ramdisk_img.o \
++	.arch-* \
++	$(EXT2IMG) \
++	$(FAT32IMG) \
++	mkfs/mkfs mkfs/mkfat32 .gdbinit \
+         $U/usys.S \
+ 	$(UPROGS)
+ 
+@@ -166,10 +271,16 @@ ifndef CPUS
+ CPUS := 3
+ endif
+ 
++ifeq ($(ARCH),loongarch)
++QEMUOPTS = -machine virt -kernel $K/kernel -m 1G -smp $(CPUS) -nographic -no-reboot -net none
++QEMUOPTS += -drive file=fs.img,if=none,format=raw,id=x0
++QEMUOPTS += -device virtio-blk-pci,drive=x0,disable-legacy=on,vectors=0
++else
+ QEMUOPTS = -machine virt -bios none -kernel $K/kernel -m 128M -smp $(CPUS) -nographic
+ QEMUOPTS += -global virtio-mmio.force-legacy=false
+ QEMUOPTS += -drive file=fs.img,if=none,format=raw,id=x0
+ QEMUOPTS += -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0
++endif
+ 
+ qemu: check-qemu-version $K/kernel fs.img
+ 	$(QEMU) $(QEMUOPTS)
+diff --git a/./src/hello.c b/./src/hello.c
+new file mode 100644
+index 0000000..8875d4f
+--- /dev/null
++++ b/./src/hello.c
+@@ -0,0 +1,8 @@
++#include "kernel/types.h"
++#include "user/user.h"
++
++void
++main()
++{
++  printf("Hello, world!\n");
++}
+diff --git a/./src/kernel/arch/loongarch/apic.c b/./src/kernel/arch/loongarch/apic.c
+new file mode 100644
+index 0000000..ab10811
+--- /dev/null
++++ b/./src/kernel/arch/loongarch/apic.c
+@@ -0,0 +1,38 @@
++#include "types.h"
++#include "param.h"
++#include "memlayout.h"
++#include "loongarch.h"
++#include "defs.h"
++
++//
++// the loongarch 7A1000 I/O Interrupt Controller Registers.
++//
++
++void
++apic_init(void)
++{
++  uint64 mask = (0x1UL << UART0_IRQ) | (0x1UL << VIRTIO0_IRQ);
++
++  *(volatile uint64*)(LS7A_INT_MASK_REG) = ~mask;
++
++  *(volatile uint64*)(LS7A_INT_EDGE_REG) = (0x1UL << UART0_IRQ);
++
++  *(volatile uint8*)(LS7A_INT_HTMSI_VEC_REG + UART0_IRQ) = UART0_IRQ;
++  *(volatile uint8*)(LS7A_INT_HTMSI_VEC_REG + VIRTIO0_IRQ) = VIRTIO0_IRQ;
++
++  *(volatile uint64*)(LS7A_INT_POL_REG) = 0x0UL;
++
++}
++
++void
++apicinit(void)
++{
++  apic_init();
++}
++
++// tell the apic we've served this IRQ.
++void
++apic_complete(uint64 irq)
++{
++  *(volatile uint64*)(LS7A_INT_CLEAR_REG) = (irq);
++}
+diff --git a/./src/kernel/arch/loongarch/asm.h b/./src/kernel/arch/loongarch/asm.h
+new file mode 100644
+index 0000000..707604f
+--- /dev/null
++++ b/./src/kernel/arch/loongarch/asm.h
+@@ -0,0 +1,18 @@
++#define LOONGARCH_CSR_CRMD		    0x0	    /* Current mode info */
++#define LOONGARCH_CSR_CPUID		    0x20	/* CPU core id */
++
++#define LOONGARCH_CSR_SAVE0		    0x30    /* Kscratch registers */
++
++#define LOONGARCH_CSR_DMWIN0		0x180	/* 64 direct map win0: MEM & IF */
++#define LOONGARCH_CSR_DMWIN1		0x181	/* 64 direct map win1: MEM & IF */
++#define LOONGARCH_CSR_DMWIN2		0x182	/* 64 direct map win2: MEM */
++#define LOONGARCH_CSR_DMWIN3		0x183	/* 64 direct map win3: MEM */
++
++#define LOONGARCH_CSR_TLBEHI		0x11	/* TLB EntryHi */
++#define LOONGARCH_CSR_PGDL          0x19
++#define LOONGARCH_CSR_PGD           0x1b
++#define LOONGARCH_CSR_TLBRENTRY		0x88	/* TLB refill exception entry */
++#define LOONGARCH_CSR_TLBRBADV		0x89	/* TLB refill badvaddr */
++#define LOONGARCH_CSR_TLBRSAVE		0x8b	/* KScratch for TLB refill exception */
++
++/* Direct Map window 0/1 */
+\ No newline at end of file
+diff --git a/./src/kernel/arch/loongarch/entry.S b/./src/kernel/arch/loongarch/entry.S
+new file mode 100644
+index 0000000..52001b7
+--- /dev/null
++++ b/./src/kernel/arch/loongarch/entry.S
+@@ -0,0 +1,38 @@
++	# qemu -kernel loads the kernel at 0x00000000
++        # and causes each CPU to jump there.
++        # kernel.ld causes the following code to
++        # be placed at 0x00000000.
++
++#include "asm.h"
++
++.section .text
++.global _entry
++_entry:
++        la.global   $t0, 0f
++        jirl        $zero, $t0, 0
++0:      li.d        $t0, 0x9000000000000011   # CA, PLV0, 0x9000 xxxx xxxx xxxx
++        csrwr       $t0, LOONGARCH_CSR_DMWIN0
++        li.d        $t0, 0x0000000000000000   
++        csrwr       $t0, LOONGARCH_CSR_DMWIN1
++        csrwr       $t0, LOONGARCH_CSR_DMWIN2
++        csrwr       $t0, LOONGARCH_CSR_DMWIN3
++        csrwr       $t0, LOONGARCH_CSR_TLBRENTRY	
++        li.w	    $t0, 0xb0		      # PLV=0, IE=0, PG=1
++	csrwr	    $t0, LOONGARCH_CSR_CRMD
++        invtlb      0x0,$zero,$zero
++	# set up a stack for C.
++        # stack0 is declared in start.c,
++        # with a 4096-byte stack per CPU.
++        # sp = stack0 + (hartid * 4096)
++     
++        la          $sp, stack0
++        li.d        $a0, 1024*4
++	csrrd       $a1, LOONGARCH_CSR_CPUID
++        addi.d      $tp, $a1, 0
++        addi.d      $a1, $a1, 1
++        mul.d       $a0, $a0, $a1
++        add.d       $sp, $sp, $a0
++	# jump to start() in start.c
++        bl          main
++spin:
++        b           spin
+diff --git a/./src/kernel/arch/loongarch/extioi.c b/./src/kernel/arch/loongarch/extioi.c
+new file mode 100644
+index 0000000..58bdddf
+--- /dev/null
++++ b/./src/kernel/arch/loongarch/extioi.c
+@@ -0,0 +1,35 @@
++#include "types.h"
++#include "param.h"
++#include "memlayout.h"
++#include "loongarch.h"
++#include "defs.h"
++
++void extioi_init(void)
++{
++    iocsr_writeq((0x1UL << UART0_IRQ) | (0x1UL << VIRTIO0_IRQ),
++                 LOONGARCH_IOCSR_EXTIOI_EN_BASE);
++
++    iocsr_writeq(0x01UL,LOONGARCH_IOCSR_EXTIOI_MAP_BASE);
++
++    iocsr_writeq(0x10000UL,LOONGARCH_IOCSR_EXTIOI_ROUTE_BASE);
++
++    iocsr_writeq(0x1,LOONGARCH_IOCSR_EXRIOI_NODETYPE_BASE);
++}
++
++void
++extioiinit(void)
++{
++    extioi_init();
++}
++
++// ask the extioi what interrupt we should serve.
++uint64
++extioi_claim(void)
++{
++    return iocsr_readq(LOONGARCH_IOCSR_EXTIOI_ISR_BASE);
++}
++
++void extioi_complete(uint64 irq)
++{
++    iocsr_writeq(irq, LOONGARCH_IOCSR_EXTIOI_ISR_BASE);
++}
+diff --git a/./src/kernel/arch/loongarch/hal.c b/./src/kernel/arch/loongarch/hal.c
+new file mode 100644
+index 0000000..52fbbeb
+--- /dev/null
++++ b/./src/kernel/arch/loongarch/hal.c
+@@ -0,0 +1,45 @@
++#include "types.h"
++#include "param.h"
++#include "memlayout.h"
++#include "riscv.h"
++#include "spinlock.h"
++#include "sleeplock.h"
++#include "defs.h"
++#include "fs.h"
++#include "buf.h"
++
++void
++hal_intr_init(void)
++{
++  apicinit();
++  extioiinit();
++}
++
++void
++hal_intr_inithart(void)
++{
++}
++
++int
++hal_irq_claim(void)
++{
++  return 0;
++}
++
++void
++hal_irq_complete(int irq)
++{
++  (void)irq;
++}
++
++void
++hal_disk_init(void)
++{
++  virtio_disk_init();
++}
++
++void
++hal_disk_rw(struct buf *b, int write)
++{
++  virtio_disk_rw(b, write);
++}
+diff --git a/./src/kernel/arch/loongarch/kernel.ld b/./src/kernel/arch/loongarch/kernel.ld
+new file mode 100644
+index 0000000..0115d30
+--- /dev/null
++++ b/./src/kernel/arch/loongarch/kernel.ld
+@@ -0,0 +1,48 @@
++OUTPUT_ARCH( "loongarch" )
++ENTRY( _entry )
++
++SECTIONS
++{
++  . = 0x9000000000200000;
++
++  .text : {
++    *(.text .text.*)
++    . = ALIGN(0x1000);
++    _keentry = .;
++    *(k_eentry)
++    . = ALIGN(0x1000);
++    _ueentry = .;
++    *(u_eentry)
++    . = ALIGN(0x1000);
++    _tlbrentry = .;
++    *(tlbrentry)
++    . = ALIGN(0x1000);
++    _merrentry = .;
++    *(merrentry)
++    . = ALIGN(0x1000);
++    PROVIDE(etext = .);
++  }
++
++  .rodata : {
++    . = ALIGN(16);
++    *(.srodata .srodata.*)
++    . = ALIGN(16);
++    *(.rodata .rodata.*)
++  }
++
++  .data : {
++    . = ALIGN(16);
++    *(.sdata .sdata.*) 
++    . = ALIGN(16);
++    *(.data .data.*)
++  }
++
++  .bss : {
++    . = ALIGN(16);
++    *(.sbss .sbss.*) 
++    . = ALIGN(16);
++    *(.bss .bss.*)
++  }
++
++  PROVIDE(end = .);
++}
+diff --git a/./src/kernel/arch/loongarch/kernelvec.S b/./src/kernel/arch/loongarch/kernelvec.S
+new file mode 100644
+index 0000000..b79ef17
+--- /dev/null
++++ b/./src/kernel/arch/loongarch/kernelvec.S
+@@ -0,0 +1,85 @@
++	#
++        # interrupts and exceptions while in privilege0
++        # push all registers, call kerneltrap(), restore, return.
++        #
++.section k_eentry
++.globl kerneltrap
++.globl kernelvec
++.align 4
++kernelvec:
++        // make room to save registers.
++        addi.d $sp, $sp, -256
++
++        // save the registers.
++        st.d $ra, $sp, 0
++        st.d $tp, $sp, 8
++        st.d $sp, $sp, 16
++        st.d $a0, $sp, 24
++        st.d $a1, $sp, 32
++        st.d $a2, $sp, 40
++        st.d $a3, $sp, 48
++        st.d $a4, $sp, 56
++        st.d $a5, $sp, 64
++        st.d $a6, $sp, 72
++        st.d $a7, $sp, 80
++        st.d $t0, $sp, 88
++        st.d $t1, $sp, 96
++        st.d $t2, $sp, 104
++        st.d $t3, $sp, 112
++        st.d $t4, $sp, 120
++        st.d $t5, $sp, 128
++        st.d $t6, $sp, 136
++        st.d $t7, $sp, 144
++        st.d $t8, $sp, 152
++        st.d $r21, $sp,160
++        st.d $fp, $sp, 168
++        st.d $s0, $sp, 176
++        st.d $s1, $sp, 184
++        st.d $s2, $sp, 192
++        st.d $s3, $sp, 200
++        st.d $s4, $sp, 208
++        st.d $s5, $sp, 216
++        st.d $s6, $sp, 224
++        st.d $s7, $sp, 232
++        st.d $s8, $sp, 240
++
++	// call the C trap handler in trap.c
++        bl kerneltrap
++
++        // restore register
++        ld.d $ra, $sp, 0
++        // not this, in case we moved CPUs: ld.d $tp, $sp, 8
++        ld.d $sp, $sp, 16
++        ld.d $a0, $sp, 24
++        ld.d $a1, $sp, 32
++        ld.d $a2, $sp, 40
++        ld.d $a3, $sp, 48
++        ld.d $a4, $sp, 56
++        ld.d $a5, $sp, 64
++        ld.d $a6, $sp, 72
++        ld.d $a7, $sp, 80
++        ld.d $t0, $sp, 88
++        ld.d $t1, $sp, 96
++        ld.d $t2, $sp, 104
++        ld.d $t3, $sp, 112
++        ld.d $t4, $sp, 120
++        ld.d $t5, $sp, 128
++        ld.d $t6, $sp, 136
++        ld.d $t7, $sp, 144
++        ld.d $t8, $sp, 152
++        ld.d $r21, $sp,160
++        ld.d $fp, $sp, 168
++        ld.d $s0, $sp, 176
++        ld.d $s1, $sp, 184
++        ld.d $s2, $sp, 192
++        ld.d $s3, $sp, 200
++        ld.d $s4, $sp, 208
++        ld.d $s5, $sp, 216
++        ld.d $s6, $sp, 224
++        ld.d $s7, $sp, 232
++        ld.d $s8, $sp, 240
++
++        addi.d $sp, $sp, 256
++
++        // return to whatever we were doing in the kernel.
++        ertn
+diff --git a/./src/kernel/arch/loongarch/loongarch.h b/./src/kernel/arch/loongarch/loongarch.h
+new file mode 100644
+index 0000000..76c2d72
+--- /dev/null
++++ b/./src/kernel/arch/loongarch/loongarch.h
+@@ -0,0 +1,332 @@
++#include <larchintrin.h>
++
++#define  CSR_CRMD_IE_SHIFT		    2
++#define  CSR_CRMD_IE			        ( 0x1 << CSR_CRMD_IE_SHIFT )
++
++#define  EXT_INT_EN_SHIFT         48
++
++#define LOONGARCH_IOCSR_EXTIOI_EN_BASE		    0x1600
++#define LOONGARCH_IOCSR_EXTIOI_ISR_BASE		    0x1800
++#define LOONGARCH_IOCSR_EXTIOI_MAP_BASE       0x14c0
++#define LOONGARCH_IOCSR_EXTIOI_ROUTE_BASE	    0x1c00
++#define LOONGARCH_IOCSR_EXRIOI_NODETYPE_BASE  0x14a0
++
++// read and write tp, the thread pointer, which holds
++// this core's hartid (core number), the index into cpus[].
++
++static inline uint64
++r_sp()
++{
++  uint64 x;
++  asm volatile("addi.d %0, $sp, 0" : "=r" (x) );
++  return x;
++}
++
++static inline uint64
++r_tp()
++{
++  uint64 x;
++  asm volatile("addi.d %0, $tp, 0" : "=r" (x) );
++  return x;
++}
++
++static inline uint32
++r_csr_crmd()
++{
++  uint32 x;
++  asm volatile("csrrd %0, 0x0" : "=r" (x) );
++  return x;
++}
++
++static inline void 
++w_csr_crmd(uint32 x)
++{
++  asm volatile("csrwr %0, 0x0" : : "r" (x));
++}
++
++#define PRMD_PPLV (3U << 0)  // Previous Privilege
++#define PRMD_PIE  (1U << 2)  // Previous Int_enable
++
++static inline uint32
++r_csr_prmd()
++{
++  uint32 x;
++  asm volatile("csrrd %0, 0x1" : "=r" (x) );
++  return x;
++}
++
++static inline void 
++w_csr_prmd(uint32 x)
++{
++  asm volatile("csrwr %0, 0x1" : : "r" (x));
++}
++
++static inline uint64
++r_csr_era()
++{
++  uint64 x;
++  asm volatile("csrrd %0, 0x6" : "=r" (x) );
++  return x;
++}
++
++static inline void 
++w_csr_era(uint64 x)
++{
++  asm volatile("csrwr %0, 0x6" : : "r" (x));
++}
++
++#define CSR_ESTAT_ECODE  (0x3fU << 16)
++
++static inline uint32
++r_csr_estat()
++{
++  uint32 x;
++  asm volatile("csrrd %0, 0x5" : "=r" (x) );
++  return x;
++}
++
++#define CSR_ECFG_VS_SHIFT  16 
++#define CSR_ECFG_LIE_TI_SHIFT  11
++#define HWI_VEC  0x3fcU
++#define TI_VEC  (0x1 << CSR_ECFG_LIE_TI_SHIFT)
++
++static inline uint32
++r_csr_ecfg()
++{
++  uint32 x;
++  asm volatile("csrrd %0, 0x4" : "=r" (x) );
++  return x;
++}
++
++static inline void
++w_csr_ecfg(uint32 x)
++{
++  asm volatile("csrwr %0, 0x4" : : "r" (x) );
++}
++
++#define CSR_TICLR_CLR  (0x1 << 0)
++
++static inline uint32
++r_csr_ticlr()
++{
++  uint32 x;
++  asm volatile("csrrd %0, 0x44" : "=r" (x) );
++  return x;
++}
++
++static inline void
++w_csr_ticlr(uint32 x)
++{
++  asm volatile("csrwr %0, 0x44" : : "r" (x) );
++}
++
++static inline uint64
++r_csr_eentry()
++{
++  uint64 x;
++  asm volatile("csrrd %0, 0xc" : "=r" (x) );
++  return x;
++}
++
++static inline uint64
++r_csr_tlbrelo0()
++{
++  uint64 x;
++  asm volatile("csrrd %0, 0x8c" : "=r" (x) );
++  return x;
++}
++
++static inline uint64
++r_csr_tlbrelo1()
++{
++  uint64 x;
++  asm volatile("csrrd %0, 0x8d" : "=r" (x) );
++  return x;
++}
++
++static inline void
++w_csr_eentry(uint64 x)
++{
++  asm volatile("csrwr %0, 0xc" : : "r" (x) );
++}
++
++static inline void
++w_csr_tlbrentry(uint64 x)
++{
++  asm volatile("csrwr %0, 0x88" : : "r" (x) );
++}
++
++static inline void
++w_csr_merrentry(uint64 x)
++{
++  asm volatile("csrwr %0, 0x93" : : "r" (x) );
++}
++
++static inline void
++w_csr_stlbps(uint32 x)
++{
++  asm volatile("csrwr %0, 0x1e" : : "r" (x) );
++}
++
++static inline void
++w_csr_asid(uint32 x)
++{
++  asm volatile("csrwr %0, 0x18" : : "r" (x) );
++}
++
++#define CSR_TCFG_EN            (1U << 0)
++#define CSR_TCFG_PER           (1U << 1)
++
++static inline void
++w_csr_tcfg(uint64 x)
++{
++  asm volatile("csrwr %0, 0x41" : : "r" (x) );
++}
++
++static inline void
++w_csr_tlbrehi(uint64 x)
++{
++  asm volatile("csrwr %0, 0x8e" : : "r" (x) );
++}
++
++static inline uint64
++r_csr_pgdl()
++{
++  uint64 x;
++  asm volatile("csrrd %0, 0x19" : "=r" (x) );
++  return x;
++}
++
++static inline void
++w_csr_pgdl(uint64 x)
++{
++  asm volatile("csrwr %0, 0x19" : : "r" (x) );
++}
++
++static inline void
++w_csr_pgdh(uint64 x)
++{
++  asm volatile("csrwr %0, 0x1a" : : "r" (x) );
++}
++
++#define PTBASE  12U
++#define PTWIDTH  9U
++#define DIR1BASE  21U 
++#define DIR1WIDTH  9U
++#define DIR2BASE  30U
++#define DIR2WIDTH  9U 
++#define PTEWIDTH  0U
++#define DIR3BASE  39U
++#define DIR3WIDTH  9U
++#define DIR4WIDTH  0U
++
++static inline void
++w_csr_pwcl(uint32 x)
++{
++  asm volatile("csrwr %0, 0x1c" : : "r" (x) );
++}
++
++static inline void
++w_csr_pwch(uint32 x)
++{
++  asm volatile("csrwr %0, 0x1d" : : "r" (x) );
++}
++
++static inline uint32
++r_csr_badi()
++{
++  uint32 x;
++  asm volatile("csrrd %0, 0x8" : "=r" (x) );
++  return x;
++}
++
++static inline uint64
++r_csr_badv()
++{
++  uint64 x;
++  asm volatile("csrrd %0, 0x7" : "=r" (x) );
++  return x;
++}
++
++/* IOCSR */
++static inline uint32 iocsr_readl(uint32 reg)
++{
++	return __iocsrrd_w(reg);
++}
++
++static inline uint64 iocsr_readq(uint32 reg)
++{
++	return __iocsrrd_d(reg);
++}
++
++static inline void iocsr_writel(uint32 val, uint32 reg)
++{
++	__iocsrwr_w(val, reg);
++}
++
++static inline void iocsr_writeq(uint64 val, uint32 reg)
++{
++	__iocsrwr_d(val, reg);
++}
++
++static inline int
++intr_get()
++{
++  uint32 x = r_csr_crmd();
++  return (x & CSR_CRMD_IE) != 0;
++}
++
++// enable device interrupts
++static inline void
++intr_on()
++{
++  w_csr_crmd(r_csr_crmd() | CSR_CRMD_IE);
++}
++
++// disable device interrupts
++static inline void
++intr_off()
++{
++  w_csr_crmd(r_csr_crmd() & ~CSR_CRMD_IE);
++}
++
++static inline void
++cpu_idle()
++{
++  asm volatile("idle 0");
++}
++
++#define PGSIZE 4096 // bytes per page
++#define PGSHIFT 12  // bits of offset within a page
++
++#define PGROUNDUP(sz)  (((sz)+PGSIZE-1) & ~(PGSIZE-1))
++#define PGROUNDDOWN(a) (((a)) & ~(PGSIZE-1))
++
++#define PTE_V (1L << 0) // valid
++#define PTE_D (1L << 1) // dirty
++#define PTE_PLV (3L << 2) //privilege level
++#define PTE_MAT (1L << 4) //memory access type
++#define PTE_P (1L << 7) // physical page exists
++#define PTE_W (1L << 8) // writeable
++#define PTE_NX (1UL << 62) //non executable
++#define PTE_NR (1L << 61) //non readable
++#define PTE_RPLV (1UL << 63) //restricted privilege level enable
++#define PTE_R 0
++#define PTE_X 0
++#define PTE_U PTE_PLV
++
++#define PAMASK          0xFFFFFFFFFUL << PGSHIFT
++#define PTE2PA(pte) (pte & PAMASK)
++// shift a physical address to the right place for a PTE.
++#define PA2PTE(pa) (((uint64)pa) & PAMASK)
++#define PTE_FLAGS(pte) ((pte) & 0xE0000000000001FFUL)
++
++// extract the three 9-bit page table indices from a virtual address.
++#define PXMASK          0x1FF // 9 bits
++#define PXSHIFT(level)  (PGSHIFT+(9*(level)))
++#define PX(level, va) ((((uint64) (va)) >> PXSHIFT(level)) & PXMASK)
++
++#define MAXVA (1L << (9 + 12 - 1)) //Lower half virtual address
++
++typedef uint64 pte_t;
++typedef uint64 *pagetable_t;
+diff --git a/./src/kernel/arch/loongarch/merror.S b/./src/kernel/arch/loongarch/merror.S
+new file mode 100644
+index 0000000..02449f7
+--- /dev/null
++++ b/./src/kernel/arch/loongarch/merror.S
+@@ -0,0 +1,7 @@
++.section merrentry
++.globl machine_trap
++.globl handle_merr
++.align 0x4
++handle_merr:
++    bl machine_trap
++    ertn
+\ No newline at end of file
+diff --git a/./src/kernel/arch/loongarch/ramdisk.c b/./src/kernel/arch/loongarch/ramdisk.c
+new file mode 100644
+index 0000000..082238a
+--- /dev/null
++++ b/./src/kernel/arch/loongarch/ramdisk.c
+@@ -0,0 +1,54 @@
++//
++// ramdisk that uses the disk image loaded by qemu -initrd fs.img
++//
++
++#include "types.h"
++#include "loongarch.h"
++#include "defs.h"
++#include "param.h"
++#include "memlayout.h"
++#include "spinlock.h"
++#include "sleeplock.h"
++#include "fs.h"
++#include "buf.h"
++
++extern uchar _binary_fs_img_start[];
++extern uchar _binary_fs_img_end[];
++
++void
++ramdiskinit(void)
++{
++}
++
++// If B_DIRTY is set, write buf to disk, clear B_DIRTY, set B_VALID.
++// Else if B_VALID is not set, read buf from disk, set B_VALID.
++void
++ramdiskrw(struct buf *b, int write)
++{
++  uint64 blockno;
++  uint64 diskaddr;
++  uint64 disksz;
++  char *addr;
++
++  if(!holdingsleep(&b->lock))
++    panic("ramdiskrw: buf not locked");
++
++  blockno = b->blockno;
++  if(b->dev == EXT2DEV)
++    blockno += FSSIZE;
++  else if(b->dev == FAT32DEV)
++    blockno += FAT32START;
++
++  diskaddr = blockno * BSIZE;
++  disksz = _binary_fs_img_end - _binary_fs_img_start;
++  if(diskaddr + BSIZE > disksz)
++    panic("ramdiskrw: blockno too big");
++
++  addr = (char *)_binary_fs_img_start + diskaddr;
++
++  if(write){
++    memmove(addr, b->data, BSIZE);
++  } else {
++    memmove(b->data, addr, BSIZE);
++  }
++}
+diff --git a/./src/kernel/arch/loongarch/start.c b/./src/kernel/arch/loongarch/start.c
+new file mode 100644
+index 0000000..40148bf
+--- /dev/null
++++ b/./src/kernel/arch/loongarch/start.c
+@@ -0,0 +1,3 @@
++#include "param.h"
++
++__attribute__ ((aligned (16))) char stack0[4096 * NCPU];
+diff --git a/./src/kernel/arch/loongarch/swtch.S b/./src/kernel/arch/loongarch/swtch.S
+new file mode 100644
+index 0000000..b252c77
+--- /dev/null
++++ b/./src/kernel/arch/loongarch/swtch.S
+@@ -0,0 +1,37 @@
++# Context switch
++#
++#   void swtch(struct context *old, struct context *new);
++# # Save current registers in old. Load from new.	
++
++
++.globl swtch
++swtch:
++        st.d $ra, $a0, 0
++        st.d $sp, $a0, 8
++        st.d $s0, $a0, 16
++        st.d $s1, $a0, 24
++        st.d $s2, $a0, 32
++        st.d $s3, $a0, 40
++        st.d $s4, $a0, 48
++        st.d $s5, $a0, 56
++        st.d $s6, $a0, 64
++        st.d $s7, $a0, 72
++        st.d $s8, $a0, 80
++        st.d $fp, $a0, 88
++
++        ld.d $ra, $a1, 0
++        ld.d $sp, $a1, 8
++        ld.d $s0, $a1, 16
++        ld.d $s1, $a1, 24
++        ld.d $s2, $a1, 32
++        ld.d $s3, $a1, 40
++        ld.d $s4, $a1, 48
++        ld.d $s5, $a1, 56
++        ld.d $s6, $a1, 64
++        ld.d $s7, $a1, 72
++        ld.d $s8, $a1, 80
++        ld.d $fp, $a1, 88
++        
++        jirl $zero, $ra, 0
++
++	
+diff --git a/./src/kernel/arch/loongarch/tlbrefill.S b/./src/kernel/arch/loongarch/tlbrefill.S
+new file mode 100644
+index 0000000..cab0b84
+--- /dev/null
++++ b/./src/kernel/arch/loongarch/tlbrefill.S
+@@ -0,0 +1,22 @@
++#include "asm.h"
++
++.section tlbrentry
++.globl handle_tlbr
++.align 0x4
++handle_tlbr:
++	csrwr	$t0, LOONGARCH_CSR_TLBRSAVE
++	csrrd	$t0, LOONGARCH_CSR_PGD
++//	lddir	$t0, $t0, 4
++//	addi.d  $t0, $t0, -1
++	lddir	$t0, $t0, 3
++	addi.d  $t0, $t0, -1
++	lddir	$t0, $t0, 2
++	addi.d  $t0, $t0, -1
++	lddir   $t0, $t0, 1
++	addi.d  $t0, $t0, -1
++	ldpte	$t0, 0
++	ldpte	$t0, 1
++	tlbfill
++	csrrd	$t0, LOONGARCH_CSR_TLBRSAVE
++	ertn
++	
+diff --git a/./src/kernel/arch/loongarch/trap.c b/./src/kernel/arch/loongarch/trap.c
+new file mode 100644
+index 0000000..0e7af59
+--- /dev/null
++++ b/./src/kernel/arch/loongarch/trap.c
+@@ -0,0 +1,261 @@
++#include "types.h"
++#include "param.h"
++#include "memlayout.h"
++#include "loongarch.h"
++#include "spinlock.h"
++#include "proc.h"
++#include "defs.h"
++
++struct spinlock tickslock;
++uint ticks;
++
++// in kernelvec.S, calls kerneltrap().
++void kernelvec();
++void uservec();
++void handle_tlbr();
++void handle_merr();
++void usertrapret(void);
++void userret(uint64, uint64);
++
++extern int devintr();
++
++#define LA_ECODE_PIL 0x1
++#define LA_ECODE_PIS 0x2
++#define LA_ECODE_SYS 0xb
++
++static int
++la_page_fault(uint32 ecode, int *read)
++{
++  if(ecode == LA_ECODE_PIL){
++    *read = 1;
++    return 1;
++  }
++  if(ecode == LA_ECODE_PIS){
++    *read = 0;
++    return 1;
++  }
++  return 0;
++}
++
++void
++trapinit(void)
++{
++  initlock(&tickslock, "time");
++  uint32 ecfg = ( 0U << CSR_ECFG_VS_SHIFT ) | HWI_VEC | TI_VEC;
++  uint64 tcfg = 0x1000000UL | CSR_TCFG_EN | CSR_TCFG_PER;
++  w_csr_ecfg(ecfg);
++  w_csr_tcfg(tcfg);
++  w_csr_eentry((uint64)kernelvec);
++  w_csr_tlbrentry((uint64)handle_tlbr);
++  w_csr_merrentry((uint64)handle_merr);
++  intr_on();
++}
++
++void
++trapinithart(void)
++{
++}
++
++//
++// handle an interrupt, exception, or system call from user space.
++// called from uservec.S
++//
++void
++usertrap(void)
++{
++  int which_dev = 0;
++  uint32 ecode;
++  int read = 0;
++
++  if((r_csr_prmd() & PRMD_PPLV) == 0)
++    panic("usertrap: not from user mode");
++
++  // send interrupts and exceptions to kerneltrap(),
++  // since we're now in the kernel.
++  w_csr_eentry((uint64)kernelvec);
++
++  struct proc *p = myproc();
++  
++  // save user program counter.
++  p->trapframe->era = r_csr_era();
++  ecode = (r_csr_estat() & CSR_ESTAT_ECODE) >> 16;
++  
++  if(ecode == LA_ECODE_SYS){
++    // system call
++
++    if(p->killed)
++      kexit(-1);
++
++    // sepc points to the ecall instruction,
++    // but we want to return to the next instruction.
++    p->trapframe->era += 4;
++
++    // an interrupt will change crmd & prmd registers,
++    // so don't enable until done with those registers.
++    intr_on();
++
++    syscall();
++  } else if((which_dev = devintr()) != 0){
++    // ok
++  } else if(la_page_fault(ecode, &read) &&
++            vmfault(p->pagetable, r_csr_badv(), read) != 0){
++    // page fault on lazily-allocated page
++  } else {
++    printf("usertrap(): unexpected trapcause %x pid=%d\n", r_csr_estat(), p->pid);
++    printf("            era=0x%lx badv=0x%lx badi=0x%x sp=0x%lx crmd=0x%x prmd=0x%x\n",
++           r_csr_era(), r_csr_badv(), r_csr_badi(), p->trapframe->sp,
++           r_csr_crmd(), r_csr_prmd());
++    p->killed = 1;
++  }
++
++  if(p->killed)
++    kexit(-1);
++
++  // give up the CPU if this is a timer interrupt.
++  if(which_dev == 2)
++    yield();
++
++  usertrapret();
++}
++
++//
++// return to user space
++//
++void
++usertrapret(void)
++{
++  struct proc *p = myproc();
++
++  // we're about to switch the destination of traps from
++  // kerneltrap() to usertrap(), so turn off interrupts until
++  // we're back in user space, where usertrap() is correct.
++  intr_off();
++
++  // send syscalls, interrupts, and exceptions to uservec.S
++  w_csr_eentry((uint64)uservec);  //maybe todo
++
++  // set up trapframe values that uservec will need when
++  // the process next re-enters the kernel.
++  p->trapframe->kernel_pgdl = r_csr_pgdl();         // kernel page table
++  p->trapframe->kernel_sp = p->kstack + PGSIZE; // process's kernel stack
++  p->trapframe->kernel_trap = (uint64)usertrap;
++  p->trapframe->kernel_hartid = r_tp();         // hartid for cpuid()
++
++  // set up the registers that uservec.S's ertn will use
++  // to get to user space.
++  
++  // set Previous Privilege mode to User Privilege3.
++  uint32 x = r_csr_prmd();
++  x |= PRMD_PPLV; // set PPLV to 3 for user mode
++  x |= PRMD_PIE; // enable interrupts in user mode
++  w_csr_prmd(x);
++
++  // set S Exception Program Counter to the saved user pc.
++  w_csr_era(p->trapframe->era);
++
++  // tell uservec.S the user page table to switch to.
++  volatile uint64 pgdl = (uint64)(p->pagetable);
++
++  // jump to uservec.S at the top of memory, which 
++  // switches to the user page table, restores user registers,
++  // and switches to user mode with ertn.
++  userret(TRAPFRAME, pgdl);
++}
++
++// interrupts and exceptions from kernel code go here via kernelvec,
++// on whatever the current kernel stack is.
++void 
++kerneltrap()
++{
++  int which_dev = 0;
++  uint64 era = r_csr_era();
++  uint64 prmd = r_csr_prmd();
++  
++  if((prmd & PRMD_PPLV) != 0)
++    panic("kerneltrap: not from privilege0");
++  if(intr_get() != 0)
++    panic("kerneltrap: interrupts enabled");
++
++  if((which_dev = devintr()) == 0){
++    printf("estat %x\n", r_csr_estat());
++    printf("era=0x%lx eentry=0x%lx badv=0x%lx crmd=0x%x prmd=0x%x\n",
++           r_csr_era(), r_csr_eentry(), r_csr_badv(), r_csr_crmd(), r_csr_prmd());
++    panic("kerneltrap");
++  }
++
++  // give up the CPU if this is a timer interrupt.
++  if(which_dev == 2 && myproc() != 0 && myproc()->state == RUNNING)
++    yield();
++
++  // the yield() may have caused some traps to occur,
++  // so restore trap registers for use by kernelvec.S's instruction.
++  w_csr_era(era);
++  w_csr_prmd(prmd);
++}
++
++void 
++machine_trap()
++{
++  panic("machine error");
++}
++
++void
++clockintr()
++{
++  acquire(&tickslock);
++  ticks++;
++  wakeup(&ticks);
++  release(&tickslock);
++}
++
++// check if it's an external interrupt or software interrupt,
++// and handle it.
++// returns 2 if timer interrupt,
++// 1 if other device,
++// 0 if not recognized.
++int
++devintr()
++{
++  uint32 estat = r_csr_estat();
++  uint32 ecfg = r_csr_ecfg();
++
++  if(estat & ecfg & HWI_VEC) {
++    // this is a hardware interrupt, via IOCR.
++
++    // irq indicates which device interrupted.
++    uint64 irq = extioi_claim();
++    if(irq & (1UL << UART0_IRQ)){
++      uartintr();
++
++    // tell the apic the device is
++    // now allowed to interrupt again.
++
++      extioi_complete(1UL << UART0_IRQ);
++    } else if(irq & (1UL << VIRTIO0_IRQ)){
++      virtio_disk_intr();
++      apic_complete(1UL << VIRTIO0_IRQ);
++      extioi_complete(1UL << VIRTIO0_IRQ);
++    } else if(irq){
++       printf("unexpected interrupt irq=0x%lx\n", irq);
++
++      apic_complete(irq); 
++      extioi_complete(irq);        
++    }
++
++    return 1;
++  } else if(estat & ecfg & TI_VEC){
++    //timer interrupt,
++
++    if(cpuid() == 0){
++      clockintr();
++    }
++    
++    // acknowledge the timer interrupt by clearing
++    // the TI bit in TICLR.
++    w_csr_ticlr(r_csr_ticlr() | CSR_TICLR_CLR);
++
++    return 2;
++  } else {
++    return 0;
++  }
++}
+diff --git a/./src/kernel/arch/loongarch/user.ld b/./src/kernel/arch/loongarch/user.ld
+new file mode 100644
+index 0000000..e3ce7b0
+--- /dev/null
++++ b/./src/kernel/arch/loongarch/user.ld
+@@ -0,0 +1,39 @@
++OUTPUT_ARCH( "loongarch" )
++
++SECTIONS
++{
++ . = 0x0;
++
++  .text : {
++    *(.text .text.*)
++  }
++
++  .rodata : {
++    . = ALIGN(16);
++    *(.srodata .srodata.*)
++    . = ALIGN(16);
++    *(.rodata .rodata.*)
++  }
++
++  .eh_frame : {
++       *(.eh_frame)
++       *(.eh_frame.*)
++   }
++
++  . = ALIGN(0x1000);
++  .data : {
++    . = ALIGN(16);
++    *(.sdata .sdata.*)
++    . = ALIGN(16);
++    *(.data .data.*)
++  }
++
++  .bss : {
++    . = ALIGN(16);
++    *(.sbss .sbss.*)
++    . = ALIGN(16);
++    *(.bss .bss.*)
++  }
++
++  PROVIDE(end = .);
++}
+diff --git a/./src/kernel/arch/loongarch/uservec.S b/./src/kernel/arch/loongarch/uservec.S
+new file mode 100644
+index 0000000..1397c50
+--- /dev/null
++++ b/./src/kernel/arch/loongarch/uservec.S
+@@ -0,0 +1,134 @@
++# code to switch between user and kernel space.
++
++	# kernel.ld causes this to be aligned
++        # to a page boundary.
++        #
++#include "asm.h"
++
++.section u_eentry
++.globl uservec
++.align 4
++
++uservec:    
++	#
++        # trap.c sets eentry to point here, so
++        # traps from user space start here,
++        # in privilege0, but with a
++        # user page table.
++        #
++        # CSR.SAVE points to where the process's p->trapframe is
++        # mapped into user space, at TRAPFRAME.
++        #
++        
++	# swap a0 and SAVE
++        # so that a0 is TRAPFRAME
++        csrwr  $a0, LOONGARCH_CSR_SAVE0
++
++        # save the user registers in TRAPFRAME
++        st.d   $ra, $a0, 0
++        st.d   $tp, $a0, 8
++        st.d   $sp, $a0, 16
++        st.d   $a1, $a0, 32
++        st.d   $a2, $a0, 40
++        st.d   $a3, $a0, 48
++        st.d   $a4, $a0, 56
++        st.d   $a5, $a0, 64
++        st.d   $a6, $a0, 72
++        st.d   $a7, $a0, 80
++        st.d   $t0, $a0, 88
++        st.d   $t1, $a0, 96
++        st.d   $t2, $a0, 104
++        st.d   $t3, $a0, 112
++        st.d   $t4, $a0, 120
++        st.d   $t5, $a0, 128
++        st.d   $t6, $a0, 136
++        st.d   $t7, $a0, 144
++        st.d   $t8, $a0, 152
++        st.d   $r21, $a0,160
++        st.d   $fp, $a0, 168
++        st.d   $s0, $a0, 176
++        st.d   $s1, $a0, 184
++        st.d   $s2, $a0, 192
++        st.d   $s3, $a0, 200
++        st.d   $s4, $a0, 208
++        st.d   $s5, $a0, 216
++        st.d   $s6, $a0, 224
++        st.d   $s7, $a0, 232
++        st.d   $s8, $a0, 240
++
++	# save the user a0 in p->trapframe->a0
++        csrrd  $t0, LOONGARCH_CSR_SAVE0
++        st.d   $t0, $a0, 24
++
++        # restore kernel stack pointer from p->trapframe->kernel_sp
++        ld.d   $sp, $a0, 248
++
++        # make tp hold the current hartid, from p->trapframe->kernel_hartid
++        ld.d   $tp, $a0, 272
++
++        # load the address of usertrap(), p->trapframe->kernel_trap
++        ld.d   $t0, $a0, 256
++
++        # restore kernel page table from p->trapframe->kernel_pgdl
++        ld.d   $t1, $a0, 280
++        csrwr  $t1, LOONGARCH_CSR_PGDL
++        invtlb 0x0,$zero,$zero
++
++        # jump to usertrap(), which does not return
++        jirl   $zero ,$t0, 0
++
++.globl userret
++userret:
++        # userret(TRAPFRAME, pagetable)
++        # switch from kernel to user.
++        # usertrapret() calls here.
++        # a0: TRAPFRAME, in user page table.
++        # a1: user page table, for pgdl.
++
++        # switch to the user page table.
++        csrwr  $a1, LOONGARCH_CSR_PGDL
++        invtlb 0x0,$zero,$zero
++
++        # put the saved user a0 in SAVE0, so we
++        # can swap it with our a0 (TRAPFRAME) in the last step.
++        ld.d   $t0, $a0, 24
++        csrwr  $t0, LOONGARCH_CSR_SAVE0
++
++        # restore all but a0 from TRAPFRAME
++        ld.d   $ra, $a0, 0
++        ld.d   $tp, $a0, 8
++        ld.d   $sp, $a0, 16
++        ld.d   $a1, $a0, 32
++        ld.d   $a2, $a0, 40
++        ld.d   $a3, $a0, 48
++        ld.d   $a4, $a0, 56
++        ld.d   $a5, $a0, 64
++        ld.d   $a6, $a0, 72
++        ld.d   $a7, $a0, 80
++        ld.d   $t0, $a0, 88
++        ld.d   $t1, $a0, 96
++        ld.d   $t2, $a0, 104
++        ld.d   $t3, $a0, 112
++        ld.d   $t4, $a0, 120
++        ld.d   $t5, $a0, 128
++        ld.d   $t6, $a0, 136
++        ld.d   $t7, $a0, 144
++        ld.d   $t8, $a0, 152
++        ld.d   $r21, $a0,160
++        ld.d   $fp, $a0, 168
++        ld.d   $s0, $a0, 176
++        ld.d   $s1, $a0, 184
++        ld.d   $s2, $a0, 192
++        ld.d   $s3, $a0, 200
++        ld.d   $s4, $a0, 208
++        ld.d   $s5, $a0, 216
++        ld.d   $s6, $a0, 224
++        ld.d   $s7, $a0, 232
++        ld.d   $s8, $a0, 240
++
++	# restore user a0, and save TRAPFRAME in SAVE0
++        csrwr  $a0, LOONGARCH_CSR_SAVE0
++        
++        # return to user mode and user pc.
++        # usertrapret() set up prmd and era.
++        ertn
+diff --git a/./src/kernel/arch/loongarch/virtio_pci.c b/./src/kernel/arch/loongarch/virtio_pci.c
+new file mode 100644
+index 0000000..f372c78
+--- /dev/null
++++ b/./src/kernel/arch/loongarch/virtio_pci.c
+@@ -0,0 +1,315 @@
++#include "types.h"
++#include "param.h"
++#include "memlayout.h"
++#include "loongarch.h"
++#include "defs.h"
++#include "virtio.h"
++
++#define PCI_VENDOR_ID          0x00
++#define PCI_DEVICE_ID          0x02
++#define PCI_COMMAND            0x04
++#define PCI_CAPABILITY_LIST    0x34
++#define PCI_BAR0               0x10
++
++#define PCI_COMMAND_IO         0x1
++#define PCI_COMMAND_MEMORY     0x2
++#define PCI_COMMAND_MASTER     0x4
++
++#define PCI_VENDOR_VIRTIO      0x1af4
++#define PCI_DEVICE_VIRTIO_BLK  0x1042
++
++#define PCI_CAP_ID_VNDR        0x09
++#define VIRTIO_PCI_CAP_COMMON_CFG 1
++#define VIRTIO_PCI_CAP_NOTIFY_CFG 2
++#define VIRTIO_PCI_CAP_ISR_CFG    3
++
++struct virtio_pci_common_cfg {
++  uint32 device_feature_select;
++  uint32 device_feature;
++  uint32 driver_feature_select;
++  uint32 driver_feature;
++  uint16 msix_config;
++  uint16 num_queues;
++  uint8 device_status;
++  uint8 config_generation;
++  uint16 queue_select;
++  uint16 queue_size;
++  uint16 queue_msix_vector;
++  uint16 queue_enable;
++  uint16 queue_notify_off;
++  uint64 queue_desc;
++  uint64 queue_driver;
++  uint64 queue_device;
++};
++
++static volatile struct virtio_pci_common_cfg *common_cfg;
++static volatile uint8 *isr_cfg;
++static volatile uint16 *notify_cfg;
++static uint32 notify_off_multiplier;
++
++static uint busno, devno, funcno;
++static uint64 bar_addr[6];
++static uint64 next_mmio = PCI_MMIO_BASE & ~DMWIN_MASK;
++
++static uint64
++pci_conf_addr(uint bus, uint dev, uint func, uint off)
++{
++  return PCI_ECAM + (bus << 20) + (dev << 15) + (func << 12) + off;
++}
++
++static uint8
++pci_read8(uint bus, uint dev, uint func, uint off)
++{
++  return *(volatile uint8*)pci_conf_addr(bus, dev, func, off);
++}
++
++static uint16
++pci_read16(uint bus, uint dev, uint func, uint off)
++{
++  return *(volatile uint16*)pci_conf_addr(bus, dev, func, off);
++}
++
++static uint32
++pci_read32(uint bus, uint dev, uint func, uint off)
++{
++  return *(volatile uint32*)pci_conf_addr(bus, dev, func, off);
++}
++
++static void
++pci_write16(uint bus, uint dev, uint func, uint off, uint16 val)
++{
++  *(volatile uint16*)pci_conf_addr(bus, dev, func, off) = val;
++}
++
++static void
++pci_write32(uint bus, uint dev, uint func, uint off, uint32 val)
++{
++  *(volatile uint32*)pci_conf_addr(bus, dev, func, off) = val;
++}
++
++static uint64
++align_up(uint64 value, uint64 align)
++{
++  return (value + align - 1) & ~(align - 1);
++}
++
++static uint64
++alloc_mmio(uint64 size)
++{
++  uint64 addr;
++
++  size = align_up(size, PGSIZE);
++  addr = align_up(next_mmio, size);
++  if(addr + size > (PCI_MMIO_BASE & ~DMWIN_MASK) + PCI_MMIO_SIZE)
++    panic("virtio pci mmio");
++  next_mmio = addr + size;
++  return addr;
++}
++
++static void
++alloc_bars(uint bus, uint dev, uint func)
++{
++  for(int i = 0; i < 6; i++){
++    uint off = PCI_BAR0 + i * 4;
++    uint32 old = pci_read32(bus, dev, func, off);
++
++    pci_write32(bus, dev, func, off, 0xffffffff);
++    uint32 low = pci_read32(bus, dev, func, off);
++    pci_write32(bus, dev, func, off, old);
++
++    if(low == 0 || low == 0xffffffff)
++      continue;
++    if(low & 0x1){
++      pci_write32(bus, dev, func, off, old);
++      continue;
++    }
++
++    uint64 mask;
++    uint64 size;
++    uint64 addr;
++    int type = (low >> 1) & 0x3;
++
++    if(type == 0x2 && i + 1 < 6){
++      uint32 oldhi = pci_read32(bus, dev, func, off + 4);
++      pci_write32(bus, dev, func, off + 4, 0xffffffff);
++      uint32 high = pci_read32(bus, dev, func, off + 4);
++      pci_write32(bus, dev, func, off + 4, oldhi);
++      mask = ((uint64)high << 32) | (low & ~0xf);
++      size = -mask;
++      addr = alloc_mmio(size);
++      pci_write32(bus, dev, func, off, (uint32)addr);
++      pci_write32(bus, dev, func, off + 4, (uint32)(addr >> 32));
++      bar_addr[i] = addr | DMWIN_MASK;
++      i++;
++    } else {
++      mask = low & ~0xf;
++      size = (uint32)(-mask);
++      addr = alloc_mmio(size);
++      pci_write32(bus, dev, func, off, (uint32)addr);
++      bar_addr[i] = addr | DMWIN_MASK;
++    }
++  }
++}
++
++static void
++find_device(void)
++{
++  for(uint dev = 0; dev < 32; dev++){
++    uint16 vendor = pci_read16(0, dev, 0, PCI_VENDOR_ID);
++    uint16 device = pci_read16(0, dev, 0, PCI_DEVICE_ID);
++    if(vendor == PCI_VENDOR_VIRTIO && device == PCI_DEVICE_VIRTIO_BLK){
++      busno = 0;
++      devno = dev;
++      funcno = 0;
++      return;
++    }
++  }
++  panic("virtio pci disk");
++}
++
++static uint64
++cap_addr(uint8 bar, uint32 off)
++{
++  if(bar >= 6 || bar_addr[bar] == 0)
++    panic("virtio pci cap bar");
++  return bar_addr[bar] + off;
++}
++
++static void
++parse_caps(void)
++{
++  uint8 cap = pci_read8(busno, devno, funcno, PCI_CAPABILITY_LIST);
++
++  while(cap){
++    uint8 id = pci_read8(busno, devno, funcno, cap);
++    uint8 next = pci_read8(busno, devno, funcno, cap + 1);
++
++    if(id == PCI_CAP_ID_VNDR){
++      uint8 cfg_type = pci_read8(busno, devno, funcno, cap + 3);
++      uint8 bar = pci_read8(busno, devno, funcno, cap + 4);
++      uint32 offset = pci_read32(busno, devno, funcno, cap + 8);
++
++      if(cfg_type == VIRTIO_PCI_CAP_COMMON_CFG){
++        common_cfg = (volatile struct virtio_pci_common_cfg*)cap_addr(bar, offset);
++      } else if(cfg_type == VIRTIO_PCI_CAP_NOTIFY_CFG){
++        notify_cfg = (volatile uint16*)cap_addr(bar, offset);
++        notify_off_multiplier = pci_read32(busno, devno, funcno, cap + 16);
++      } else if(cfg_type == VIRTIO_PCI_CAP_ISR_CFG){
++        isr_cfg = (volatile uint8*)cap_addr(bar, offset);
++      }
++    }
++    cap = next;
++  }
++
++  if(common_cfg == 0 || notify_cfg == 0 || isr_cfg == 0)
++    panic("virtio pci caps");
++}
++
++void
++virtio_pci_init(void)
++{
++  find_device();
++  alloc_bars(busno, devno, funcno);
++  parse_caps();
++
++  pci_write16(busno, devno, funcno, PCI_COMMAND,
++              PCI_COMMAND_IO | PCI_COMMAND_MEMORY | PCI_COMMAND_MASTER);
++}
++
++uint8
++virtio_pci_get_status(void)
++{
++  return common_cfg->device_status;
++}
++
++void
++virtio_pci_set_status(uint8 status)
++{
++  common_cfg->device_status = status;
++}
++
++uint64
++virtio_pci_get_features(void)
++{
++  uint64 features;
++
++  common_cfg->device_feature_select = 0;
++  features = common_cfg->device_feature;
++  common_cfg->device_feature_select = 1;
++  features |= ((uint64)common_cfg->device_feature) << 32;
++  return features;
++}
++
++void
++virtio_pci_set_features(uint64 features)
++{
++  common_cfg->driver_feature_select = 0;
++  common_cfg->driver_feature = features;
++  common_cfg->driver_feature_select = 1;
++  common_cfg->driver_feature = features >> 32;
++}
++
++void
++virtio_pci_select_queue(uint16 queue)
++{
++  common_cfg->queue_select = queue;
++}
++
++uint16
++virtio_pci_queue_max(void)
++{
++  return common_cfg->queue_size;
++}
++
++uint16
++virtio_pci_queue_ready(void)
++{
++  return common_cfg->queue_enable;
++}
++
++void
++virtio_pci_set_queue_num(uint16 num)
++{
++  common_cfg->queue_size = num;
++}
++
++void
++virtio_pci_set_queue_desc(uint64 addr)
++{
++  common_cfg->queue_desc = addr;
++}
++
++void
++virtio_pci_set_queue_avail(uint64 addr)
++{
++  common_cfg->queue_driver = addr;
++}
++
++void
++virtio_pci_set_queue_used(uint64 addr)
++{
++  common_cfg->queue_device = addr;
++}
++
++void
++virtio_pci_set_queue_ready(uint16 ready)
++{
++  common_cfg->queue_msix_vector = 0xffff;
++  common_cfg->queue_enable = ready;
++}
++
++void
++virtio_pci_notify(uint16 queue)
++{
++  uint16 off;
++
++  common_cfg->queue_select = queue;
++  off = common_cfg->queue_notify_off;
++  *(volatile uint16*)((uint64)notify_cfg + off * notify_off_multiplier) = queue;
++}
++
++void
++virtio_pci_intr_ack(void)
++{
++  (void)*isr_cfg;
++}
+diff --git a/./src/kernel/arch/loongarch/vm.c b/./src/kernel/arch/loongarch/vm.c
+new file mode 100644
+index 0000000..51b900c
+--- /dev/null
++++ b/./src/kernel/arch/loongarch/vm.c
+@@ -0,0 +1,444 @@
++#include "param.h"
++#include "types.h"
++#include "memlayout.h"
++#include "elf.h"
++#include "loongarch.h"
++#include "defs.h"
++#include "spinlock.h"
++#include "fs.h"
++#include "proc.h"
++
++void
++tlbinit(void)
++{
++  asm volatile("invtlb  0x0,$zero,$zero");
++  w_csr_stlbps(0xcU);
++  w_csr_asid(0x0U);//todo
++  w_csr_tlbrehi(0xcU);
++}
++
++void
++kvminit(void)
++{
++  pagetable_t kpgtbl;
++
++  kpgtbl = (pagetable_t) kalloc();
++  memset(kpgtbl, 0, PGSIZE);
++  proc_mapstacks(kpgtbl);
++
++  w_csr_pgdl((uint64)kpgtbl);
++  tlbinit();
++
++  w_csr_pwcl((PTEWIDTH << 30)|(DIR2WIDTH << 25)|(DIR2BASE << 20)|(DIR1WIDTH << 15)|(DIR1BASE << 10)|(PTWIDTH << 5)|(PTBASE << 0));
++  w_csr_pwch((DIR4WIDTH << 18)|(DIR3WIDTH << 6)|(DIR3BASE << 0));
++}
++
++void
++kvminithart(void)
++{
++  tlbinit();
++}
++
++void
++kvmmap(pagetable_t kpgtbl, uint64 va, uint64 pa, uint64 sz, int perm)
++{
++  perm |= PTE_P | PTE_D | PTE_MAT;
++  if(mappages(kpgtbl, va, sz, pa, perm) != 0)
++    panic("kvmmap");
++}
++
++// Return the address of the PTE in page table pagetable
++// that corresponds to virtual address va.  If alloc!=0,
++// create any required page-table pages.
++//
++// The paging scheme has four levels of page-table
++// pages. A page-table page contains 512 64-bit PTEs.
++// A 64-bit virtual address is split into five fields:
++//   48..63 -- must be zero.
++//   39..47 -- 9 bits of level-3 index.
++//   30..38 -- 9 bits of level-2 index.
++//   21..29 -- 9 bits of level-1 index.
++//   12..20 -- 9 bits of level-0 index.
++//    0..11 -- 12 bits of byte offset within the page.
++pte_t *
++walk(pagetable_t pagetable, uint64 va, int alloc)
++{
++  if(va >= MAXVA)
++    panic("walk");
++
++  for(int level = 3; level > 0; level--) {
++    pte_t *pte = &pagetable[PX(level, va)];
++    if(*pte & PTE_V) {
++      pagetable = (pagetable_t)(PTE2PA(*pte) | DMWIN_MASK);      
++    } else {
++      if(!alloc || (pagetable = (pde_t*)kalloc()) == 0)
++        return 0;
++      memset(pagetable, 0, PGSIZE);
++      *pte = PA2PTE(pagetable) | PTE_V;
++    }
++  }
++  return &pagetable[PX(0, va)];
++}
++
++// Look up a virtual address, return the physical address,
++// or 0 if not mapped.
++// Can only be used to look up user pages.
++uint64
++walkaddr(pagetable_t pagetable, uint64 va)
++{
++  pte_t *pte;
++  uint64 pa;
++
++  if(va >= MAXVA)
++    return 0;
++
++  pte = walk(pagetable, va, 0);
++  if(pte == 0)
++    return 0;
++  if((*pte & PTE_V) == 0)
++    return 0;
++  if((*pte & PTE_PLV) == 0)
++    return 0;
++  pa = PTE2PA(*pte);
++  return pa;
++}
++
++// Create PTEs for virtual addresses starting at va that refer to
++// physical addresses starting at pa. va and size might not
++// be page-aligned. Returns 0 on success, -1 if walk() couldn't
++// allocate a needed page-table page.
++int
++mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
++{
++  uint64 a, last;
++  pte_t *pte;
++
++  if(size == 0)
++    panic("mappages: size");
++  
++  a = PGROUNDDOWN(va);
++  last = PGROUNDDOWN(va + size - 1);
++  for(;;){
++    if((pte = walk(pagetable, a, 1)) == 0)
++      return -1;
++    if(*pte & PTE_V)
++      panic("mappages: remap");
++    *pte = PA2PTE(pa) | perm | PTE_V;
++    if(a == last)
++      break;
++    a += PGSIZE;
++    pa += PGSIZE;
++  }
++  return 0;
++}
++
++// Remove npages of mappings starting from va. va must be
++// page-aligned. The mappings must exist.
++// Optionally free the physical memory.
++void
++uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
++{
++  uint64 a;
++  pte_t *pte;
++
++  if((va % PGSIZE) != 0)
++    panic("uvmunmap: not aligned");
++
++  for(a = va; a < va + npages*PGSIZE; a += PGSIZE){
++    if((pte = walk(pagetable, a, 0)) == 0)
++      panic("uvmunmap: walk");
++    if((*pte & PTE_V) == 0)
++      panic("uvmunmap: not mapped");
++    if(PTE_FLAGS(*pte) == PTE_V)
++      panic("uvmunmap: not a leaf");
++    if(do_free){
++      uint64 pa = PTE2PA(*pte);    
++      kfree((void*)(pa | DMWIN_MASK));
++    }
++    *pte = 0;
++  }
++}
++
++// create an empty user page table.
++// returns 0 if out of memory.
++pagetable_t
++uvmcreate()
++{
++  pagetable_t pagetable;
++  pagetable = (pagetable_t) kalloc();
++  if(pagetable == 0)
++    return 0;
++  memset(pagetable, 0, PGSIZE);
++  return pagetable;
++}
++
++// Load the user initcode into address 0 of pagetable,
++// for the very first process.
++// sz must be less than a page.
++void
++uvminit(pagetable_t pagetable, uchar *src, uint sz)
++{
++  char *mem;
++
++  if(sz >= PGSIZE)
++    panic("inituvm: more than a page");
++  mem = kalloc();
++  memset(mem, 0, PGSIZE);
++  mappages(pagetable, 0, PGSIZE, (uint64)mem, PTE_P|PTE_W|PTE_PLV|PTE_MAT);
++  memmove(mem, src, sz);
++}//todo
++
++// Allocate PTEs and physical memory to grow process from oldsz to
++// newsz, which need not be page aligned.  Returns new size or 0 on error.
++uint64
++uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz, int xperm)
++{
++  char *mem;
++  uint64 a;
++  uint64 perm;
++
++  if(newsz < oldsz)
++    return oldsz;
++
++  oldsz = PGROUNDUP(oldsz);
++  for(a = oldsz; a < newsz; a += PGSIZE){
++    mem = kalloc();
++    if(mem == 0){
++      uvmdealloc(pagetable, a, oldsz);
++      return 0;
++    }
++    memset(mem, 0, PGSIZE);
++    perm = PTE_P|PTE_W|PTE_PLV|PTE_MAT|PTE_D|xperm;
++    if(mappages(pagetable, a, PGSIZE, (uint64)mem, perm) != 0){
++      kfree(mem);
++      uvmdealloc(pagetable, a, oldsz);
++      return 0;
++    }
++  }
++  return newsz;
++}
++
++uint64
++vmfault(pagetable_t pagetable, uint64 va, int read)
++{
++  char *mem;
++  struct proc *p = myproc();
++
++  (void)read;
++
++  if(va >= MAXVA || va >= p->sz)
++    return 0;
++  va = PGROUNDDOWN(va);
++  if(walkaddr(pagetable, va) != 0)
++    return walkaddr(pagetable, va);
++  mem = kalloc();
++  if(mem == 0)
++    return 0;
++  memset(mem, 0, PGSIZE);
++  if(mappages(pagetable, va, PGSIZE, (uint64)mem,
++              PTE_P|PTE_W|PTE_PLV|PTE_MAT|PTE_D) != 0){
++    kfree(mem);
++    return 0;
++  }
++  return (uint64)mem;
++}
++
++// Deallocate user pages to bring the process size from oldsz to
++// newsz.  oldsz and newsz need not be page-aligned, nor does newsz
++// need to be less than oldsz.  oldsz can be larger than the actual
++// process size.  Returns the new process size.
++uint64
++uvmdealloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz)
++{
++  if(newsz >= oldsz)
++    return oldsz;
++
++  if(PGROUNDUP(newsz) < PGROUNDUP(oldsz)){
++    int npages = (PGROUNDUP(oldsz) - PGROUNDUP(newsz)) / PGSIZE;
++    uvmunmap(pagetable, PGROUNDUP(newsz), npages, 1);
++  }
++
++  return newsz;
++}
++
++// Recursively free page-table pages.
++// All leaf mappings must already have been removed.
++void
++freewalk(pagetable_t pagetable)
++{
++  // there are 2^9 = 512 PTEs in a page table.
++  for(int i = 0; i < 512; i++){
++    pte_t pte = pagetable[i];
++    if((pte & PTE_V) && (PTE_FLAGS(pte) == PTE_V)){
++      // this PTE points to a lower-level page table.
++      uint64 child = (PTE2PA(pte) | DMWIN_MASK);
++      freewalk((pagetable_t)child);
++      pagetable[i] = 0;
++    } else if(pte & PTE_V){
++      panic("freewalk: leaf");
++    }
++  }
++  kfree((void*)pagetable);
++}
++
++// Free user memory pages,
++// then free page-table pages.
++void
++uvmfree(pagetable_t pagetable, uint64 sz)
++{
++  if(sz > 0)
++    uvmunmap(pagetable, 0, PGROUNDUP(sz)/PGSIZE, 1);
++  freewalk(pagetable);
++}
++
++// Given a parent process's page table, copy
++// its memory into a child's page table.
++// Copies both the page table and the
++// physical memory.
++// returns 0 on success, -1 on failure.
++// frees any allocated pages on failure.
++int
++uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
++{
++  pte_t *pte;
++  uint64 pa, i;
++  uint flags;
++  char *mem;
++
++  for(i = 0; i < sz; i += PGSIZE){
++    if((pte = walk(old, i, 0)) == 0)
++      panic("uvmcopy: pte should exist");
++    if((*pte & PTE_V) == 0)
++      panic("uvmcopy: page not present");
++    pa = PTE2PA(*pte);
++    flags = PTE_FLAGS(*pte);
++    if((mem = kalloc()) == 0)
++      goto err;
++    memmove(mem, (char*)(pa | DMWIN_MASK), PGSIZE);
++    if(mappages(new, i, PGSIZE, (uint64)mem, flags) != 0){
++      kfree(mem);
++      goto err;
++    }
++  }
++  return 0;
++
++ err:
++  uvmunmap(new, 0, i / PGSIZE, 1);
++  return -1;
++}
++
++// mark a PTE invalid for user access.
++// used by exec for the user stack guard page.
++void
++uvmclear(pagetable_t pagetable, uint64 va)
++{
++  pte_t *pte;
++  
++  pte = walk(pagetable, va, 0);
++  if(pte == 0)
++    panic("uvmclear");
++  *pte &= ~PTE_PLV;
++}
++
++// Copy from kernel to user.
++// Copy len bytes from src to virtual address dstva in a given page table.
++// Return 0 on success, -1 on error.
++int
++copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
++{
++  uint64 n, va0, pa0;
++  pte_t *pte;
++
++  while(len > 0){
++    va0 = PGROUNDDOWN(dstva);
++    pa0 = walkaddr(pagetable, va0);
++    if(pa0 == 0){
++      if((pa0 = vmfault(pagetable, va0, 0)) == 0)
++        return -1;
++    }
++    pte = walk(pagetable, va0, 0);
++    if(pte == 0 || (*pte & PTE_W) == 0)
++      return -1;
++    n = PGSIZE - (dstva - va0);
++    if(n > len)
++      n = len;
++    memmove((void *)((pa0 + (dstva - va0)) | DMWIN_MASK), src, n);
++
++    len -= n;
++    src += n;
++    dstva = va0 + PGSIZE;
++  }
++  return 0;
++}//todo
++
++// Copy from user to kernel.
++// Copy len bytes to dst from virtual address srcva in a given page table.
++// Return 0 on success, -1 on error.
++int
++copyin(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len)
++{
++  uint64 n, va0, pa0;
++
++  while(len > 0){
++    va0 = PGROUNDDOWN(srcva);
++    pa0 = walkaddr(pagetable, va0);
++    if(pa0 == 0){
++      if((pa0 = vmfault(pagetable, va0, 1)) == 0)
++        return -1;
++    }
++    n = PGSIZE - (srcva - va0);
++    if(n > len)
++      n = len;
++    memmove(dst, (void *)((pa0 + (srcva - va0)) | DMWIN_MASK), n);
++
++    len -= n;
++    dst += n;
++    srcva = va0 + PGSIZE;
++  }
++  return 0;
++}//todo
++
++// Copy a null-terminated string from user to kernel.
++// Copy bytes to dst from virtual address srcva in a given page table,
++// until a '\0', or max.
++// Return 0 on success, -1 on error.
++int
++copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
++{
++  uint64 n, va0, pa0;
++  int got_null = 0;
++
++  while(got_null == 0 && max > 0){
++    va0 = PGROUNDDOWN(srcva);
++    pa0 = walkaddr(pagetable, va0);
++    if(pa0 == 0){
++      if((pa0 = vmfault(pagetable, va0, 1)) == 0)
++        return -1;
++    }
++    n = PGSIZE - (srcva - va0);
++    if(n > max)
++      n = max;
++
++    char *p = (char *) ((pa0 + (srcva - va0)) | DMWIN_MASK);
++    while(n > 0){
++      if(*p == '\0'){
++        *dst = '\0';
++        got_null = 1;
++        break;
++      } else {
++        *dst = *p;
++      }
++      --n;
++      --max;
++      p++;
++      dst++;
++    }
++
++    srcva = va0 + PGSIZE;
++  }
++  if(got_null){
++    return 0;
++  } else {
++    return -1;
++  }
++}//todo
+diff --git a/./xv6-riscv-src/kernel/bio.c b/./src/kernel/bio.c
+index 60d91a6..48809ea 100644
+--- a/./xv6-riscv-src/kernel/bio.c
++++ b/./src/kernel/bio.c
+@@ -96,7 +96,7 @@ bread(uint dev, uint blockno)
+ 
+   b = bget(dev, blockno);
+   if(!b->valid) {
+-    virtio_disk_rw(b, 0);
++    hal_disk_rw(b, 0);
+     b->valid = 1;
+   }
+   return b;
+@@ -108,7 +108,7 @@ bwrite(struct buf *b)
+ {
+   if(!holdingsleep(&b->lock))
+     panic("bwrite");
+-  virtio_disk_rw(b, 1);
++  hal_disk_rw(b, 1);
+ }
+ 
+ // Release a locked buffer.
+@@ -150,4 +150,3 @@ bunpin(struct buf *b) {
+   release(&bcache.lock);
+ }
+ 
+-
+diff --git a/./src/kernel/block.c b/./src/kernel/block.c
+new file mode 100644
+index 0000000..ce5e849
+--- /dev/null
++++ b/./src/kernel/block.c
+@@ -0,0 +1,52 @@
++#include "types.h"
++#include "riscv.h"
++#include "defs.h"
++#include "spinlock.h"
++#include "sleeplock.h"
++#include "fs.h"
++#include "buf.h"
++
++static uint
++block_min(uint a, uint b)
++{
++  return a < b ? a : b;
++}
++
++int
++block_read_bytes(uint dev, uint off, uchar *dst, uint n)
++{
++  struct buf *bp;
++  uint m, tot;
++
++  if(dst == 0 && n != 0)
++    return -1;
++
++  for(tot = 0; tot < n; tot += m, off += m){
++    bp = bread(dev, off / BSIZE);
++    m = block_min(n - tot, BSIZE - off % BSIZE);
++    memmove(dst + tot, bp->data + off % BSIZE, m);
++    brelse(bp);
++  }
++
++  return tot;
++}
++
++int
++block_write_bytes(uint dev, uint off, uchar *src, uint n)
++{
++  struct buf *bp;
++  uint m, tot;
++
++  if(src == 0 && n != 0)
++    return -1;
++
++  for(tot = 0; tot < n; tot += m, off += m){
++    bp = bread(dev, off / BSIZE);
++    m = block_min(n - tot, BSIZE - off % BSIZE);
++    memmove(bp->data + off % BSIZE, src + tot, m);
++    bwrite(bp);
++    brelse(bp);
++  }
++
++  return tot;
++}
+diff --git a/./src/kernel/block.h b/./src/kernel/block.h
+new file mode 100644
+index 0000000..8839f1d
+--- /dev/null
++++ b/./src/kernel/block.h
+@@ -0,0 +1,9 @@
++#ifndef XV6_BLOCK_H
++#define XV6_BLOCK_H
++
++#include "types.h"
++
++int block_read_bytes(uint dev, uint off, uchar *dst, uint n);
++int block_write_bytes(uint dev, uint off, uchar *src, uint n);
++
++#endif
+diff --git a/./xv6-riscv-src/kernel/defs.h b/./src/kernel/defs.h
+index 122d9ca..c053cfe 100644
+--- a/./xv6-riscv-src/kernel/defs.h
++++ b/./src/kernel/defs.h
+@@ -2,6 +2,7 @@ struct buf;
+ struct context;
+ struct file;
+ struct inode;
++struct mount;
+ struct pipe;
+ struct proc;
+ struct spinlock;
+@@ -17,6 +18,27 @@ void            bwrite(struct buf*);
+ void            bpin(struct buf*);
+ void            bunpin(struct buf*);
+ 
++// block.c
++int             block_read_bytes(uint, uint, uchar*, uint);
++int             block_write_bytes(uint, uint, uchar*, uint);
++
++// hal.c
++void            hal_disk_init(void);
++void            hal_disk_rw(struct buf*, int);
++void            hal_intr_init(void);
++void            hal_intr_inithart(void);
++int             hal_irq_claim(void);
++void            hal_irq_complete(int);
++
++// LoongArch platform helpers.
++void            apicinit(void);
++void            apic_complete(uint64);
++uint64          extioi_claim(void);
++void            extioi_complete(uint64);
++void            extioiinit(void);
++void            ramdiskinit(void);
++void            ramdiskrw(struct buf*, int);
++
+ // console.c
+ void            consoleinit(void);
+ void            consoleintr(int);
+@@ -39,6 +61,7 @@ void            fsinit(int);
+ int             dirlink(struct inode*, char*, uint);
+ struct inode*   dirlookup(struct inode*, char*, uint*);
+ struct inode*   ialloc(uint, short);
++struct inode*   iget(uint, uint);
+ struct inode*   idup(struct inode*);
+ void            iinit();
+ void            ilock(struct inode*);
+@@ -55,6 +78,26 @@ int             writei(struct inode*, int, uint64, uint, uint);
+ void            itrunc(struct inode*);
+ void            ireclaim(int);
+ 
++// vfs.c
++void            vfsinit(void);
++void            vfs_init_inode(struct inode*);
++int             vfs_mount(char*, char*, int);
++struct mount*   vfs_mountpoint(struct inode*);
++struct inode*   vfs_lookup(struct inode*, char*);
++struct inode*   vfs_create(struct inode*, char*, short, short, short);
++int             vfs_unlink(struct inode*, char*);
++int             vfs_link(struct inode*, struct inode*, char*);
++int             vfs_readi(struct inode*, int, uint64, uint, uint);
++int             vfs_writei(struct inode*, int, uint64, uint, uint);
++void            vfs_stati(struct inode*, struct stat*);
++void            vfs_itrunc(struct inode*);
++
++// ext2.c
++struct fs_ops*  ext2_get_fs_ops(void);
++
++// fat32.c
++struct fs_ops*  fat32_get_fs_ops(void);
++
+ // kalloc.c
+ void*           kalloc(void);
+ void            kfree(void *);
+diff --git a/./xv6-riscv-src/kernel/exec.c b/./src/kernel/exec.c
+index 7cb6fe5..546808a 100644
+--- a/./xv6-riscv-src/kernel/exec.c
++++ b/./src/kernel/exec.c
+@@ -131,7 +131,11 @@ kexec(char *path, char **argv)
+   oldpagetable = p->pagetable;
+   p->pagetable = pagetable;
+   p->sz = sz;
++#ifdef ARCH_LOONGARCH
++  p->trapframe->era = elf.entry;  // initial program counter = main
++#else
+   p->trapframe->epc = elf.entry;  // initial program counter = main
++#endif
+   p->trapframe->sp = sp; // initial stack pointer
+   proc_freepagetable(oldpagetable, oldsz);
+ 
+@@ -165,6 +169,9 @@ loadseg(pagetable_t pagetable, uint64 va, struct inode *ip, uint offset, uint sz
+       n = sz - i;
+     else
+       n = PGSIZE;
++#ifdef ARCH_LOONGARCH
++    pa |= DMWIN_MASK;
++#endif
+     if(readi(ip, 0, (uint64)pa, offset+i, n) != n)
+       return -1;
+   }
+diff --git a/./src/kernel/ext2.c b/./src/kernel/ext2.c
+new file mode 100644
+index 0000000..7288f7c
+--- /dev/null
++++ b/./src/kernel/ext2.c
+@@ -0,0 +1,1040 @@
++#include "types.h"
++#include "riscv.h"
++#include "defs.h"
++#include "param.h"
++#include "stat.h"
++#include "spinlock.h"
++#include "sleeplock.h"
++#include "fs.h"
++#include "buf.h"
++#include "file.h"
++#include "vfs.h"
++
++#define EXT2_SUPER_OFFSET 1024
++#define EXT2_SUPER_MAGIC  0xEF53
++#define EXT2_ROOT_INO     2
++#define EXT2_N_BLOCKS     15
++#define EXT2_NAME_MAX     255
++
++#define EXT2_S_IFMT       0xF000
++#define EXT2_S_IFREG      0x8000
++#define EXT2_S_IFDIR      0x4000
++
++#define EXT2_FT_REG_FILE  1
++#define EXT2_FT_DIR       2
++
++struct ext2_super {
++  uint s_inodes_count;
++  uint s_blocks_count;
++  uint s_r_blocks_count;
++  uint s_free_blocks_count;
++  uint s_free_inodes_count;
++  uint s_first_data_block;
++  uint s_log_block_size;
++  int  s_log_frag_size;
++  uint s_blocks_per_group;
++  uint s_frags_per_group;
++  uint s_inodes_per_group;
++  uint s_mtime;
++  uint s_wtime;
++  ushort s_mnt_count;
++  ushort s_max_mnt_count;
++  ushort s_magic;
++  ushort s_state;
++  ushort s_errors;
++  ushort s_minor_rev_level;
++  uint s_lastcheck;
++  uint s_checkinterval;
++  uint s_creator_os;
++  uint s_rev_level;
++  ushort s_def_resuid;
++  ushort s_def_resgid;
++  uint s_first_ino;
++  ushort s_inode_size;
++  ushort s_block_group_nr;
++} __attribute__((packed));
++
++struct ext2_group_desc {
++  uint bg_block_bitmap;
++  uint bg_inode_bitmap;
++  uint bg_inode_table;
++  ushort bg_free_blocks_count;
++  ushort bg_free_inodes_count;
++} __attribute__((packed));
++
++struct ext2_dinode {
++  ushort i_mode;
++  ushort i_uid;
++  uint i_size;
++  uint i_atime;
++  uint i_ctime;
++  uint i_mtime;
++  uint i_dtime;
++  ushort i_gid;
++  ushort i_links_count;
++  uint i_blocks;
++  uint i_flags;
++  uint i_osd1;
++  uint i_block[EXT2_N_BLOCKS];
++  uint i_generation;
++  uint i_file_acl;
++  uint i_dir_acl;
++  uint i_faddr;
++  uchar i_osd2[12];
++} __attribute__((packed));
++
++struct ext2_dirent {
++  uint inode;
++  ushort rec_len;
++  uchar name_len;
++  uchar file_type;
++  char name[EXT2_NAME_MAX];
++} __attribute__((packed));
++
++struct ext2_fs {
++  int used;
++  uint dev;
++  uint block_size;
++  uint inode_size;
++  struct ext2_super sb;
++  struct ext2_group_desc gd;
++};
++
++static struct ext2_fs ext2fs;
++
++static struct inode_ops ext2_inode_ops;
++static struct fs_ops ext2_fs_ops;
++static void ext2_itrunc(struct inode *ip);
++
++static uint
++ext2_min(uint a, uint b)
++{
++  return a < b ? a : b;
++}
++
++static uint
++ext2_block_offset(struct ext2_fs *fs, uint blockno)
++{
++  return blockno * fs->block_size;
++}
++
++static uint
++ext2_align4(uint n)
++{
++  return (n + 3) & ~3;
++}
++
++static int
++ext2_namelen(char *name)
++{
++  int len;
++
++  for(len = 0; len < DIRSIZ && name[len]; len++)
++    ;
++  return len;
++}
++
++static int
++ext2_nameeq(char *a, char *b, int blen)
++{
++  int alen = ext2_namelen(a);
++
++  if(alen != blen)
++    return 0;
++  return memcmp(a, b, alen) == 0;
++}
++
++static int
++ext2_read_dinode(struct ext2_fs *fs, uint inum, struct ext2_dinode *di)
++{
++  uint index, off;
++
++  if(inum == 0 || inum > fs->sb.s_inodes_count)
++    return -1;
++
++  index = inum - 1;
++  off = ext2_block_offset(fs, fs->gd.bg_inode_table) + index * fs->inode_size;
++  return block_read_bytes(fs->dev, off, (uchar*)di, sizeof(*di));
++}
++
++static int
++ext2_write_dinode(struct ext2_fs *fs, uint inum, struct ext2_dinode *di)
++{
++  uint index, off;
++
++  if(inum == 0 || inum > fs->sb.s_inodes_count)
++    return -1;
++
++  index = inum - 1;
++  off = ext2_block_offset(fs, fs->gd.bg_inode_table) + index * fs->inode_size;
++  return block_write_bytes(fs->dev, off, (uchar*)di, sizeof(*di));
++}
++
++static short
++ext2_mode_to_type(ushort mode)
++{
++  if((mode & EXT2_S_IFMT) == EXT2_S_IFDIR)
++    return T_DIR;
++  return T_FILE;
++}
++
++static int
++ext2_supported_mode(ushort mode)
++{
++  mode &= EXT2_S_IFMT;
++  return mode == EXT2_S_IFDIR || mode == EXT2_S_IFREG;
++}
++
++static ushort
++ext2_type_to_mode(short type)
++{
++  if(type == T_DIR)
++    return EXT2_S_IFDIR | 0755;
++  return EXT2_S_IFREG | 0644;
++}
++
++static void
++ext2_fill_inode(struct inode *ip, struct mount *mnt, struct ext2_dinode *di)
++{
++  int i;
++
++  ip->fstype = FS_EXT2;
++  ip->mnt = mnt;
++  ip->ops = &ext2_inode_ops;
++  ip->type = ext2_mode_to_type(di->i_mode);
++  ip->major = 0;
++  ip->minor = 0;
++  ip->nlink = di->i_links_count;
++  ip->size = di->i_size;
++  for(i = 0; i < NDIRECT; i++)
++    ip->addrs[i] = di->i_block[i];
++  ip->addrs[NDIRECT] = di->i_block[12];
++  ip->valid = 1;
++}
++
++static struct inode*
++ext2_iget(struct mount *mnt, uint inum)
++{
++  struct ext2_fs *fs = (struct ext2_fs*)mnt->fs_private;
++  struct ext2_dinode di;
++  struct inode *ip;
++
++  if(ext2_read_dinode(fs, inum, &di) < 0)
++    return 0;
++  if(di.i_mode == 0)
++    return 0;
++  if(!ext2_supported_mode(di.i_mode))
++    return 0;
++  if(di.i_block[13] || di.i_block[14])
++    return 0;
++
++  ip = iget(mnt->dev, inum);
++  ext2_fill_inode(ip, mnt, &di);
++  return ip;
++}
++
++static int
++ext2_sync_inode(struct inode *ip)
++{
++  struct ext2_fs *fs = (struct ext2_fs*)ip->mnt->fs_private;
++  struct ext2_dinode di;
++  struct buf *bp;
++  uint *indirect;
++  uint blocks;
++  int i;
++
++  if(ext2_read_dinode(fs, ip->inum, &di) < 0)
++    return -1;
++
++  di.i_mode = ext2_type_to_mode(ip->type);
++  di.i_size = ip->size;
++  di.i_links_count = ip->nlink;
++  blocks = 0;
++  for(i = 0; i < NDIRECT; i++){
++    di.i_block[i] = ip->addrs[i];
++    if(ip->addrs[i])
++      blocks++;
++  }
++  di.i_block[12] = ip->addrs[NDIRECT];
++  if(ip->addrs[NDIRECT]){
++    blocks++;
++    bp = bread(fs->dev, ip->addrs[NDIRECT]);
++    indirect = (uint*)bp->data;
++    for(i = 0; i < fs->block_size / sizeof(uint); i++)
++      if(indirect[i])
++        blocks++;
++    brelse(bp);
++  }
++  di.i_blocks = blocks * (fs->block_size / 512);
++
++  if(ext2_write_dinode(fs, ip->inum, &di) < 0)
++    return -1;
++  return 0;
++}
++
++static int
++ext2_write_super(struct ext2_fs *fs)
++{
++  return block_write_bytes(fs->dev, EXT2_SUPER_OFFSET, (uchar*)&fs->sb,
++                           sizeof(fs->sb));
++}
++
++static int
++ext2_write_group(struct ext2_fs *fs)
++{
++  uint gd_block = fs->sb.s_first_data_block + 1;
++
++  return block_write_bytes(fs->dev, ext2_block_offset(fs, gd_block),
++                           (uchar*)&fs->gd, sizeof(fs->gd));
++}
++
++static int
++ext2_test_bit(uchar *buf, uint bit)
++{
++  return (buf[bit / 8] & (1 << (bit % 8))) != 0;
++}
++
++static void
++ext2_set_bit(uchar *buf, uint bit)
++{
++  buf[bit / 8] |= 1 << (bit % 8);
++}
++
++static void
++ext2_clear_bit(uchar *buf, uint bit)
++{
++  buf[bit / 8] &= ~(1 << (bit % 8));
++}
++
++static uint
++ext2_alloc_block(struct ext2_fs *fs)
++{
++  struct buf *bp, *dbp;
++  uchar *bitmap;
++  uint i, blockno, start;
++
++  bp = bread(fs->dev, fs->gd.bg_block_bitmap);
++  bitmap = (uchar*)bp->data;
++
++  start = fs->sb.s_first_data_block;
++  for(i = 0; i < fs->sb.s_blocks_per_group; i++){
++    if(!ext2_test_bit(bitmap, i)){
++      ext2_set_bit(bitmap, i);
++      blockno = start + i;
++      bwrite(bp);
++      brelse(bp);
++      if(fs->sb.s_free_blocks_count)
++        fs->sb.s_free_blocks_count--;
++      if(fs->gd.bg_free_blocks_count)
++        fs->gd.bg_free_blocks_count--;
++      ext2_write_super(fs);
++      ext2_write_group(fs);
++      dbp = bread(fs->dev, blockno);
++      memset(dbp->data, 0, BSIZE);
++      bwrite(dbp);
++      brelse(dbp);
++      return blockno;
++    }
++  }
++
++  brelse(bp);
++  return 0;
++}
++
++static void
++ext2_free_block(struct ext2_fs *fs, uint blockno)
++{
++  struct buf *bp;
++  uchar *bitmap;
++  uint bit;
++
++  if(blockno == 0)
++    return;
++  bp = bread(fs->dev, fs->gd.bg_block_bitmap);
++  bitmap = (uchar*)bp->data;
++  bit = blockno - fs->sb.s_first_data_block;
++  if(ext2_test_bit(bitmap, bit)){
++    ext2_clear_bit(bitmap, bit);
++    bwrite(bp);
++    fs->sb.s_free_blocks_count++;
++    fs->gd.bg_free_blocks_count++;
++    ext2_write_super(fs);
++    ext2_write_group(fs);
++  }
++  brelse(bp);
++}
++
++static uint
++ext2_alloc_inode(struct ext2_fs *fs)
++{
++  struct buf *bp;
++  uchar *bitmap;
++  uint i, inum, first;
++
++  bp = bread(fs->dev, fs->gd.bg_inode_bitmap);
++  bitmap = (uchar*)bp->data;
++
++  first = fs->sb.s_first_ino;
++  if(first == 0)
++    first = 11;
++
++  for(i = first - 1; i < fs->sb.s_inodes_per_group; i++){
++    if(!ext2_test_bit(bitmap, i)){
++      ext2_set_bit(bitmap, i);
++      inum = i + 1;
++      bwrite(bp);
++      brelse(bp);
++      if(fs->sb.s_free_inodes_count)
++        fs->sb.s_free_inodes_count--;
++      if(fs->gd.bg_free_inodes_count)
++        fs->gd.bg_free_inodes_count--;
++      ext2_write_super(fs);
++      ext2_write_group(fs);
++      return inum;
++    }
++  }
++
++  brelse(bp);
++  return 0;
++}
++
++static void
++ext2_free_inode(struct ext2_fs *fs, uint inum)
++{
++  struct buf *bp;
++  uchar *bitmap;
++  struct ext2_dinode di;
++  uint bit;
++
++  if(inum == 0)
++    return;
++  bp = bread(fs->dev, fs->gd.bg_inode_bitmap);
++  bitmap = (uchar*)bp->data;
++  bit = inum - 1;
++  if(ext2_test_bit(bitmap, bit)){
++    ext2_clear_bit(bitmap, bit);
++    bwrite(bp);
++    fs->sb.s_free_inodes_count++;
++    fs->gd.bg_free_inodes_count++;
++    ext2_write_super(fs);
++    ext2_write_group(fs);
++  }
++  brelse(bp);
++
++  memset(&di, 0, sizeof(di));
++  ext2_write_dinode(fs, inum, &di);
++}
++
++static uint
++ext2_bmap(struct inode *ip, uint bn, int alloc)
++{
++  struct ext2_fs *fs = (struct ext2_fs*)ip->mnt->fs_private;
++  struct buf *bp;
++  uint *indirect;
++  uint blockno;
++
++  if(bn < NDIRECT){
++    if(ip->addrs[bn] == 0 && alloc)
++      ip->addrs[bn] = ext2_alloc_block(fs);
++    return ip->addrs[bn];
++  }
++
++  bn -= NDIRECT;
++  if(bn >= fs->block_size / sizeof(uint))
++    return 0;
++
++  if(ip->addrs[NDIRECT] == 0){
++    if(!alloc)
++      return 0;
++    ip->addrs[NDIRECT] = ext2_alloc_block(fs);
++    if(ip->addrs[NDIRECT] == 0)
++      return 0;
++  }
++
++  bp = bread(fs->dev, ip->addrs[NDIRECT]);
++
++  indirect = (uint*)bp->data;
++  blockno = indirect[bn];
++  if(blockno == 0 && alloc){
++    blockno = ext2_alloc_block(fs);
++    if(blockno == 0){
++      brelse(bp);
++      return 0;
++    }
++    indirect[bn] = blockno;
++    bwrite(bp);
++  }
++
++  brelse(bp);
++  return blockno;
++}
++
++static struct inode*
++ext2_lookup(struct inode *dp, char *name)
++{
++  struct ext2_fs *fs = (struct ext2_fs*)dp->mnt->fs_private;
++  uchar buf[BSIZE];
++  struct ext2_dirent *de;
++  uint off, bno, pos;
++
++  if(dp->type != T_DIR)
++    return 0;
++
++  for(off = 0; off < dp->size; off += fs->block_size){
++    bno = ext2_bmap(dp, off / fs->block_size, 0);
++    if(bno == 0)
++      continue;
++    if(block_read_bytes(fs->dev, ext2_block_offset(fs, bno),
++                        buf, fs->block_size) < 0)
++      return 0;
++    for(pos = 0; pos < fs->block_size; ){
++      de = (struct ext2_dirent*)(buf + pos);
++      if(de->rec_len < 8 || pos + de->rec_len > fs->block_size)
++        break;
++      if(de->inode != 0 && de->name_len <= DIRSIZ &&
++         ext2_nameeq(name, de->name, de->name_len))
++        return ext2_iget(dp->mnt, de->inode);
++      pos += de->rec_len;
++    }
++  }
++
++  return 0;
++}
++
++static int
++ext2_find_dirent(struct inode *dp, char *name, struct ext2_dirent *out,
++                 uint *entry_off)
++{
++  struct ext2_fs *fs = (struct ext2_fs*)dp->mnt->fs_private;
++  uchar buf[BSIZE];
++  struct ext2_dirent *de;
++  uint off, bno, pos;
++
++  if(dp->type != T_DIR)
++    return -1;
++
++  for(off = 0; off < dp->size; off += fs->block_size){
++    bno = ext2_bmap(dp, off / fs->block_size, 0);
++    if(bno == 0)
++      continue;
++    if(block_read_bytes(fs->dev, ext2_block_offset(fs, bno),
++                        buf, fs->block_size) < 0)
++      return -1;
++    for(pos = 0; pos < fs->block_size; ){
++      de = (struct ext2_dirent*)(buf + pos);
++      if(de->rec_len < 8 || pos + de->rec_len > fs->block_size)
++        break;
++      if(de->inode != 0 && de->name_len <= DIRSIZ &&
++         ext2_nameeq(name, de->name, de->name_len)){
++        if(out)
++          *out = *de;
++        if(entry_off)
++          *entry_off = ext2_block_offset(fs, bno) + pos;
++        return 0;
++      }
++      pos += de->rec_len;
++    }
++  }
++
++  return -1;
++}
++
++static int
++ext2_remove_dirent(struct ext2_fs *fs, uint entry_off)
++{
++  struct ext2_dirent de;
++
++  if(block_read_bytes(fs->dev, entry_off, (uchar*)&de, 8) < 0)
++    return -1;
++  de.inode = 0;
++  return block_write_bytes(fs->dev, entry_off, (uchar*)&de, 8) == 8 ? 0 : -1;
++}
++
++static int
++ext2_is_dir_empty(struct inode *ip)
++{
++  struct ext2_fs *fs = (struct ext2_fs*)ip->mnt->fs_private;
++  uchar buf[BSIZE];
++  struct ext2_dirent *de;
++  uint off, bno, pos;
++
++  for(off = 0; off < ip->size; off += fs->block_size){
++    bno = ext2_bmap(ip, off / fs->block_size, 0);
++    if(bno == 0)
++      continue;
++    if(block_read_bytes(fs->dev, ext2_block_offset(fs, bno),
++                        buf, fs->block_size) < 0)
++      return 0;
++    for(pos = 0; pos < fs->block_size; ){
++      de = (struct ext2_dirent*)(buf + pos);
++      if(de->rec_len < 8 || pos + de->rec_len > fs->block_size)
++        break;
++      if(de->inode != 0 &&
++         !ext2_nameeq(".", de->name, de->name_len) &&
++         !ext2_nameeq("..", de->name, de->name_len))
++        return 0;
++      pos += de->rec_len;
++    }
++  }
++
++  return 1;
++}
++
++static int
++ext2_dir_add(struct inode *dp, char *name, uint inum, uchar file_type)
++{
++  struct ext2_fs *fs = (struct ext2_fs*)dp->mnt->fs_private;
++  struct buf *bp;
++  struct ext2_dirent *de, *newde;
++  uint off, bno, pos, namelen, need, actual;
++  int bad;
++
++  namelen = ext2_namelen(name);
++  if(namelen == 0 || namelen > EXT2_NAME_MAX)
++    return -1;
++  need = ext2_align4(8 + namelen);
++
++  for(off = 0; off < dp->size; off += fs->block_size){
++    bno = ext2_bmap(dp, off / fs->block_size, 0);
++    if(bno == 0)
++      continue;
++    bp = bread(fs->dev, bno);
++    bad = 0;
++    for(pos = 0; pos < fs->block_size; ){
++      de = (struct ext2_dirent*)(bp->data + pos);
++      if(de->rec_len < 8 || pos + de->rec_len > fs->block_size){
++        bad = 1;
++        break;
++      }
++      actual = ext2_align4(8 + de->name_len);
++      if(actual > de->rec_len){
++        bad = 1;
++        break;
++      }
++      if(de->inode == 0 && de->rec_len >= need){
++        de->inode = inum;
++        de->name_len = namelen;
++        de->file_type = file_type;
++        memmove(de->name, name, namelen);
++        bwrite(bp);
++        brelse(bp);
++        return 0;
++      }
++      if(de->rec_len >= actual + need){
++        newde = (struct ext2_dirent*)(bp->data + pos + actual);
++        newde->inode = inum;
++        newde->rec_len = de->rec_len - actual;
++        newde->name_len = namelen;
++        newde->file_type = file_type;
++        memmove(newde->name, name, namelen);
++        de->rec_len = actual;
++        bwrite(bp);
++        brelse(bp);
++        return 0;
++      }
++      pos += de->rec_len;
++    }
++    brelse(bp);
++    if(bad)
++      return -1;
++  }
++
++  bno = ext2_bmap(dp, dp->size / fs->block_size, 1);
++  if(bno == 0)
++    return -1;
++  bp = bread(fs->dev, bno);
++  memset(bp->data, 0, BSIZE);
++  de = (struct ext2_dirent*)bp->data;
++  de->inode = inum;
++  de->rec_len = fs->block_size;
++  de->name_len = namelen;
++  de->file_type = file_type;
++  memmove(de->name, name, namelen);
++  bwrite(bp);
++  brelse(bp);
++  dp->size += fs->block_size;
++  ext2_sync_inode(dp);
++  return 0;
++}
++
++static int
++ext2_init_dir(struct ext2_fs *fs, uint inum, uint parent, uint bno)
++{
++  struct buf *bp;
++  struct ext2_dirent *de;
++  uint dotlen;
++
++  bp = bread(fs->dev, bno);
++  memset(bp->data, 0, BSIZE);
++
++  dotlen = ext2_align4(8 + 1);
++  de = (struct ext2_dirent*)bp->data;
++  de->inode = inum;
++  de->rec_len = dotlen;
++  de->name_len = 1;
++  de->file_type = EXT2_FT_DIR;
++  memmove(de->name, ".", 1);
++
++  de = (struct ext2_dirent*)(bp->data + dotlen);
++  de->inode = parent;
++  de->rec_len = fs->block_size - dotlen;
++  de->name_len = 2;
++  de->file_type = EXT2_FT_DIR;
++  memmove(de->name, "..", 2);
++
++  bwrite(bp);
++  brelse(bp);
++  return 0;
++}
++
++static struct inode*
++ext2_create(struct inode *dp, char *name, short type, short major, short minor)
++{
++  struct ext2_fs *fs = (struct ext2_fs*)dp->mnt->fs_private;
++  struct ext2_dinode di;
++  uint inum, bno = 0;
++
++  (void)major;
++  (void)minor;
++
++  if(type != T_FILE && type != T_DIR)
++    return 0;
++
++  inum = ext2_alloc_inode(fs);
++  if(inum == 0)
++    return 0;
++
++  memset(&di, 0, sizeof(di));
++  di.i_mode = ext2_type_to_mode(type);
++  di.i_links_count = type == T_DIR ? 2 : 1;
++
++  if(type == T_DIR){
++    bno = ext2_alloc_block(fs);
++    if(bno == 0){
++      ext2_free_inode(fs, inum);
++      return 0;
++    }
++    if(ext2_init_dir(fs, inum, dp->inum, bno) < 0){
++      ext2_free_block(fs, bno);
++      ext2_free_inode(fs, inum);
++      return 0;
++    }
++    di.i_size = fs->block_size;
++    di.i_blocks = fs->block_size / 512;
++    di.i_block[0] = bno;
++  }
++
++  if(ext2_write_dinode(fs, inum, &di) < 0){
++    if(type == T_DIR)
++      ext2_free_block(fs, bno);
++    ext2_free_inode(fs, inum);
++    return 0;
++  }
++
++  if(ext2_dir_add(dp, name, inum,
++                  type == T_DIR ? EXT2_FT_DIR : EXT2_FT_REG_FILE) < 0){
++    if(type == T_DIR)
++      ext2_free_block(fs, bno);
++    ext2_free_inode(fs, inum);
++    return 0;
++  }
++
++  if(type == T_DIR){
++    dp->nlink++;
++    ext2_sync_inode(dp);
++  }
++
++  return ext2_iget(dp->mnt, inum);
++}
++
++static int
++ext2_unlink(struct inode *dp, char *name)
++{
++  struct ext2_fs *fs = (struct ext2_fs*)dp->mnt->fs_private;
++  struct ext2_dirent de;
++  struct inode *ip;
++  uint entry_off;
++
++  if(ext2_find_dirent(dp, name, &de, &entry_off) < 0)
++    return -1;
++
++  ip = ext2_iget(dp->mnt, de.inode);
++  if(ip == 0)
++    return -1;
++
++  ilock(ip);
++  if(ip->type == T_DIR && !ext2_is_dir_empty(ip)){
++    iunlockput(ip);
++    return -1;
++  }
++
++  if(ext2_remove_dirent(fs, entry_off) < 0){
++    iunlockput(ip);
++    return -1;
++  }
++
++  if(ip->type == T_DIR){
++    dp->nlink--;
++    ext2_sync_inode(dp);
++    ip->nlink = 0;
++  } else if(ip->nlink > 0){
++    ip->nlink--;
++  }
++
++  if(ip->nlink == 0){
++    ext2_itrunc(ip);
++    ext2_free_inode(fs, ip->inum);
++  } else {
++    ext2_sync_inode(ip);
++  }
++  iunlockput(ip);
++  return 0;
++}
++
++static int
++ext2_link(struct inode *ip, struct inode *dp, char *name)
++{
++  struct inode *old;
++
++  if(ip->type != T_FILE || dp->type != T_DIR)
++    return -1;
++
++  ilock(ip);
++  ip->nlink++;
++  if(ext2_sync_inode(ip) < 0){
++    ip->nlink--;
++    iunlock(ip);
++    return -1;
++  }
++  iunlock(ip);
++
++  ilock(dp);
++  if((old = ext2_lookup(dp, name)) != 0){
++    iput(old);
++    iunlock(dp);
++    ilock(ip);
++    ip->nlink--;
++    ext2_sync_inode(ip);
++    iunlock(ip);
++    return -1;
++  }
++  if(ext2_dir_add(dp, name, ip->inum, EXT2_FT_REG_FILE) < 0){
++    iunlock(dp);
++    ilock(ip);
++    ip->nlink--;
++    ext2_sync_inode(ip);
++    iunlock(ip);
++    return -1;
++  }
++  iunlock(dp);
++
++  return 0;
++}
++
++static int
++ext2_readi(struct inode *ip, int user_dst, uint64 dst, uint off, uint n)
++{
++  struct ext2_fs *fs = (struct ext2_fs*)ip->mnt->fs_private;
++  struct dirent xde;
++  uchar buf[BSIZE];
++  struct ext2_dirent *de;
++  uint tot, m, bno, want, seen, pos;
++
++  if(ip->type == T_DIR){
++    if(n < sizeof(xde) || off % sizeof(xde) != 0)
++      return 0;
++    want = off / sizeof(xde);
++    seen = 0;
++    for(off = 0; off < ip->size; off += fs->block_size){
++      bno = ext2_bmap(ip, off / fs->block_size, 0);
++      if(bno == 0)
++        continue;
++      if(block_read_bytes(fs->dev, ext2_block_offset(fs, bno),
++                          buf, fs->block_size) < 0)
++        return -1;
++      for(pos = 0; pos < fs->block_size; ){
++        de = (struct ext2_dirent*)(buf + pos);
++        if(de->rec_len < 8 || pos + de->rec_len > fs->block_size)
++          break;
++        if(de->inode != 0 && de->name_len <= DIRSIZ){
++          if(seen++ == want){
++            memset(&xde, 0, sizeof(xde));
++            xde.inum = de->inode;
++            memmove(xde.name, de->name, de->name_len);
++            if(either_copyout(user_dst, dst, (char*)&xde, sizeof(xde)) < 0)
++              return -1;
++            return sizeof(xde);
++          }
++        }
++        pos += de->rec_len;
++      }
++    }
++    return 0;
++  }
++
++  if(off > ip->size || off + n < off)
++    return 0;
++  if(off + n > ip->size)
++    n = ip->size - off;
++
++  for(tot = 0; tot < n; tot += m, off += m, dst += m){
++    bno = ext2_bmap(ip, off / fs->block_size, 0);
++    m = ext2_min(n - tot, fs->block_size - off % fs->block_size);
++    if(bno == 0){
++      memset(buf, 0, fs->block_size);
++    } else if(block_read_bytes(fs->dev, ext2_block_offset(fs, bno),
++                               buf, fs->block_size) < 0){
++      return -1;
++    }
++    if(either_copyout(user_dst, dst, buf + off % fs->block_size, m) < 0)
++      return -1;
++  }
++
++  return tot;
++}
++
++static int
++ext2_writei(struct inode *ip, int user_src, uint64 src, uint off, uint n)
++{
++  struct ext2_fs *fs = (struct ext2_fs*)ip->mnt->fs_private;
++  uchar buf[BSIZE];
++  uint tot, m, bno;
++
++  if(off + n < off)
++    return -1;
++
++  for(tot = 0; tot < n; tot += m, off += m, src += m){
++    bno = ext2_bmap(ip, off / fs->block_size, 1);
++    if(bno == 0)
++      break;
++    if(block_read_bytes(fs->dev, ext2_block_offset(fs, bno),
++                        buf, fs->block_size) < 0)
++      return -1;
++    m = ext2_min(n - tot, fs->block_size - off % fs->block_size);
++    if(either_copyin(buf + off % fs->block_size, user_src, src, m) < 0)
++      return -1;
++    if(block_write_bytes(fs->dev, ext2_block_offset(fs, bno),
++                         buf, fs->block_size) < 0)
++      return -1;
++  }
++
++  if(off > ip->size)
++    ip->size = off;
++  ext2_sync_inode(ip);
++
++  return tot;
++}
++
++static void
++ext2_stati(struct inode *ip, struct stat *st)
++{
++  st->dev = ip->dev;
++  st->ino = ip->inum;
++  st->type = ip->type;
++  st->nlink = ip->nlink;
++  st->size = ip->size;
++}
++
++static void
++ext2_itrunc(struct inode *ip)
++{
++  struct ext2_fs *fs = (struct ext2_fs*)ip->mnt->fs_private;
++  struct buf *bp;
++  uint *indirect;
++  int i;
++
++  for(i = 0; i < NDIRECT; i++){
++    if(ip->addrs[i]){
++      ext2_free_block(fs, ip->addrs[i]);
++      ip->addrs[i] = 0;
++    }
++  }
++
++  if(ip->addrs[NDIRECT]){
++    bp = bread(fs->dev, ip->addrs[NDIRECT]);
++    indirect = (uint*)bp->data;
++    for(i = 0; i < fs->block_size / sizeof(uint); i++)
++      if(indirect[i])
++        ext2_free_block(fs, indirect[i]);
++    brelse(bp);
++    ext2_free_block(fs, ip->addrs[NDIRECT]);
++    ip->addrs[NDIRECT] = 0;
++  }
++
++  ip->size = 0;
++  ext2_sync_inode(ip);
++}
++
++static int
++ext2_mount(struct mount *mnt)
++{
++  struct ext2_super sb;
++  struct ext2_group_desc gd;
++  uint block_size, inode_size, gd_block;
++
++  if(ext2fs.used)
++    return -1;
++
++  if(block_read_bytes(mnt->dev, EXT2_SUPER_OFFSET, (uchar*)&sb,
++                      sizeof(sb)) < 0)
++    return -1;
++  if(sb.s_magic != EXT2_SUPER_MAGIC)
++    return -1;
++
++  block_size = 1024 << sb.s_log_block_size;
++  if(block_size != BSIZE)
++    return -1;
++  if(sb.s_blocks_count > sb.s_blocks_per_group ||
++     sb.s_inodes_count > sb.s_inodes_per_group)
++    return -1;
++
++  inode_size = sb.s_inode_size;
++  if(inode_size == 0)
++    inode_size = 128;
++  if(inode_size < sizeof(struct ext2_dinode))
++    return -1;
++
++  gd_block = sb.s_first_data_block + 1;
++  if(block_read_bytes(mnt->dev, gd_block * block_size, (uchar*)&gd,
++                      sizeof(gd)) < 0)
++    return -1;
++
++  memset(&ext2fs, 0, sizeof(ext2fs));
++  ext2fs.used = 1;
++  ext2fs.dev = mnt->dev;
++  ext2fs.block_size = block_size;
++  ext2fs.inode_size = inode_size;
++  ext2fs.sb = sb;
++  ext2fs.gd = gd;
++
++  mnt->fs_private = &ext2fs;
++  mnt->root = ext2_iget(mnt, EXT2_ROOT_INO);
++  if(mnt->root == 0){
++    memset(&ext2fs, 0, sizeof(ext2fs));
++    mnt->fs_private = 0;
++    return -1;
++  }
++
++  return 0;
++}
++
++static struct inode_ops ext2_inode_ops = {
++  .read = ext2_readi,
++  .write = ext2_writei,
++  .stat = ext2_stati,
++  .trunc = ext2_itrunc,
++  .lookup = ext2_lookup,
++  .create = ext2_create,
++  .unlink = ext2_unlink,
++  .link = ext2_link,
++};
++
++static struct fs_ops ext2_fs_ops = {
++  .mount = ext2_mount,
++};
++
++struct fs_ops*
++ext2_get_fs_ops(void)
++{
++  return &ext2_fs_ops;
++}
+diff --git a/./src/kernel/fat32.c b/./src/kernel/fat32.c
+new file mode 100644
+index 0000000..89501a9
+--- /dev/null
++++ b/./src/kernel/fat32.c
+@@ -0,0 +1,895 @@
++#include "types.h"
++#include "riscv.h"
++#include "defs.h"
++#include "param.h"
++#include "stat.h"
++#include "fs.h"
++#include "spinlock.h"
++#include "sleeplock.h"
++#include "file.h"
++#include "vfs.h"
++
++#define FAT32_SIG0       0x55
++#define FAT32_SIG1       0xAA
++#define FAT32_ROOT_INO   2
++#define FAT32_EOC        0x0ffffff8
++#define FAT32_MASK       0x0fffffff
++
++#define FAT32_ATTR_VOL   0x08
++#define FAT32_ATTR_DIR   0x10
++#define FAT32_ATTR_ARCH  0x20
++#define FAT32_ATTR_LFN   0x0f
++
++#define BPB_BYTSPERSEC   11
++#define BPB_SECPERCLUS   13
++#define BPB_RSVDSECCNT   14
++#define BPB_NUMFATS      16
++#define BPB_ROOTENTCNT   17
++#define BPB_TOTSEC16     19
++#define BPB_FATSZ16      22
++#define BPB_TOTSEC32     32
++#define BPB_FATSZ32      36
++#define BPB_ROOTCLUS     44
++#define BPB_FSTYPE       82
++#define BPB_BOOTSIG      510
++
++struct fat32_fs {
++  int used;
++  uint dev;
++  uint bytes_per_sec;
++  uint sec_per_clus;
++  uint cluster_size;
++  uint rsvd_sec;
++  uint num_fats;
++  uint fat_sz;
++  uint total_sec;
++  uint root_clus;
++  uint data_sec;
++  uint data_start_sec;
++  uint nclus;
++};
++
++struct fat32_dirent {
++  uchar name[11];
++  uchar attr;
++  uchar ntres;
++  uchar crt_time_tenth;
++  ushort crt_time;
++  ushort crt_date;
++  ushort access_date;
++  ushort clus_hi;
++  ushort write_time;
++  ushort write_date;
++  ushort clus_lo;
++  uint size;
++} __attribute__((packed));
++
++static struct fat32_fs fat32fs;
++static struct inode_ops fat32_inode_ops;
++static struct fs_ops fat32_fs_ops;
++
++static ushort
++fat32_get16(uchar *p)
++{
++  return p[0] | (p[1] << 8);
++}
++
++static uint
++fat32_get32(uchar *p)
++{
++  return (uint)p[0] | ((uint)p[1] << 8) |
++         ((uint)p[2] << 16) | ((uint)p[3] << 24);
++}
++
++static void
++fat32_put32(uchar *p, uint v)
++{
++  p[0] = v & 0xff;
++  p[1] = (v >> 8) & 0xff;
++  p[2] = (v >> 16) & 0xff;
++  p[3] = (v >> 24) & 0xff;
++}
++
++static uint
++fat32_min(uint a, uint b)
++{
++  return a < b ? a : b;
++}
++
++static int
++fat32_is_power2(uint n)
++{
++  return n != 0 && (n & (n - 1)) == 0;
++}
++
++static int
++fat32_check_type(uchar *boot)
++{
++  return boot[BPB_FSTYPE+0] == 'F' &&
++         boot[BPB_FSTYPE+1] == 'A' &&
++         boot[BPB_FSTYPE+2] == 'T' &&
++         boot[BPB_FSTYPE+3] == '3' &&
++         boot[BPB_FSTYPE+4] == '2';
++}
++
++static uint
++fat32_clus_offset(struct fat32_fs *fs, uint clus)
++{
++  return (fs->data_start_sec + (clus - 2) * fs->sec_per_clus) *
++         fs->bytes_per_sec;
++}
++
++static uint
++fat32_fat_offset(struct fat32_fs *fs, int fatno, uint clus)
++{
++  return (fs->rsvd_sec + fatno * fs->fat_sz) * fs->bytes_per_sec + clus * 4;
++}
++
++static int
++fat32_is_eoc(uint v)
++{
++  return (v & FAT32_MASK) >= FAT32_EOC;
++}
++
++static uint
++fat32_first_cluster(struct fat32_dirent *de)
++{
++  return ((uint)de->clus_hi << 16) | de->clus_lo;
++}
++
++static void
++fat32_set_cluster(struct fat32_dirent *de, uint clus)
++{
++  de->clus_hi = clus >> 16;
++  de->clus_lo = clus & 0xffff;
++}
++
++static int
++fat32_read_fat(struct fat32_fs *fs, uint clus, uint *val)
++{
++  uchar buf[4];
++
++  if(clus < 2 || clus > fs->nclus + 1)
++    return -1;
++  if(block_read_bytes(fs->dev, fat32_fat_offset(fs, 0, clus),
++                      buf, sizeof(buf)) != sizeof(buf))
++    return -1;
++  *val = fat32_get32(buf) & FAT32_MASK;
++  return 0;
++}
++
++static int
++fat32_write_fat(struct fat32_fs *fs, uint clus, uint val)
++{
++  uchar buf[4];
++  int i;
++
++  if(clus < 2 || clus > fs->nclus + 1)
++    return -1;
++  fat32_put32(buf, val & FAT32_MASK);
++  for(i = 0; i < fs->num_fats; i++){
++    if(block_write_bytes(fs->dev, fat32_fat_offset(fs, i, clus),
++                         buf, sizeof(buf)) != sizeof(buf))
++      return -1;
++  }
++  return 0;
++}
++
++static int
++fat32_zero_cluster(struct fat32_fs *fs, uint clus)
++{
++  uchar zero[BSIZE];
++  uint off, n;
++
++  memset(zero, 0, sizeof(zero));
++  for(off = 0; off < fs->cluster_size; off += n){
++    n = fat32_min(BSIZE, fs->cluster_size - off);
++    if(block_write_bytes(fs->dev, fat32_clus_offset(fs, clus) + off,
++                         zero, n) != n)
++      return -1;
++  }
++  return 0;
++}
++
++static uint
++fat32_alloc_cluster(struct fat32_fs *fs)
++{
++  uint clus, val;
++
++  for(clus = 2; clus <= fs->nclus + 1; clus++){
++    if(fat32_read_fat(fs, clus, &val) < 0)
++      return 0;
++    if(val == 0){
++      if(fat32_write_fat(fs, clus, FAT32_EOC) < 0)
++        return 0;
++      if(fat32_zero_cluster(fs, clus) < 0){
++        fat32_write_fat(fs, clus, 0);
++        return 0;
++      }
++      return clus;
++    }
++  }
++  return 0;
++}
++
++static void
++fat32_free_after(struct fat32_fs *fs, uint first)
++{
++  uint next, cur;
++
++  if(first < 2)
++    return;
++  if(fat32_read_fat(fs, first, &cur) < 0)
++    return;
++  fat32_write_fat(fs, first, FAT32_EOC);
++
++  while(!fat32_is_eoc(cur) && cur >= 2){
++    if(fat32_read_fat(fs, cur, &next) < 0)
++      break;
++    fat32_write_fat(fs, cur, 0);
++    cur = next;
++  }
++}
++
++static void
++fat32_free_chain(struct fat32_fs *fs, uint first)
++{
++  fat32_free_after(fs, first);
++  if(first >= 2)
++    fat32_write_fat(fs, first, 0);
++}
++
++static uint
++fat32_cluster_at(struct inode *ip, uint index, int alloc)
++{
++  struct fat32_fs *fs = (struct fat32_fs*)ip->mnt->fs_private;
++  uint clus, next;
++
++  clus = ip->addrs[0];
++  if(clus < 2)
++    return 0;
++
++  while(index-- > 0){
++    if(fat32_read_fat(fs, clus, &next) < 0)
++      return 0;
++    if(fat32_is_eoc(next)){
++      if(!alloc)
++        return 0;
++      next = fat32_alloc_cluster(fs);
++      if(next == 0)
++        return 0;
++      if(fat32_write_fat(fs, clus, next) < 0){
++        fat32_write_fat(fs, next, 0);
++        return 0;
++      }
++    }
++    clus = next;
++  }
++  return clus;
++}
++
++static int
++fat32_is_valid_entry(struct fat32_dirent *de)
++{
++  if(de->name[0] == 0x00 || de->name[0] == 0xe5)
++    return 0;
++  if((de->attr & FAT32_ATTR_LFN) == FAT32_ATTR_LFN)
++    return 0;
++  if(de->attr & FAT32_ATTR_VOL)
++    return 0;
++  return 1;
++}
++
++static char
++fat32_toupper(char c)
++{
++  if(c >= 'a' && c <= 'z')
++    return c - 'a' + 'A';
++  return c;
++}
++
++static char
++fat32_tolower(char c)
++{
++  if(c >= 'A' && c <= 'Z')
++    return c - 'A' + 'a';
++  return c;
++}
++
++static int
++fat32_name83(char *name, uchar out[11])
++{
++  int i, j;
++
++  memset(out, ' ', 11);
++  if(name[0] == 0)
++    return -1;
++
++  for(i = 0; name[i] && name[i] != '.'; i++){
++    if(i >= 8 || name[i] == '/' || name[i] == ' ')
++      return -1;
++    out[i] = fat32_toupper(name[i]);
++  }
++  if(i == 0)
++    return -1;
++
++  if(name[i] == '.'){
++    i++;
++    for(j = 0; name[i]; i++, j++){
++      if(j >= 3 || name[i] == '/' || name[i] == '.' || name[i] == ' ')
++        return -1;
++      out[8+j] = fat32_toupper(name[i]);
++    }
++    if(j == 0)
++      return -1;
++  }
++  return 0;
++}
++
++static void
++fat32_name_from83(struct fat32_dirent *de, char *name)
++{
++  int i, n;
++
++  n = 0;
++  for(i = 0; i < 8 && de->name[i] != ' '; i++)
++    name[n++] = fat32_tolower(de->name[i]);
++  if(de->name[8] != ' '){
++    name[n++] = '.';
++    for(i = 8; i < 11 && de->name[i] != ' '; i++)
++      name[n++] = fat32_tolower(de->name[i]);
++  }
++  name[n] = 0;
++}
++
++static void
++fat32_fill_inode(struct inode *ip, struct mount *mnt, struct fat32_dirent *de,
++                 uint entry_off)
++{
++  uint clus;
++
++  clus = fat32_first_cluster(de);
++  ip->fstype = FS_FAT32;
++  ip->mnt = mnt;
++  ip->ops = &fat32_inode_ops;
++  ip->type = (de->attr & FAT32_ATTR_DIR) ? T_DIR : T_FILE;
++  ip->major = 0;
++  ip->minor = 0;
++  ip->nlink = 1;
++  ip->size = (ip->type == T_DIR) ? 0 : de->size;
++  ip->addrs[0] = clus;
++  ip->addrs[1] = entry_off;
++  ip->valid = 1;
++}
++
++static struct inode*
++fat32_iget(struct mount *mnt, struct fat32_dirent *de, uint entry_off)
++{
++  struct fat32_fs *fs = (struct fat32_fs*)mnt->fs_private;
++  struct inode *ip;
++  uint clus;
++
++  clus = fat32_first_cluster(de);
++  if(clus < 2)
++    return 0;
++  if(mnt->root != 0 && clus == fs->root_clus)
++    return idup(mnt->root);
++  ip = iget(mnt->dev, clus);
++  fat32_fill_inode(ip, mnt, de, entry_off);
++  return ip;
++}
++
++static struct inode*
++fat32_root_inode(struct mount *mnt)
++{
++  struct inode *ip;
++
++  ip = iget(mnt->dev, FAT32_ROOT_INO);
++  ip->fstype = FS_FAT32;
++  ip->mnt = mnt;
++  ip->ops = &fat32_inode_ops;
++  ip->type = T_DIR;
++  ip->major = 0;
++  ip->minor = 0;
++  ip->nlink = 1;
++  ip->size = 0;
++  ip->addrs[0] = fat32fs.root_clus;
++  ip->addrs[1] = 0;
++  ip->valid = 1;
++  return ip;
++}
++
++static int
++fat32_read_entry(struct fat32_fs *fs, uint off, struct fat32_dirent *de)
++{
++  return block_read_bytes(fs->dev, off, (uchar*)de, sizeof(*de)) ==
++         sizeof(*de) ? 0 : -1;
++}
++
++static int
++fat32_write_entry(struct fat32_fs *fs, uint off, struct fat32_dirent *de)
++{
++  return block_write_bytes(fs->dev, off, (uchar*)de, sizeof(*de)) ==
++         sizeof(*de) ? 0 : -1;
++}
++
++static int
++fat32_find_entry(struct inode *dp, uchar name83[11],
++                 struct fat32_dirent *out, uint *entry_off)
++{
++  struct fat32_fs *fs = (struct fat32_fs*)dp->mnt->fs_private;
++  struct fat32_dirent de;
++  uint clus, next, pos, off;
++
++  if(dp->type != T_DIR)
++    return -1;
++
++  clus = dp->addrs[0];
++  while(clus >= 2){
++    for(pos = 0; pos < fs->cluster_size; pos += sizeof(de)){
++      off = fat32_clus_offset(fs, clus) + pos;
++      if(fat32_read_entry(fs, off, &de) < 0)
++        return -1;
++      if(de.name[0] == 0x00)
++        return -1;
++      if(fat32_is_valid_entry(&de) && memcmp(de.name, name83, 11) == 0){
++        if(out)
++          *out = de;
++        if(entry_off)
++          *entry_off = off;
++        return 0;
++      }
++    }
++    if(fat32_read_fat(fs, clus, &next) < 0 || fat32_is_eoc(next))
++      break;
++    clus = next;
++  }
++  return -1;
++}
++
++static int
++fat32_find_free_entry(struct inode *dp, uint *entry_off)
++{
++  struct fat32_fs *fs = (struct fat32_fs*)dp->mnt->fs_private;
++  struct fat32_dirent de;
++  uint clus, next, pos, off, newclus;
++
++  clus = dp->addrs[0];
++  while(clus >= 2){
++    for(pos = 0; pos < fs->cluster_size; pos += sizeof(de)){
++      off = fat32_clus_offset(fs, clus) + pos;
++      if(fat32_read_entry(fs, off, &de) < 0)
++        return -1;
++      if(de.name[0] == 0x00 || de.name[0] == 0xe5){
++        *entry_off = off;
++        return 0;
++      }
++    }
++    if(fat32_read_fat(fs, clus, &next) < 0)
++      return -1;
++    if(fat32_is_eoc(next))
++      break;
++    clus = next;
++  }
++
++  newclus = fat32_alloc_cluster(fs);
++  if(newclus == 0)
++    return -1;
++  if(fat32_write_fat(fs, clus, newclus) < 0){
++    fat32_write_fat(fs, newclus, 0);
++    return -1;
++  }
++  *entry_off = fat32_clus_offset(fs, newclus);
++  return 0;
++}
++
++static void
++fat32_remove_entry(struct fat32_fs *fs, uint entry_off)
++{
++  struct fat32_dirent de;
++
++  if(entry_off == 0)
++    return;
++  if(fat32_read_entry(fs, entry_off, &de) < 0)
++    return;
++  de.name[0] = 0xe5;
++  fat32_write_entry(fs, entry_off, &de);
++}
++
++static int
++fat32_add_entry(struct inode *dp, uchar name83[11], uchar attr,
++                uint clus, uint size, uint *entry_off)
++{
++  struct fat32_fs *fs = (struct fat32_fs*)dp->mnt->fs_private;
++  struct fat32_dirent de;
++
++  if(fat32_find_free_entry(dp, entry_off) < 0)
++    return -1;
++
++  memset(&de, 0, sizeof(de));
++  memmove(de.name, name83, 11);
++  de.attr = attr;
++  fat32_set_cluster(&de, clus);
++  de.size = size;
++  return fat32_write_entry(fs, *entry_off, &de);
++}
++
++static int
++fat32_sync_inode(struct inode *ip)
++{
++  struct fat32_fs *fs = (struct fat32_fs*)ip->mnt->fs_private;
++  struct fat32_dirent de;
++
++  if(ip->addrs[1] == 0)
++    return 0;
++  if(fat32_read_entry(fs, ip->addrs[1], &de) < 0)
++    return -1;
++  de.size = ip->type == T_DIR ? 0 : ip->size;
++  fat32_set_cluster(&de, ip->addrs[0]);
++  return fat32_write_entry(fs, ip->addrs[1], &de);
++}
++
++static int
++fat32_mount(struct mount *mnt)
++{
++  uchar boot[BSIZE];
++  uint root_entries, fat16, total16;
++  uint fat_bytes, needed;
++
++  if(fat32fs.used)
++    return -1;
++
++  if(block_read_bytes(mnt->dev, 0, boot, sizeof(boot)) < 0)
++    return -1;
++
++  if(boot[BPB_BOOTSIG] != FAT32_SIG0 || boot[BPB_BOOTSIG+1] != FAT32_SIG1)
++    return -1;
++  if(!fat32_check_type(boot))
++    return -1;
++
++  fat32fs.bytes_per_sec = fat32_get16(boot + BPB_BYTSPERSEC);
++  fat32fs.sec_per_clus = boot[BPB_SECPERCLUS];
++  fat32fs.rsvd_sec = fat32_get16(boot + BPB_RSVDSECCNT);
++  fat32fs.num_fats = boot[BPB_NUMFATS];
++  fat32fs.total_sec = fat32_get32(boot + BPB_TOTSEC32);
++  fat32fs.fat_sz = fat32_get32(boot + BPB_FATSZ32);
++  fat32fs.root_clus = fat32_get32(boot + BPB_ROOTCLUS);
++
++  root_entries = fat32_get16(boot + BPB_ROOTENTCNT);
++  total16 = fat32_get16(boot + BPB_TOTSEC16);
++  fat16 = fat32_get16(boot + BPB_FATSZ16);
++
++  if(fat32fs.bytes_per_sec != 512)
++    return -1;
++  if(!fat32_is_power2(fat32fs.sec_per_clus))
++    return -1;
++  if(fat32fs.rsvd_sec == 0 || fat32fs.num_fats == 0 ||
++     fat32fs.fat_sz == 0 || fat32fs.total_sec == 0 ||
++     fat32fs.root_clus < FAT32_ROOT_INO)
++    return -1;
++  if(root_entries != 0 || total16 != 0 || fat16 != 0)
++    return -1;
++
++  fat32fs.data_start_sec = fat32fs.rsvd_sec + fat32fs.num_fats * fat32fs.fat_sz;
++  if(fat32fs.total_sec <= fat32fs.data_start_sec)
++    return -1;
++  fat32fs.data_sec = fat32fs.total_sec - fat32fs.data_start_sec;
++  fat32fs.cluster_size = fat32fs.bytes_per_sec * fat32fs.sec_per_clus;
++  fat32fs.nclus = fat32fs.data_sec / fat32fs.sec_per_clus;
++  if(fat32fs.cluster_size == 0 || fat32fs.nclus == 0)
++    return -1;
++
++  fat_bytes = fat32fs.fat_sz * fat32fs.bytes_per_sec;
++  needed = (fat32fs.nclus + 2) * 4;
++  if(fat_bytes < needed)
++    return -1;
++
++  fat32fs.used = 1;
++  fat32fs.dev = mnt->dev;
++  mnt->fs_private = &fat32fs;
++  mnt->root = fat32_root_inode(mnt);
++  if(mnt->root == 0){
++    memset(&fat32fs, 0, sizeof(fat32fs));
++    mnt->fs_private = 0;
++    return -1;
++  }
++
++  return 0;
++}
++
++static int
++fat32_readi(struct inode *ip, int user_dst, uint64 dst, uint off, uint n)
++{
++  struct fat32_fs *fs = (struct fat32_fs*)ip->mnt->fs_private;
++  struct dirent xde;
++  struct fat32_dirent de;
++  char name[DIRSIZ];
++  uchar buf[BSIZE];
++  uint want, seen, clus, next, pos, deoff, m;
++
++  if(ip->type == T_DIR){
++    if(n < sizeof(xde) || off % sizeof(xde) != 0)
++      return 0;
++    want = off / sizeof(xde);
++    seen = 0;
++    clus = ip->addrs[0];
++    while(clus >= 2){
++      for(pos = 0; pos < fs->cluster_size; pos += sizeof(de)){
++        deoff = fat32_clus_offset(fs, clus) + pos;
++        if(fat32_read_entry(fs, deoff, &de) < 0)
++          return -1;
++        if(de.name[0] == 0x00)
++          return 0;
++        if(!fat32_is_valid_entry(&de))
++          continue;
++        if(seen++ == want){
++          memset(&xde, 0, sizeof(xde));
++          xde.inum = fat32_first_cluster(&de);
++          fat32_name_from83(&de, name);
++          memmove(xde.name, name, fat32_min(strlen(name), DIRSIZ));
++          if(either_copyout(user_dst, dst, (char*)&xde, sizeof(xde)) < 0)
++            return -1;
++          return sizeof(xde);
++        }
++      }
++      if(fat32_read_fat(fs, clus, &next) < 0 || fat32_is_eoc(next))
++        break;
++      clus = next;
++    }
++    return 0;
++  }
++
++  if(off > ip->size || off + n < off)
++    return 0;
++  if(off + n > ip->size)
++    n = ip->size - off;
++
++  for(want = 0; want < n; want += m, off += m, dst += m){
++    clus = fat32_cluster_at(ip, off / fs->cluster_size, 0);
++    m = fat32_min(n - want, fs->cluster_size - off % fs->cluster_size);
++    m = fat32_min(m, BSIZE);
++    if(clus == 0){
++      memset(buf, 0, m);
++    } else if(block_read_bytes(fs->dev,
++                               fat32_clus_offset(fs, clus) + off % fs->cluster_size,
++                               buf, m) != m){
++      return -1;
++    }
++    if(either_copyout(user_dst, dst, (char*)buf, m) < 0)
++      return -1;
++  }
++
++  return want;
++}
++
++static int
++fat32_writei(struct inode *ip, int user_src, uint64 src, uint off, uint n)
++{
++  struct fat32_fs *fs = (struct fat32_fs*)ip->mnt->fs_private;
++  uchar buf[BSIZE];
++  uint tot, m, clus;
++
++  if(ip->type != T_FILE || off + n < off)
++    return -1;
++
++  for(tot = 0; tot < n; tot += m, off += m, src += m){
++    clus = fat32_cluster_at(ip, off / fs->cluster_size, 1);
++    if(clus == 0)
++      break;
++    m = fat32_min(n - tot, fs->cluster_size - off % fs->cluster_size);
++    m = fat32_min(m, BSIZE);
++    if(either_copyin((char*)buf, user_src, src, m) < 0)
++      return -1;
++    if(block_write_bytes(fs->dev,
++                         fat32_clus_offset(fs, clus) + off % fs->cluster_size,
++                         buf, m) != m)
++      return -1;
++  }
++
++  if(off > ip->size)
++    ip->size = off;
++  fat32_sync_inode(ip);
++  return tot;
++}
++
++static void
++fat32_stati(struct inode *ip, struct stat *st)
++{
++  st->dev = ip->dev;
++  st->ino = ip->inum;
++  st->type = ip->type;
++  st->nlink = ip->nlink;
++  st->size = ip->size;
++}
++
++static void
++fat32_itrunc(struct inode *ip)
++{
++  struct fat32_fs *fs = (struct fat32_fs*)ip->mnt->fs_private;
++
++  if(ip->type != T_FILE)
++    return;
++  fat32_free_after(fs, ip->addrs[0]);
++  fat32_zero_cluster(fs, ip->addrs[0]);
++  ip->size = 0;
++  fat32_sync_inode(ip);
++}
++
++static struct inode*
++fat32_lookup(struct inode *dp, char *name)
++{
++  uchar name83[11];
++  struct fat32_dirent de;
++  uint entry_off;
++
++  if(namecmp(name, ".") == 0)
++    return idup(dp);
++  if(namecmp(name, "..") == 0){
++    memset(name83, ' ', sizeof(name83));
++    name83[0] = '.';
++    name83[1] = '.';
++  } else if(fat32_name83(name, name83) < 0){
++    return 0;
++  }
++  if(fat32_find_entry(dp, name83, &de, &entry_off) < 0){
++    if(namecmp(name, "..") == 0)
++      return idup(dp);
++    return 0;
++  }
++  return fat32_iget(dp->mnt, &de, entry_off);
++}
++
++static struct inode*
++fat32_create(struct inode *dp, char *name, short type, short major, short minor)
++{
++  struct fat32_fs *fs = (struct fat32_fs*)dp->mnt->fs_private;
++  struct fat32_dirent de;
++  struct inode tmp;
++  uchar name83[11], dot[11], dotdot[11];
++  uchar attr;
++  uint clus, entry_off, dot_off;
++
++  (void)major;
++  (void)minor;
++
++  if(type != T_FILE && type != T_DIR)
++    return 0;
++  if(fat32_name83(name, name83) < 0)
++    return 0;
++  if(fat32_find_entry(dp, name83, 0, 0) == 0)
++    return 0;
++
++  clus = fat32_alloc_cluster(fs);
++  if(clus == 0)
++    return 0;
++
++  attr = type == T_DIR ? FAT32_ATTR_DIR : FAT32_ATTR_ARCH;
++  if(fat32_add_entry(dp, name83, attr, clus, 0, &entry_off) < 0){
++    fat32_write_fat(fs, clus, 0);
++    return 0;
++  }
++
++  if(type == T_DIR){
++    memset(&tmp, 0, sizeof(tmp));
++    tmp.mnt = dp->mnt;
++    tmp.type = T_DIR;
++    tmp.addrs[0] = clus;
++
++    memset(dot, ' ', sizeof(dot));
++    memset(dotdot, ' ', sizeof(dotdot));
++    dot[0] = '.';
++    dotdot[0] = '.';
++    dotdot[1] = '.';
++    if(fat32_add_entry(&tmp, dot, FAT32_ATTR_DIR, clus, 0, &dot_off) < 0){
++      fat32_remove_entry(fs, entry_off);
++      fat32_write_fat(fs, clus, 0);
++      return 0;
++    }
++    if(fat32_add_entry(&tmp, dotdot, FAT32_ATTR_DIR, dp->addrs[0], 0,
++                       &dot_off) < 0){
++      fat32_remove_entry(fs, entry_off);
++      fat32_write_fat(fs, clus, 0);
++      return 0;
++    }
++  }
++
++  memset(&de, 0, sizeof(de));
++  memmove(de.name, name83, sizeof(name83));
++  de.attr = attr;
++  fat32_set_cluster(&de, clus);
++  de.size = 0;
++  return fat32_iget(dp->mnt, &de, entry_off);
++}
++
++static int
++fat32_is_dir_empty(struct inode *ip)
++{
++  struct fat32_fs *fs = (struct fat32_fs*)ip->mnt->fs_private;
++  struct fat32_dirent de;
++  uint clus, next, pos, off;
++
++  clus = ip->addrs[0];
++  while(clus >= 2){
++    for(pos = 0; pos < fs->cluster_size; pos += sizeof(de)){
++      off = fat32_clus_offset(fs, clus) + pos;
++      if(fat32_read_entry(fs, off, &de) < 0)
++        return 0;
++      if(de.name[0] == 0x00)
++        return 1;
++      if(!fat32_is_valid_entry(&de))
++        continue;
++      if(!(de.name[0] == '.' && de.name[1] == ' ') &&
++         !(de.name[0] == '.' && de.name[1] == '.' && de.name[2] == ' '))
++        return 0;
++    }
++    if(fat32_read_fat(fs, clus, &next) < 0 || fat32_is_eoc(next))
++      break;
++    clus = next;
++  }
++
++  return 1;
++}
++
++static int
++fat32_unlink(struct inode *dp, char *name)
++{
++  struct fat32_fs *fs = (struct fat32_fs*)dp->mnt->fs_private;
++  struct fat32_dirent de;
++  struct inode *ip;
++  uchar name83[11];
++  uint entry_off, clus;
++
++  if(fat32_name83(name, name83) < 0)
++    return -1;
++  if(fat32_find_entry(dp, name83, &de, &entry_off) < 0)
++    return -1;
++
++  ip = fat32_iget(dp->mnt, &de, entry_off);
++  if(ip == 0)
++    return -1;
++
++  ilock(ip);
++  if(ip->type == T_DIR && !fat32_is_dir_empty(ip)){
++    iunlockput(ip);
++    return -1;
++  }
++
++  clus = ip->addrs[0];
++  fat32_remove_entry(fs, entry_off);
++  fat32_free_chain(fs, clus);
++  ip->nlink = 0;
++  ip->size = 0;
++  ip->addrs[0] = 0;
++  iunlockput(ip);
++  return 0;
++}
++
++static int
++fat32_link(struct inode *ip, struct inode *dp, char *name)
++{
++  (void)ip;
++  (void)dp;
++  (void)name;
++  return -1;
++}
++
++static struct inode_ops fat32_inode_ops = {
++  .read = fat32_readi,
++  .write = fat32_writei,
++  .stat = fat32_stati,
++  .trunc = fat32_itrunc,
++  .lookup = fat32_lookup,
++  .create = fat32_create,
++  .unlink = fat32_unlink,
++  .link = fat32_link,
++};
++
++static struct fs_ops fat32_fs_ops = {
++  .mount = fat32_mount,
++};
++
++struct fs_ops*
++fat32_get_fs_ops(void)
++{
++  return &fat32_fs_ops;
++}
+diff --git a/./xv6-riscv-src/kernel/file.c b/./src/kernel/file.c
+index 8912b7e..0ff5c67 100644
+--- a/./xv6-riscv-src/kernel/file.c
++++ b/./src/kernel/file.c
+@@ -92,7 +92,7 @@ filestat(struct file *f, uint64 addr)
+   
+   if(f->type == FD_INODE || f->type == FD_DEVICE){
+     ilock(f->ip);
+-    stati(f->ip, &st);
++    vfs_stati(f->ip, &st);
+     iunlock(f->ip);
+     if(copyout(p->pagetable, addr, (char *)&st, sizeof(st)) < 0)
+       return -1;
+@@ -119,7 +119,7 @@ fileread(struct file *f, uint64 addr, int n)
+     r = devsw[f->major].read(1, addr, n);
+   } else if(f->type == FD_INODE){
+     ilock(f->ip);
+-    if((r = readi(f->ip, 1, addr, f->off, n)) > 0)
++    if((r = vfs_readi(f->ip, 1, addr, f->off, n)) > 0)
+       f->off += r;
+     iunlock(f->ip);
+   } else {
+@@ -159,7 +159,7 @@ filewrite(struct file *f, uint64 addr, int n)
+ 
+       begin_op();
+       ilock(f->ip);
+-      if ((r = writei(f->ip, 1, addr + i, f->off, n1)) > 0)
++      if ((r = vfs_writei(f->ip, 1, addr + i, f->off, n1)) > 0)
+         f->off += r;
+       iunlock(f->ip);
+       end_op();
+@@ -177,4 +177,3 @@ filewrite(struct file *f, uint64 addr, int n)
+ 
+   return ret;
+ }
+-
+diff --git a/./xv6-riscv-src/kernel/file.h b/./src/kernel/file.h
+index b076d1d..1e0abb4 100644
+--- a/./xv6-riscv-src/kernel/file.h
++++ b/./src/kernel/file.h
+@@ -1,3 +1,5 @@
++#include "vfs.h"
++
+ struct file {
+   enum { FD_NONE, FD_PIPE, FD_INODE, FD_DEVICE } type;
+   int ref; // reference count
+@@ -21,6 +23,10 @@ struct inode {
+   struct sleeplock lock; // protects everything below here
+   int valid;          // inode has been read from disk?
+ 
++  enum fs_type fstype;      // file system type
++  struct mount *mnt;        // mount instance
++  struct inode_ops *ops;    // inode operation table
++
+   short type;         // copy of disk inode
+   short major;
+   short minor;
+diff --git a/./xv6-riscv-src/kernel/fs.c b/./src/kernel/fs.c
+index 9274678..4fa7e7d 100644
+--- a/./xv6-riscv-src/kernel/fs.c
++++ b/./src/kernel/fs.c
+@@ -190,8 +190,6 @@ iinit()
+   }
+ }
+ 
+-static struct inode* iget(uint dev, uint inum);
+-
+ // Allocate an inode on device dev.
+ // Mark it as allocated by  giving it type type.
+ // Returns an unlocked but allocated and referenced inode,
+@@ -244,7 +242,7 @@ iupdate(struct inode *ip)
+ // Find the inode with number inum on device dev
+ // and return the in-memory copy. Does not lock
+ // the inode and does not read it from disk.
+-static struct inode*
++struct inode*
+ iget(uint dev, uint inum)
+ {
+   struct inode *ip, *empty;
+@@ -272,6 +270,7 @@ iget(uint dev, uint inum)
+   ip->inum = inum;
+   ip->ref = 1;
+   ip->valid = 0;
++  vfs_init_inode(ip);
+   release(&itable.lock);
+ 
+   return ip;
+@@ -301,6 +300,9 @@ ilock(struct inode *ip)
+ 
+   acquiresleep(&ip->lock);
+ 
++  if(ip->fstype != FS_XV6)
++    return;
++
+   if(ip->valid == 0){
+     bp = bread(ip->dev, IBLOCK(ip->inum, sb));
+     dip = (struct dinode*)bp->data + ip->inum%IPB;
+@@ -339,6 +341,20 @@ iput(struct inode *ip)
+ {
+   acquire(&itable.lock);
+ 
++  if(ip->ref < 1)
++    panic("iput");
++
++  if(ip->fstype != FS_XV6){
++    ip->ref--;
++    if(ip->ref == 0){
++      ip->valid = 0;
++      ip->mnt = 0;
++      ip->ops = 0;
++    }
++    release(&itable.lock);
++    return;
++  }
++
+   if(ip->ref == 1 && ip->valid && ip->nlink == 0){
+     // inode has no links and no other references: truncate and free.
+ 
+@@ -675,6 +691,7 @@ static struct inode*
+ namex(char *path, int nameiparent, char *name)
+ {
+   struct inode *ip, *next;
++  struct mount *mnt;
+ 
+   if(*path == '/')
+     ip = iget(ROOTDEV, ROOTINO);
+@@ -692,11 +709,15 @@ namex(char *path, int nameiparent, char *name)
+       iunlock(ip);
+       return ip;
+     }
+-    if((next = dirlookup(ip, name, 0)) == 0){
++    if((next = vfs_lookup(ip, name)) == 0){
+       iunlockput(ip);
+       return 0;
+     }
+     iunlockput(ip);
++    if((mnt = vfs_mountpoint(next)) != 0 && mnt->root != 0){
++      iput(next);
++      next = idup(mnt->root);
++    }
+     ip = next;
+   }
+   if(nameiparent){
+diff --git a/./src/kernel/hal.c b/./src/kernel/hal.c
+new file mode 100644
+index 0000000..c31235b
+--- /dev/null
++++ b/./src/kernel/hal.c
+@@ -0,0 +1,45 @@
++#include "types.h"
++#include "param.h"
++#include "memlayout.h"
++#include "riscv.h"
++#include "spinlock.h"
++#include "sleeplock.h"
++#include "defs.h"
++#include "fs.h"
++#include "buf.h"
++
++void
++hal_intr_init(void)
++{
++  plicinit();
++}
++
++void
++hal_intr_inithart(void)
++{
++  plicinithart();
++}
++
++int
++hal_irq_claim(void)
++{
++  return plic_claim();
++}
++
++void
++hal_irq_complete(int irq)
++{
++  plic_complete(irq);
++}
++
++void
++hal_disk_init(void)
++{
++  virtio_disk_init();
++}
++
++void
++hal_disk_rw(struct buf *b, int write)
++{
++  virtio_disk_rw(b, write);
++}
+diff --git a/./xv6-riscv-src/kernel/kalloc.c b/./src/kernel/kalloc.c
+index 0699e7e..c07483d 100644
+--- a/./xv6-riscv-src/kernel/kalloc.c
++++ b/./src/kernel/kalloc.c
+@@ -27,7 +27,11 @@ void
+ kinit()
+ {
+   initlock(&kmem.lock, "kmem");
++#ifdef ARCH_LOONGARCH
++  freerange((void*)RAMBASE, (void*)RAMSTOP);
++#else
+   freerange(end, (void*)PHYSTOP);
++#endif
+ }
+ 
+ void
+diff --git a/./xv6-riscv-src/kernel/main.c b/./src/kernel/main.c
+index f0d3171..a5363b9 100644
+--- a/./xv6-riscv-src/kernel/main.c
++++ b/./src/kernel/main.c
+@@ -22,12 +22,13 @@ main()
+     procinit();      // process table
+     trapinit();      // trap vectors
+     trapinithart();  // install kernel trap vector
+-    plicinit();      // set up interrupt controller
+-    plicinithart();  // ask PLIC for device interrupts
++    hal_intr_init(); // set up interrupt controller
++    hal_intr_inithart();
+     binit();         // buffer cache
+     iinit();         // inode table
+     fileinit();      // file table
+-    virtio_disk_init(); // emulated hard disk
++    vfsinit();       // virtual file system
++    hal_disk_init(); // emulated hard disk
+     userinit();      // first user process
+     __sync_synchronize();
+     started = 1;
+@@ -38,7 +39,7 @@ main()
+     printf("hart %d starting\n", cpuid());
+     kvminithart();    // turn on paging
+     trapinithart();   // install kernel trap vector
+-    plicinithart();   // ask PLIC for device interrupts
++    hal_intr_inithart();
+   }
+ 
+   scheduler();        
+diff --git a/./xv6-riscv-src/kernel/memlayout.h b/./src/kernel/memlayout.h
+index 9bc9424..4bb735b 100644
+--- a/./xv6-riscv-src/kernel/memlayout.h
++++ b/./src/kernel/memlayout.h
+@@ -1,3 +1,34 @@
++#ifdef ARCH_LOONGARCH
++
++#define DMWIN_MASK 0x9000000000000000
++
++#define UART0 (0x1fe001e0UL | DMWIN_MASK)
++#define UART0_IRQ 2
++#define VIRTIO0_IRQ 17
++
++#define LS7A_PCH_REG_BASE (0x10000000UL | DMWIN_MASK)
++#define LS7A_INT_MASK_REG (LS7A_PCH_REG_BASE + 0x020)
++#define LS7A_INT_EDGE_REG (LS7A_PCH_REG_BASE + 0x060)
++#define LS7A_INT_CLEAR_REG (LS7A_PCH_REG_BASE + 0x080)
++#define LS7A_INT_HTMSI_VEC_REG (LS7A_PCH_REG_BASE + 0x200)
++#define LS7A_INT_STATUS_REG (LS7A_PCH_REG_BASE + 0x3a0)
++#define LS7A_INT_POL_REG (LS7A_PCH_REG_BASE + 0x3e0)
++
++#define PCI_ECAM (0x20000000UL | DMWIN_MASK)
++#define PCI_MMIO_BASE (0x40000000UL | DMWIN_MASK)
++#define PCI_MMIO_SIZE 0x40000000UL
++
++#define KERNBASE (0x9000000000200000UL)
++#define RAMBASE (0x90000000UL | DMWIN_MASK)
++#define PHYSTOP (RAMBASE + 128*1024*1024)
++#define RAMSTOP PHYSTOP
++
++#define KSTACK(p) (TRAPFRAME - ((p)+1)* 2*PGSIZE)
++#define TRAPFRAME (MAXVA - PGSIZE)
++#define TRAMPOLINE TRAPFRAME
++
++#else
++
+ // Physical memory layout
+ 
+ // qemu -machine virt is set up like this,
+@@ -57,3 +88,5 @@
+ //   TRAPFRAME (p->trapframe, used by the trampoline)
+ //   TRAMPOLINE (the same page as in the kernel)
+ #define TRAPFRAME (TRAMPOLINE - PGSIZE)
++
++#endif
+diff --git a/./xv6-riscv-src/kernel/param.h b/./src/kernel/param.h
+index cd2a41c..aad3051 100644
+--- a/./xv6-riscv-src/kernel/param.h
++++ b/./src/kernel/param.h
+@@ -5,11 +5,14 @@
+ #define NINODE       50  // maximum number of active i-nodes
+ #define NDEV         10  // maximum major device number
+ #define ROOTDEV       1  // device number of file system root disk
++#define EXT2DEV       2  // logical device number of ext2 disk image
++#define EXT2SIZE   4096  // ext2 image size in xv6 blocks
++#define FAT32DEV      3  // logical device number of fat32 disk image
+ #define MAXARG       32  // max exec arguments
+ #define MAXOPBLOCKS  10  // max # of blocks any FS op writes
+ #define LOGBLOCKS    (MAXOPBLOCKS*3)  // max data blocks in on-disk log
+ #define NBUF         (MAXOPBLOCKS*3)  // size of disk block cache
+ #define FSSIZE       2000  // size of file system in blocks
++#define FAT32START   (FSSIZE + EXT2SIZE)  // fat32 image start in xv6 blocks
+ #define MAXPATH      128   // maximum file path name
+ #define USERSTACK    1     // user stack pages
+-
+diff --git a/./xv6-riscv-src/kernel/proc.c b/./src/kernel/proc.c
+index 9d6cf3f..edf94b9 100644
+--- a/./xv6-riscv-src/kernel/proc.c
++++ b/./src/kernel/proc.c
+@@ -18,7 +18,9 @@ struct spinlock pid_lock;
+ extern void forkret(void);
+ static void freeproc(struct proc *p);
+ 
++#ifndef ARCH_LOONGARCH
+ extern char trampoline[]; // trampoline.S
++#endif
+ 
+ // helps ensure that wakeups of wait()ing
+ // parents are not lost. helps obey the
+@@ -183,6 +185,7 @@ proc_pagetable(struct proc *p)
+   if(pagetable == 0)
+     return 0;
+ 
++#ifndef ARCH_LOONGARCH
+   // map the trampoline code (for system call return)
+   // at the highest user virtual address.
+   // only the supervisor uses it, on the way
+@@ -192,12 +195,20 @@ proc_pagetable(struct proc *p)
+     uvmfree(pagetable, 0);
+     return 0;
+   }
++#endif
+ 
+   // map the trapframe page just below the trampoline page, for
+   // trampoline.S.
++#ifdef ARCH_LOONGARCH
++  if(mappages(pagetable, TRAPFRAME, PGSIZE,
++              (uint64)(p->trapframe), PTE_P | PTE_W | PTE_MAT | PTE_D) < 0){
++#else
+   if(mappages(pagetable, TRAPFRAME, PGSIZE,
+               (uint64)(p->trapframe), PTE_R | PTE_W) < 0){
++#endif
++#ifndef ARCH_LOONGARCH
+     uvmunmap(pagetable, TRAMPOLINE, 1, 0);
++#endif
+     uvmfree(pagetable, 0);
+     return 0;
+   }
+@@ -210,7 +221,9 @@ proc_pagetable(struct proc *p)
+ void
+ proc_freepagetable(pagetable_t pagetable, uint64 sz)
+ {
++#ifndef ARCH_LOONGARCH
+   uvmunmap(pagetable, TRAMPOLINE, 1, 0);
++#endif
+   uvmunmap(pagetable, TRAPFRAME, 1, 0);
+   uvmfree(pagetable, sz);
+ }
+@@ -454,7 +467,7 @@ scheduler(void)
+     }
+     if(found == 0) {
+       // nothing to run; stop running on this core until an interrupt.
+-      asm volatile("wfi");
++      cpu_idle();
+     }
+   }
+ }
+@@ -502,7 +515,11 @@ yield(void)
+ void
+ forkret(void)
+ {
++#ifndef ARCH_LOONGARCH
+   extern char userret[];
++#else
++  extern void usertrapret(void);
++#endif
+   static int first = 1;
+   struct proc *p = myproc();
+ 
+@@ -528,10 +545,14 @@ forkret(void)
+   }
+ 
+   // return to user space, mimicing usertrap()'s return.
++#ifdef ARCH_LOONGARCH
++  usertrapret();
++#else
+   prepare_return();
+   uint64 satp = MAKE_SATP(p->pagetable);
+   uint64 trampoline_userret = TRAMPOLINE + (userret - trampoline);
+   ((void (*)(uint64))trampoline_userret)(satp);
++#endif
+ }
+ 
+ // Sleep on channel chan, releasing condition lock lk.
+diff --git a/./xv6-riscv-src/kernel/proc.h b/./src/kernel/proc.h
+index d021857..c8163f6 100644
+--- a/./xv6-riscv-src/kernel/proc.h
++++ b/./src/kernel/proc.h
+@@ -13,9 +13,13 @@ struct context {
+   uint64 s6;
+   uint64 s7;
+   uint64 s8;
++#ifndef ARCH_LOONGARCH
+   uint64 s9;
+   uint64 s10;
+   uint64 s11;
++#else
++  uint64 fp;
++#endif
+ };
+ 
+ // Per-CPU state.
+@@ -40,6 +44,46 @@ extern struct cpu cpus[NCPU];
+ // the trapframe includes callee-saved user registers like s0-s11 because the
+ // return-to-user path via usertrapret() doesn't return through
+ // the entire kernel call stack.
++#ifdef ARCH_LOONGARCH
++struct trapframe {
++  /*   0 */ uint64 ra;
++  /*   8 */ uint64 tp;
++  /*  16 */ uint64 sp;
++  /*  24 */ uint64 a0;
++  /*  32 */ uint64 a1;
++  /*  40 */ uint64 a2;
++  /*  48 */ uint64 a3;
++  /*  56 */ uint64 a4;
++  /*  64 */ uint64 a5;
++  /*  72 */ uint64 a6;
++  /*  80 */ uint64 a7;
++  /*  88 */ uint64 t0;
++  /*  96 */ uint64 t1;
++  /* 104 */ uint64 t2;
++  /* 112 */ uint64 t3;
++  /* 120 */ uint64 t4;
++  /* 128 */ uint64 t5;
++  /* 136 */ uint64 t6;
++  /* 144 */ uint64 t7;
++  /* 152 */ uint64 t8;
++  /* 160 */ uint64 r21;
++  /* 168 */ uint64 fp;
++  /* 176 */ uint64 s0;
++  /* 184 */ uint64 s1;
++  /* 192 */ uint64 s2;
++  /* 200 */ uint64 s3;
++  /* 208 */ uint64 s4;
++  /* 216 */ uint64 s5;
++  /* 224 */ uint64 s6;
++  /* 232 */ uint64 s7;
++  /* 240 */ uint64 s8;
++  /* 248 */ uint64 kernel_sp;
++  /* 256 */ uint64 kernel_trap;
++  /* 264 */ uint64 era;
++  /* 272 */ uint64 kernel_hartid;
++  /* 280 */ uint64 kernel_pgdl;
++};
++#else
+ struct trapframe {
+   /*   0 */ uint64 kernel_satp;   // kernel page table
+   /*   8 */ uint64 kernel_sp;     // top of process's kernel stack
+@@ -78,6 +122,7 @@ struct trapframe {
+   /* 272 */ uint64 t5;
+   /* 280 */ uint64 t6;
+ };
++#endif
+ 
+ enum procstate { UNUSED, USED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
+ 
+diff --git a/./xv6-riscv-src/kernel/riscv.h b/./src/kernel/riscv.h
+index ef3372c..b713402 100644
+--- a/./xv6-riscv-src/kernel/riscv.h
++++ b/./src/kernel/riscv.h
+@@ -1,3 +1,6 @@
++#ifdef ARCH_LOONGARCH
++#include "loongarch.h"
++#else
+ #ifndef __ASSEMBLER__
+ 
+ // which hart (core) is this?
+@@ -344,6 +347,12 @@ sfence_vma()
+   asm volatile("sfence.vma zero, zero");
+ }
+ 
++static inline void
++cpu_idle()
++{
++  asm volatile("wfi");
++}
++
+ typedef uint64 pte_t;
+ typedef uint64 *pagetable_t; // 512 PTEs
+ 
+@@ -378,3 +387,5 @@ typedef uint64 *pagetable_t; // 512 PTEs
+ // Sv39, to avoid having to sign-extend virtual addresses
+ // that have the high bit set.
+ #define MAXVA (1L << (9 + 9 + 9 + 12 - 1))
++
++#endif
+diff --git a/./xv6-riscv-src/kernel/syscall.c b/./src/kernel/syscall.c
+index 076d965..30dcbcf 100644
+--- a/./xv6-riscv-src/kernel/syscall.c
++++ b/./src/kernel/syscall.c
+@@ -101,6 +101,7 @@ extern uint64 sys_unlink(void);
+ extern uint64 sys_link(void);
+ extern uint64 sys_mkdir(void);
+ extern uint64 sys_close(void);
++extern uint64 sys_mount(void);
+ 
+ // An array mapping syscall numbers from syscall.h
+ // to the function that handles the system call.
+@@ -126,6 +127,7 @@ static uint64 (*syscalls[])(void) = {
+ [SYS_link]    sys_link,
+ [SYS_mkdir]   sys_mkdir,
+ [SYS_close]   sys_close,
++[SYS_mount]   sys_mount,
+ };
+ 
+ void
+diff --git a/./xv6-riscv-src/kernel/syscall.h b/./src/kernel/syscall.h
+index 3dd926d..9d93685 100644
+--- a/./xv6-riscv-src/kernel/syscall.h
++++ b/./src/kernel/syscall.h
+@@ -20,3 +20,4 @@
+ #define SYS_link   19
+ #define SYS_mkdir  20
+ #define SYS_close  21
++#define SYS_mount  22
+diff --git a/./xv6-riscv-src/kernel/sysfile.c b/./src/kernel/sysfile.c
+index d8234ce..38745ff 100644
+--- a/./xv6-riscv-src/kernel/sysfile.c
++++ b/./src/kernel/sysfile.c
+@@ -16,6 +16,20 @@
+ #include "file.h"
+ #include "fcntl.h"
+ 
++uint64
++sys_mount(void)
++{
++  char fstype[16], path[MAXPATH];
++  int dev;
++
++  if(argstr(0, fstype, sizeof(fstype)) < 0 ||
++     argstr(1, path, MAXPATH) < 0)
++    return -1;
++  argint(2, &dev);
++
++  return vfs_mount(fstype, path, dev);
++}
++
+ // Fetch the nth word-sized system call argument as a file descriptor
+ // and return both the descriptor and the corresponding struct file.
+ static int
+@@ -125,6 +139,7 @@ sys_link(void)
+ {
+   char name[DIRSIZ], new[MAXPATH], old[MAXPATH];
+   struct inode *dp, *ip;
++  int r;
+ 
+   if(argstr(0, old, MAXPATH) < 0 || argstr(1, new, MAXPATH) < 0)
+     return -1;
+@@ -135,38 +150,17 @@ sys_link(void)
+     return -1;
+   }
+ 
+-  ilock(ip);
+-  if(ip->type == T_DIR){
+-    iunlockput(ip);
++  if((dp = nameiparent(new, name)) == 0){
++    iput(ip);
+     end_op();
+     return -1;
+   }
+-
+-  ip->nlink++;
+-  iupdate(ip);
+-  iunlock(ip);
+-
+-  if((dp = nameiparent(new, name)) == 0)
+-    goto bad;
+-  ilock(dp);
+-  if(dp->dev != ip->dev || dirlink(dp, name, ip->inum) < 0){
+-    iunlockput(dp);
+-    goto bad;
+-  }
+-  iunlockput(dp);
++  r = vfs_link(ip, dp, name);
++  iput(dp);
+   iput(ip);
+ 
+   end_op();
+-
+-  return 0;
+-
+-bad:
+-  ilock(ip);
+-  ip->nlink--;
+-  iupdate(ip);
+-  iunlockput(ip);
+-  end_op();
+-  return -1;
++  return r;
+ }
+ 
+ // Is the directory dp empty except for "." and ".." ?
+@@ -208,6 +202,14 @@ sys_unlink(void)
+   if(namecmp(name, ".") == 0 || namecmp(name, "..") == 0)
+     goto bad;
+ 
++  if(dp->fstype != FS_XV6){
++    if(vfs_unlink(dp, name) < 0)
++      goto bad;
++    iunlockput(dp);
++    end_op();
++    return 0;
++  }
++
+   if((ip = dirlookup(dp, name, &off)) == 0)
+     goto bad;
+   ilock(ip);
+@@ -253,7 +255,7 @@ create(char *path, short type, short major, short minor)
+ 
+   ilock(dp);
+ 
+-  if((ip = dirlookup(dp, name, 0)) != 0){
++  if((ip = vfs_lookup(dp, name)) != 0){
+     iunlockput(dp);
+     ilock(ip);
+     if(type == T_FILE && (ip->type == T_FILE || ip->type == T_DEVICE))
+@@ -262,6 +264,14 @@ create(char *path, short type, short major, short minor)
+     return 0;
+   }
+ 
++  if(dp->fstype != FS_XV6){
++    ip = vfs_create(dp, name, type, major, minor);
++    iunlockput(dp);
++    if(ip)
++      ilock(ip);
++    return ip;
++  }
++
+   if((ip = ialloc(dp->dev, type)) == 0){
+     iunlockput(dp);
+     return 0;
+@@ -361,7 +371,7 @@ sys_open(void)
+   f->writable = (omode & O_WRONLY) || (omode & O_RDWR);
+ 
+   if((omode & O_TRUNC) && ip->type == T_FILE){
+-    itrunc(ip);
++    vfs_itrunc(ip);
+   }
+ 
+   iunlock(ip);
+@@ -377,7 +387,11 @@ sys_mkdir(void)
+   struct inode *ip;
+ 
+   begin_op();
+-  if(argstr(0, path, MAXPATH) < 0 || (ip = create(path, T_DIR, 0, 0)) == 0){
++  if(argstr(0, path, MAXPATH) < 0){
++    end_op();
++    return -1;
++  }
++  if((ip = create(path, T_DIR, 0, 0)) == 0){
+     end_op();
+     return -1;
+   }
+diff --git a/./xv6-riscv-src/kernel/trap.c b/./src/kernel/trap.c
+index a41cd69..8d63a57 100644
+--- a/./xv6-riscv-src/kernel/trap.c
++++ b/./src/kernel/trap.c
+@@ -191,7 +191,7 @@ devintr()
+     // this is a supervisor external interrupt, via PLIC.
+ 
+     // irq indicates which device interrupted.
+-    int irq = plic_claim();
++    int irq = hal_irq_claim();
+ 
+     if(irq == UART0_IRQ){
+       uartintr();
+@@ -205,7 +205,7 @@ devintr()
+     // interrupt at a time; tell the PLIC the device is
+     // now allowed to interrupt again.
+     if(irq)
+-      plic_complete(irq);
++      hal_irq_complete(irq);
+ 
+     return 1;
+   } else if(scause == 0x8000000000000005L){
+@@ -216,4 +216,3 @@ devintr()
+     return 0;
+   }
+ }
+-
+diff --git a/./src/kernel/vfs.c b/./src/kernel/vfs.c
+new file mode 100644
+index 0000000..da3026e
+--- /dev/null
++++ b/./src/kernel/vfs.c
+@@ -0,0 +1,331 @@
++#include "types.h"
++#include "riscv.h"
++#include "defs.h"
++#include "param.h"
++#include "stat.h"
++#include "fs.h"
++#include "spinlock.h"
++#include "sleeplock.h"
++#include "file.h"
++#include "vfs.h"
++
++static struct {
++  struct spinlock lock;
++  struct mount mount[NMOUNT];
++} mtable;
++
++// The default backend is the original xv6 filesystem.
++static struct inode*
++xv6_lookup(struct inode *dp, char *name)
++{
++  return dirlookup(dp, name, 0);
++}
++
++static int
++xv6_link(struct inode *ip, struct inode *dp, char *name)
++{
++  ilock(ip);
++  if(ip->type == T_DIR){
++    iunlock(ip);
++    return -1;
++  }
++
++  ip->nlink++;
++  iupdate(ip);
++  iunlock(ip);
++
++  ilock(dp);
++  if(dp->dev != ip->dev || dirlink(dp, name, ip->inum) < 0){
++    iunlock(dp);
++    ilock(ip);
++    ip->nlink--;
++    iupdate(ip);
++    iunlock(ip);
++    return -1;
++  }
++  iunlock(dp);
++
++  return 0;
++}
++
++static struct inode_ops xv6_inode_ops = {
++  .read = readi,
++  .write = writei,
++  .stat = stati,
++  .trunc = itrunc,
++  .lookup = xv6_lookup,
++  .create = 0,
++  .link = xv6_link,
++};
++
++static int
++xv6_mount(struct mount *mnt)
++{
++  if(mnt == 0)
++    return -1;
++  mnt->root = 0;
++  mnt->fs_private = 0;
++  return 0;
++}
++
++static struct fs_ops xv6_fs_ops = {
++  .mount = xv6_mount,
++};
++
++static enum fs_type
++vfs_parse_fstype(char *fstype)
++{
++  if(strncmp(fstype, "xv6", 4) == 0)
++    return FS_XV6;
++  if(strncmp(fstype, "ext2", 5) == 0)
++    return FS_EXT2;
++  if(strncmp(fstype, "fat32", 6) == 0)
++    return FS_FAT32;
++  return FS_NONE;
++}
++
++static struct fs_ops*
++vfs_fsops(enum fs_type fstype)
++{
++  switch(fstype){
++  case FS_XV6:
++    return &xv6_fs_ops;
++  case FS_EXT2:
++    return ext2_get_fs_ops();
++  case FS_FAT32:
++    return fat32_get_fs_ops();
++  default:
++    return 0;
++  }
++}
++
++void
++vfsinit(void)
++{
++  struct mount *root;
++
++  initlock(&mtable.lock, "mtable");
++
++  root = &mtable.mount[0];
++  root->used = 1;
++  root->fstype = FS_XV6;
++  root->dev = ROOTDEV;
++  root->mountpoint = 0;
++  root->root = 0;
++  root->fsops = &xv6_fs_ops;
++  root->fs_private = 0;
++  if(root->fsops->mount(root) < 0)
++    panic("vfsinit: xv6 mount");
++}
++
++void
++vfs_init_inode(struct inode *ip)
++{
++  ip->fstype = FS_XV6;
++  ip->mnt = &mtable.mount[0];
++  ip->ops = &xv6_inode_ops;
++}
++
++int
++vfs_mount(char *fstype, char *path, int dev)
++{
++  enum fs_type type;
++  struct fs_ops *ops;
++  struct inode *mp, *parent;
++  struct mount *mnt;
++  char name[DIRSIZ];
++  int free, i;
++
++  if(fstype == 0 || path == 0 || dev <= 0)
++    return -1;
++
++  type = vfs_parse_fstype(fstype);
++  ops = vfs_fsops(type);
++  if(type == FS_NONE || ops == 0)
++    return -1;
++
++  if(path[0] == '/' && path[1] == '\0')
++    return -1;
++
++  begin_op();
++
++  if((parent = nameiparent(path, name)) == 0){
++    end_op();
++    return -1;
++  }
++
++  if((mp = namei(path)) == 0){
++    iput(parent);
++    end_op();
++    return -1;
++  }
++
++  ilock(mp);
++  if(mp->type != T_DIR){
++    iunlockput(mp);
++    iput(parent);
++    end_op();
++    return -1;
++  }
++  iunlock(mp);
++
++  free = -1;
++  acquire(&mtable.lock);
++  for(i = 1; i < NMOUNT; i++){
++    if(mtable.mount[i].used &&
++       mtable.mount[i].mountpoint != 0 &&
++       mtable.mount[i].mountpoint->dev == mp->dev &&
++       mtable.mount[i].mountpoint->inum == mp->inum){
++      release(&mtable.lock);
++      iput(mp);
++      iput(parent);
++      end_op();
++      return -1;
++    }
++    if(!mtable.mount[i].used && free < 0)
++      free = i;
++  }
++
++  if(free < 0){
++    release(&mtable.lock);
++    iput(mp);
++    iput(parent);
++    end_op();
++    return -1;
++  }
++
++  mnt = &mtable.mount[free];
++  memset(mnt, 0, sizeof(*mnt));
++  mnt->used = 1;
++  mnt->fstype = type;
++  mnt->dev = dev;
++  mnt->mountpoint = mp;
++  mnt->parent = parent;
++  mnt->root = 0;
++  mnt->fsops = ops;
++  mnt->fs_private = 0;
++  release(&mtable.lock);
++
++  if(ops->mount(mnt) < 0){
++    acquire(&mtable.lock);
++    memset(mnt, 0, sizeof(*mnt));
++    release(&mtable.lock);
++    iput(mp);
++    iput(parent);
++    end_op();
++    return -1;
++  }
++
++  end_op();
++  return 0;
++}
++
++struct mount*
++vfs_mountpoint(struct inode *ip)
++{
++  struct mount *mnt;
++  int i;
++
++  if(ip == 0)
++    return 0;
++
++  acquire(&mtable.lock);
++  for(i = 1; i < NMOUNT; i++){
++    mnt = &mtable.mount[i];
++    if(mnt->used &&
++       mnt->mountpoint != 0 &&
++       mnt->mountpoint->dev == ip->dev &&
++       mnt->mountpoint->inum == ip->inum){
++      release(&mtable.lock);
++      return mnt;
++    }
++  }
++  release(&mtable.lock);
++
++  return 0;
++}
++
++struct inode*
++vfs_lookup(struct inode *dp, char *name)
++{
++  struct mount *mnt;
++  struct inode *parent;
++  int i;
++
++  if(dp == 0 || dp->ops == 0 || dp->ops->lookup == 0)
++    return 0;
++
++  if(namecmp(name, "..") == 0){
++    acquire(&mtable.lock);
++    for(i = 1; i < NMOUNT; i++){
++      mnt = &mtable.mount[i];
++      if(mnt->used && mnt->root != 0 && mnt->parent != 0 &&
++         mnt->root->dev == dp->dev && mnt->root->inum == dp->inum){
++        parent = mnt->parent;
++        release(&mtable.lock);
++        return idup(parent);
++      }
++    }
++    release(&mtable.lock);
++  }
++
++  return dp->ops->lookup(dp, name);
++}
++
++struct inode*
++vfs_create(struct inode *dp, char *name, short type, short major, short minor)
++{
++  if(dp == 0 || dp->ops == 0 || dp->ops->create == 0)
++    return 0;
++  return dp->ops->create(dp, name, type, major, minor);
++}
++
++int
++vfs_unlink(struct inode *dp, char *name)
++{
++  if(dp == 0 || dp->ops == 0 || dp->ops->unlink == 0)
++    return -1;
++  return dp->ops->unlink(dp, name);
++}
++
++int
++vfs_link(struct inode *ip, struct inode *dp, char *name)
++{
++  if(ip == 0 || dp == 0 || ip->ops == 0 || ip->ops->link == 0)
++    return -1;
++  if(ip->fstype != dp->fstype || ip->dev != dp->dev)
++    return -1;
++  return ip->ops->link(ip, dp, name);
++}
++
++int
++vfs_readi(struct inode *ip, int user_dst, uint64 dst, uint off, uint n)
++{
++  if(ip == 0 || ip->ops == 0 || ip->ops->read == 0)
++    return -1;
++  return ip->ops->read(ip, user_dst, dst, off, n);
++}
++
++int
++vfs_writei(struct inode *ip, int user_src, uint64 src, uint off, uint n)
++{
++  if(ip == 0 || ip->ops == 0 || ip->ops->write == 0)
++    return -1;
++  return ip->ops->write(ip, user_src, src, off, n);
++}
++
++void
++vfs_stati(struct inode *ip, struct stat *st)
++{
++  if(ip == 0 || ip->ops == 0 || ip->ops->stat == 0)
++    return;
++  ip->ops->stat(ip, st);
++}
++
++void
++vfs_itrunc(struct inode *ip)
++{
++  if(ip == 0 || ip->ops == 0 || ip->ops->trunc == 0)
++    return;
++  ip->ops->trunc(ip);
++}
+diff --git a/./src/kernel/vfs.h b/./src/kernel/vfs.h
+new file mode 100644
+index 0000000..118cf6b
+--- /dev/null
++++ b/./src/kernel/vfs.h
+@@ -0,0 +1,47 @@
++#ifndef XV6_VFS_H
++#define XV6_VFS_H
++
++#include "types.h"
++
++struct inode;
++struct mount;
++struct stat;
++
++enum fs_type {
++  FS_NONE = 0,
++  FS_XV6 = 1,
++  FS_EXT2,
++  FS_FAT32,
++};
++
++#define NMOUNT 8
++
++// Per-inode operations. Each filesystem backend provides its own table.
++struct inode_ops {
++  int  (*read)(struct inode *ip, int user_dst, uint64 dst, uint off, uint n);
++  int  (*write)(struct inode *ip, int user_src, uint64 src, uint off, uint n);
++  void (*stat)(struct inode *ip, struct stat *st);
++  void (*trunc)(struct inode *ip);
++  struct inode *(*lookup)(struct inode *dp, char *name);
++  struct inode *(*create)(struct inode *dp, char *name, short type, short major, short minor);
++  int  (*unlink)(struct inode *dp, char *name);
++  int  (*link)(struct inode *ip, struct inode *dp, char *name);
++};
++
++// Per-filesystem operations. Each backend validates and initializes a mount.
++struct fs_ops {
++  int (*mount)(struct mount *mnt);
++};
++
++struct mount {
++  int used;
++  enum fs_type fstype;
++  uint dev;
++  struct inode *mountpoint;
++  struct inode *parent;
++  struct inode *root;
++  struct fs_ops *fsops;
++  void *fs_private;
++};
++
++#endif
+diff --git a/./xv6-riscv-src/kernel/virtio.h b/./src/kernel/virtio.h
+index 96272b4..198ad53 100644
+--- a/./xv6-riscv-src/kernel/virtio.h
++++ b/./src/kernel/virtio.h
+@@ -44,6 +44,8 @@
+ #define VIRTIO_F_ANY_LAYOUT         27
+ #define VIRTIO_RING_F_INDIRECT_DESC 28
+ #define VIRTIO_RING_F_EVENT_IDX     29
++#define VIRTIO_F_VERSION_1          32
++#define VIRTIO_F_RING_PACKED        34
+ 
+ // this many virtio descriptors.
+ // must be a power of two.
+diff --git a/./xv6-riscv-src/kernel/virtio_disk.c b/./src/kernel/virtio_disk.c
+index ae6c164..2d744bc 100644
+--- a/./xv6-riscv-src/kernel/virtio_disk.c
++++ b/./src/kernel/virtio_disk.c
+@@ -16,8 +16,157 @@
+ #include "buf.h"
+ #include "virtio.h"
+ 
++#ifdef ARCH_LOONGARCH
++void virtio_pci_init(void);
++uint8 virtio_pci_get_status(void);
++void virtio_pci_set_status(uint8);
++uint64 virtio_pci_get_features(void);
++void virtio_pci_set_features(uint64);
++void virtio_pci_select_queue(uint16);
++uint16 virtio_pci_queue_max(void);
++uint16 virtio_pci_queue_ready(void);
++void virtio_pci_set_queue_num(uint16);
++void virtio_pci_set_queue_desc(uint64);
++void virtio_pci_set_queue_avail(uint64);
++void virtio_pci_set_queue_used(uint64);
++void virtio_pci_set_queue_ready(uint16);
++void virtio_pci_notify(uint16);
++void virtio_pci_intr_ack(void);
++#else
+ // the address of virtio mmio register r.
+ #define R(r) ((volatile uint32 *)(VIRTIO0 + (r)))
++#endif
++
++static uint64
++virtio_dma_addr(void *addr)
++{
++#ifdef ARCH_LOONGARCH
++  return ((uint64)addr) & ~DMWIN_MASK;
++#else
++  return (uint64)addr;
++#endif
++}
++
++static uint8
++virtio_get_status(void)
++{
++#ifdef ARCH_LOONGARCH
++  return virtio_pci_get_status();
++#else
++  return *R(VIRTIO_MMIO_STATUS);
++#endif
++}
++
++static void
++virtio_set_status(uint8 status)
++{
++#ifdef ARCH_LOONGARCH
++  virtio_pci_set_status(status);
++#else
++  *R(VIRTIO_MMIO_STATUS) = status;
++#endif
++}
++
++static uint64
++virtio_get_features(void)
++{
++#ifdef ARCH_LOONGARCH
++  return virtio_pci_get_features();
++#else
++  return *R(VIRTIO_MMIO_DEVICE_FEATURES);
++#endif
++}
++
++static void
++virtio_set_features(uint64 features)
++{
++#ifdef ARCH_LOONGARCH
++  virtio_pci_set_features(features);
++#else
++  *R(VIRTIO_MMIO_DRIVER_FEATURES) = features;
++#endif
++}
++
++static void
++virtio_select_queue(uint16 queue)
++{
++#ifdef ARCH_LOONGARCH
++  virtio_pci_select_queue(queue);
++#else
++  *R(VIRTIO_MMIO_QUEUE_SEL) = queue;
++#endif
++}
++
++static uint16
++virtio_queue_max(void)
++{
++#ifdef ARCH_LOONGARCH
++  return virtio_pci_queue_max();
++#else
++  return *R(VIRTIO_MMIO_QUEUE_NUM_MAX);
++#endif
++}
++
++static uint16
++virtio_queue_ready(void)
++{
++#ifdef ARCH_LOONGARCH
++  return virtio_pci_queue_ready();
++#else
++  return *R(VIRTIO_MMIO_QUEUE_READY);
++#endif
++}
++
++static void
++virtio_setup_queue(uint16 queue, uint16 num, void *desc, void *avail, void *used)
++{
++#ifdef ARCH_LOONGARCH
++  virtio_pci_select_queue(queue);
++  virtio_pci_set_queue_num(num);
++  virtio_pci_set_queue_desc(virtio_dma_addr(desc));
++  virtio_pci_set_queue_avail(virtio_dma_addr(avail));
++  virtio_pci_set_queue_used(virtio_dma_addr(used));
++#else
++  *R(VIRTIO_MMIO_QUEUE_NUM) = num;
++  *R(VIRTIO_MMIO_QUEUE_DESC_LOW) = virtio_dma_addr(desc);
++  *R(VIRTIO_MMIO_QUEUE_DESC_HIGH) = virtio_dma_addr(desc) >> 32;
++  *R(VIRTIO_MMIO_DRIVER_DESC_LOW) = virtio_dma_addr(avail);
++  *R(VIRTIO_MMIO_DRIVER_DESC_HIGH) = virtio_dma_addr(avail) >> 32;
++  *R(VIRTIO_MMIO_DEVICE_DESC_LOW) = virtio_dma_addr(used);
++  *R(VIRTIO_MMIO_DEVICE_DESC_HIGH) = virtio_dma_addr(used) >> 32;
++#endif
++}
++
++static void
++virtio_set_queue_ready(uint16 ready)
++{
++#ifdef ARCH_LOONGARCH
++  virtio_pci_set_queue_ready(ready);
++#else
++  *R(VIRTIO_MMIO_QUEUE_READY) = ready;
++#endif
++}
++
++static void
++virtio_notify(uint16 queue)
++{
++#ifdef ARCH_LOONGARCH
++  virtio_pci_notify(queue);
++#else
++  (void)queue;
++  *R(VIRTIO_MMIO_QUEUE_NOTIFY) = 0;
++#endif
++}
++
++static void
++virtio_intr_ack(void)
++{
++#ifdef ARCH_LOONGARCH
++  virtio_pci_intr_ack();
++#else
++  *R(VIRTIO_MMIO_INTERRUPT_ACK) = *R(VIRTIO_MMIO_INTERRUPT_STATUS) & 0x3;
++#endif
++}
+ 
+ static struct disk {
+   // a set (not a ring) of DMA descriptors, with which the
+@@ -65,26 +214,34 @@ virtio_disk_init(void)
+ 
+   initlock(&disk.vdisk_lock, "virtio_disk");
+ 
++#ifdef ARCH_LOONGARCH
++  virtio_pci_init();
++#else
+   if(*R(VIRTIO_MMIO_MAGIC_VALUE) != 0x74726976 ||
+      *R(VIRTIO_MMIO_VERSION) != 2 ||
+      *R(VIRTIO_MMIO_DEVICE_ID) != 2 ||
+      *R(VIRTIO_MMIO_VENDOR_ID) != 0x554d4551){
+     panic("could not find virtio disk");
+   }
++#endif
+   
+   // reset device
+-  *R(VIRTIO_MMIO_STATUS) = status;
++  virtio_set_status(status);
++#ifdef ARCH_LOONGARCH
++  while(virtio_get_status() != 0)
++    ;
++#endif
+ 
+   // set ACKNOWLEDGE status bit
+   status |= VIRTIO_CONFIG_S_ACKNOWLEDGE;
+-  *R(VIRTIO_MMIO_STATUS) = status;
++  virtio_set_status(status);
+ 
+   // set DRIVER status bit
+   status |= VIRTIO_CONFIG_S_DRIVER;
+-  *R(VIRTIO_MMIO_STATUS) = status;
++  virtio_set_status(status);
+ 
+   // negotiate features
+-  uint64 features = *R(VIRTIO_MMIO_DEVICE_FEATURES);
++  uint64 features = virtio_get_features();
+   features &= ~(1 << VIRTIO_BLK_F_RO);
+   features &= ~(1 << VIRTIO_BLK_F_SCSI);
+   features &= ~(1 << VIRTIO_BLK_F_CONFIG_WCE);
+@@ -92,26 +249,34 @@ virtio_disk_init(void)
+   features &= ~(1 << VIRTIO_F_ANY_LAYOUT);
+   features &= ~(1 << VIRTIO_RING_F_EVENT_IDX);
+   features &= ~(1 << VIRTIO_RING_F_INDIRECT_DESC);
+-  *R(VIRTIO_MMIO_DRIVER_FEATURES) = features;
++#ifdef ARCH_LOONGARCH
++  features &= (1ULL << VIRTIO_F_VERSION_1);
++#endif
++  virtio_set_features(features);
+ 
+   // tell device that feature negotiation is complete.
+   status |= VIRTIO_CONFIG_S_FEATURES_OK;
+-  *R(VIRTIO_MMIO_STATUS) = status;
++  virtio_set_status(status);
+ 
+   // re-read status to ensure FEATURES_OK is set.
+-  status = *R(VIRTIO_MMIO_STATUS);
++  status = virtio_get_status();
+   if(!(status & VIRTIO_CONFIG_S_FEATURES_OK))
+     panic("virtio disk FEATURES_OK unset");
+ 
+   // initialize queue 0.
+-  *R(VIRTIO_MMIO_QUEUE_SEL) = 0;
++  virtio_select_queue(0);
+ 
+   // ensure queue 0 is not in use.
+-  if(*R(VIRTIO_MMIO_QUEUE_READY))
++  if(virtio_queue_ready()){
++#ifdef ARCH_LOONGARCH
++    virtio_set_queue_ready(0);
++#else
+     panic("virtio disk should not be ready");
++#endif
++  }
+ 
+   // check maximum queue size.
+-  uint32 max = *R(VIRTIO_MMIO_QUEUE_NUM_MAX);
++  uint32 max = virtio_queue_max();
+   if(max == 0)
+     panic("virtio disk has no queue 0");
+   if(max < NUM)
+@@ -127,19 +292,11 @@ virtio_disk_init(void)
+   memset(disk.avail, 0, PGSIZE);
+   memset(disk.used, 0, PGSIZE);
+ 
+-  // set queue size.
+-  *R(VIRTIO_MMIO_QUEUE_NUM) = NUM;
+-
+-  // write physical addresses.
+-  *R(VIRTIO_MMIO_QUEUE_DESC_LOW) = (uint64)disk.desc;
+-  *R(VIRTIO_MMIO_QUEUE_DESC_HIGH) = (uint64)disk.desc >> 32;
+-  *R(VIRTIO_MMIO_DRIVER_DESC_LOW) = (uint64)disk.avail;
+-  *R(VIRTIO_MMIO_DRIVER_DESC_HIGH) = (uint64)disk.avail >> 32;
+-  *R(VIRTIO_MMIO_DEVICE_DESC_LOW) = (uint64)disk.used;
+-  *R(VIRTIO_MMIO_DEVICE_DESC_HIGH) = (uint64)disk.used >> 32;
++  // set queue size and addresses.
++  virtio_setup_queue(0, NUM, disk.desc, disk.avail, disk.used);
+ 
+   // queue is ready.
+-  *R(VIRTIO_MMIO_QUEUE_READY) = 0x1;
++  virtio_set_queue_ready(0x1);
+ 
+   // all NUM descriptors start out unused.
+   for(int i = 0; i < NUM; i++)
+@@ -147,7 +304,7 @@ virtio_disk_init(void)
+ 
+   // tell device we're completely ready.
+   status |= VIRTIO_CONFIG_S_DRIVER_OK;
+-  *R(VIRTIO_MMIO_STATUS) = status;
++  virtio_set_status(status);
+ 
+   // plic.c and trap.c arrange for interrupts from VIRTIO0_IRQ.
+ }
+@@ -215,7 +372,14 @@ alloc3_desc(int *idx)
+ void
+ virtio_disk_rw(struct buf *b, int write)
+ {
+-  uint64 sector = b->blockno * (BSIZE / 512);
++  uint64 blockno = b->blockno;
++
++  if(b->dev == EXT2DEV)
++    blockno += FSSIZE;
++  else if(b->dev == FAT32DEV)
++    blockno += FAT32START;
++
++  uint64 sector = blockno * (BSIZE / 512);
+ 
+   acquire(&disk.vdisk_lock);
+ 
+@@ -244,12 +408,12 @@ virtio_disk_rw(struct buf *b, int write)
+   buf0->reserved = 0;
+   buf0->sector = sector;
+ 
+-  disk.desc[idx[0]].addr = (uint64) buf0;
++  disk.desc[idx[0]].addr = virtio_dma_addr(buf0);
+   disk.desc[idx[0]].len = sizeof(struct virtio_blk_req);
+   disk.desc[idx[0]].flags = VRING_DESC_F_NEXT;
+   disk.desc[idx[0]].next = idx[1];
+ 
+-  disk.desc[idx[1]].addr = (uint64) b->data;
++  disk.desc[idx[1]].addr = virtio_dma_addr(b->data);
+   disk.desc[idx[1]].len = BSIZE;
+   if(write)
+     disk.desc[idx[1]].flags = 0; // device reads b->data
+@@ -259,7 +423,7 @@ virtio_disk_rw(struct buf *b, int write)
+   disk.desc[idx[1]].next = idx[2];
+ 
+   disk.info[idx[0]].status = 0xff; // device writes 0 on success
+-  disk.desc[idx[2]].addr = (uint64) &disk.info[idx[0]].status;
++  disk.desc[idx[2]].addr = virtio_dma_addr(&disk.info[idx[0]].status);
+   disk.desc[idx[2]].len = 1;
+   disk.desc[idx[2]].flags = VRING_DESC_F_WRITE; // device writes the status
+   disk.desc[idx[2]].next = 0;
+@@ -278,7 +442,7 @@ virtio_disk_rw(struct buf *b, int write)
+ 
+   __sync_synchronize();
+ 
+-  *R(VIRTIO_MMIO_QUEUE_NOTIFY) = 0; // value is queue number
++  virtio_notify(0); // value is queue number
+ 
+   // Wait for virtio_disk_intr() to say request has finished.
+   while(b->disk == 1) {
+@@ -302,7 +466,7 @@ virtio_disk_intr()
+   // the "used" ring, in which case we may process the new
+   // completion entries in this interrupt, and have nothing to do
+   // in the next interrupt, which is harmless.
+-  *R(VIRTIO_MMIO_INTERRUPT_ACK) = *R(VIRTIO_MMIO_INTERRUPT_STATUS) & 0x3;
++  virtio_intr_ack();
+ 
+   __sync_synchronize();
+ 
+diff --git a/./src/mkfs/mkfat32.c b/./src/mkfs/mkfat32.c
+new file mode 100644
+index 0000000..6f4b699
+--- /dev/null
++++ b/./src/mkfs/mkfat32.c
+@@ -0,0 +1,127 @@
++#include <stdint.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++
++#define FAT32_BPS          512
++#define FAT32_BLOCKS       65536
++#define FAT32_TOTAL_SEC    (FAT32_BLOCKS * 2)
++#define FAT32_RSVD_SEC     32
++#define FAT32_NUM_FATS     2
++#define FAT32_FAT_SEC      1024
++#define FAT32_SEC_PER_CLUS 1
++#define FAT32_ROOT_CLUS    2
++
++static void
++put16(unsigned char *p, int off, uint16_t v)
++{
++  p[off+0] = v & 0xff;
++  p[off+1] = v >> 8;
++}
++
++static void
++put32(unsigned char *p, int off, uint32_t v)
++{
++  p[off+0] = v & 0xff;
++  p[off+1] = (v >> 8) & 0xff;
++  p[off+2] = (v >> 16) & 0xff;
++  p[off+3] = (v >> 24) & 0xff;
++}
++
++static void
++write_sector(FILE *f, uint32_t sec, unsigned char *buf)
++{
++  if(fseek(f, (long)sec * FAT32_BPS, SEEK_SET) != 0 ||
++     fwrite(buf, 1, FAT32_BPS, f) != FAT32_BPS){
++    perror("mkfat32");
++    exit(1);
++  }
++}
++
++int
++main(int argc, char **argv)
++{
++  const char *path;
++  FILE *f;
++  unsigned char boot[FAT32_BPS];
++  unsigned char fsinfo[FAT32_BPS];
++  unsigned char fat[FAT32_BPS];
++  uint32_t data_start, clusters;
++
++  if(argc != 2){
++    fprintf(stderr, "Usage: mkfat32 image\n");
++    return 1;
++  }
++  path = argv[1];
++
++  data_start = FAT32_RSVD_SEC + FAT32_NUM_FATS * FAT32_FAT_SEC;
++  clusters = (FAT32_TOTAL_SEC - data_start) / FAT32_SEC_PER_CLUS;
++  if((clusters + 2) * 4 > FAT32_FAT_SEC * FAT32_BPS){
++    fprintf(stderr, "mkfat32: FAT too small\n");
++    return 1;
++  }
++
++  f = fopen(path, "wb+");
++  if(f == 0){
++    perror(path);
++    return 1;
++  }
++  if(fseek(f, (long)FAT32_BLOCKS * 1024 - 1, SEEK_SET) != 0 ||
++     fputc(0, f) == EOF){
++    perror(path);
++    fclose(f);
++    return 1;
++  }
++
++  memset(boot, 0, sizeof(boot));
++  boot[0] = 0xeb;
++  boot[1] = 0x58;
++  boot[2] = 0x90;
++  memcpy(boot + 3, "MSDOS5.0", 8);
++  put16(boot, 11, FAT32_BPS);
++  boot[13] = FAT32_SEC_PER_CLUS;
++  put16(boot, 14, FAT32_RSVD_SEC);
++  boot[16] = FAT32_NUM_FATS;
++  put16(boot, 17, 0);
++  put16(boot, 19, 0);
++  boot[21] = 0xf8;
++  put16(boot, 22, 0);
++  put16(boot, 24, 63);
++  put16(boot, 26, 255);
++  put32(boot, 28, 0);
++  put32(boot, 32, FAT32_TOTAL_SEC);
++  put32(boot, 36, FAT32_FAT_SEC);
++  put16(boot, 40, 0);
++  put16(boot, 42, 0);
++  put32(boot, 44, FAT32_ROOT_CLUS);
++  put16(boot, 48, 1);
++  put16(boot, 50, 6);
++  boot[64] = 0x80;
++  boot[66] = 0x29;
++  put32(boot, 67, 0x20260624);
++  memcpy(boot + 71, "XV6 FAT32  ", 11);
++  memcpy(boot + 82, "FAT32   ", 8);
++  boot[510] = 0x55;
++  boot[511] = 0xaa;
++  write_sector(f, 0, boot);
++  write_sector(f, 6, boot);
++
++  memset(fsinfo, 0, sizeof(fsinfo));
++  put32(fsinfo, 0, 0x41615252);
++  put32(fsinfo, 484, 0x61417272);
++  put32(fsinfo, 488, clusters - 1);
++  put32(fsinfo, 492, 3);
++  put32(fsinfo, 508, 0xaa550000);
++  write_sector(f, 1, fsinfo);
++  write_sector(f, 7, fsinfo);
++
++  memset(fat, 0, sizeof(fat));
++  put32(fat, 0, 0x0ffffff8);
++  put32(fat, 4, 0xffffffff);
++  put32(fat, 8, 0x0fffffff);
++  write_sector(f, FAT32_RSVD_SEC, fat);
++  write_sector(f, FAT32_RSVD_SEC + FAT32_FAT_SEC, fat);
++
++  fclose(f);
++  return 0;
++}
+diff --git a/./src/mkfs/mkfs.c b/./src/mkfs/mkfs.c
+new file mode 100644
+index 0000000..12bbbbd
+--- /dev/null
++++ b/./src/mkfs/mkfs.c
+@@ -0,0 +1,359 @@
++#include <stdio.h>
++#include <unistd.h>
++#include <stdlib.h>
++#include <string.h>
++#include <fcntl.h>
++#include <assert.h>
++
++#define stat xv6_stat  // avoid clash with host struct stat
++#include "kernel/types.h"
++#include "kernel/fs.h"
++#include "kernel/stat.h"
++#include "kernel/param.h"
++
++#ifndef static_assert
++#define static_assert(a, b) do { switch (0) case 0: case (a): ; } while (0)
++#endif
++
++#define NINODES 200
++
++// Disk layout:
++// [ boot block | sb block | log | inode blocks | free bit map | data blocks ]
++
++int nbitmap = FSSIZE/BPB + 1;
++int ninodeblocks = NINODES / IPB + 1;
++int nlog = LOGBLOCKS+1;   // Header followed by LOGBLOCKS data blocks.
++int nmeta;    // Number of meta blocks (boot, sb, nlog, inode, bitmap)
++int nblocks;  // Number of data blocks
++
++int fsfd;
++struct superblock sb;
++char zeroes[BSIZE];
++uint freeinode = 1;
++uint freeblock;
++
++#define MAXDIRS 32
++struct {
++  char name[DIRSIZ];
++  uint inum;
++} dirs[MAXDIRS];
++int ndirs;
++
++void balloc(int);
++void wsect(uint, void*);
++void winode(uint, struct dinode*);
++void rinode(uint inum, struct dinode *ip);
++void rsect(uint sec, void *buf);
++uint ialloc(ushort type);
++void iappend(uint inum, void *p, int n);
++void die(const char *);
++uint getdir(uint rootino, char *name);
++
++// convert to riscv byte order
++ushort
++xshort(ushort x)
++{
++  ushort y;
++  uchar *a = (uchar*)&y;
++  a[0] = x;
++  a[1] = x >> 8;
++  return y;
++}
++
++uint
++xint(uint x)
++{
++  uint y;
++  uchar *a = (uchar*)&y;
++  a[0] = x;
++  a[1] = x >> 8;
++  a[2] = x >> 16;
++  a[3] = x >> 24;
++  return y;
++}
++
++int
++main(int argc, char *argv[])
++{
++  int i, cc, fd;
++  uint rootino, inum, off;
++  struct dirent de;
++  char buf[BSIZE];
++  struct dinode din;
++
++
++  static_assert(sizeof(int) == 4, "Integers must be 4 bytes!");
++
++  if(argc < 2){
++    fprintf(stderr, "Usage: mkfs fs.img files...\n");
++    exit(1);
++  }
++
++  assert((BSIZE % sizeof(struct dinode)) == 0);
++  assert((BSIZE % sizeof(struct dirent)) == 0);
++
++  fsfd = open(argv[1], O_RDWR|O_CREAT|O_TRUNC, 0666);
++  if(fsfd < 0)
++    die(argv[1]);
++
++  // 1 fs block = 1 disk sector
++  nmeta = 2 + nlog + ninodeblocks + nbitmap;
++  nblocks = FSSIZE - nmeta;
++
++  sb.magic = FSMAGIC;
++  sb.size = xint(FSSIZE);
++  sb.nblocks = xint(nblocks);
++  sb.ninodes = xint(NINODES);
++  sb.nlog = xint(nlog);
++  sb.logstart = xint(2);
++  sb.inodestart = xint(2+nlog);
++  sb.bmapstart = xint(2+nlog+ninodeblocks);
++
++  printf("nmeta %d (boot, super, log blocks %u, inode blocks %u, bitmap blocks %u) blocks %d total %d\n",
++         nmeta, nlog, ninodeblocks, nbitmap, nblocks, FSSIZE);
++
++  freeblock = nmeta;     // the first free block that we can allocate
++
++  for(i = 0; i < FSSIZE; i++)
++    wsect(i, zeroes);
++
++  memset(buf, 0, sizeof(buf));
++  memmove(buf, &sb, sizeof(sb));
++  wsect(1, buf);
++
++  rootino = ialloc(T_DIR);
++  assert(rootino == ROOTINO);
++
++  bzero(&de, sizeof(de));
++  de.inum = xshort(rootino);
++  strcpy(de.name, ".");
++  iappend(rootino, &de, sizeof(de));
++
++  bzero(&de, sizeof(de));
++  de.inum = xshort(rootino);
++  strcpy(de.name, "..");
++  iappend(rootino, &de, sizeof(de));
++
++  for(i = 2; i < argc; i++){
++    // get rid of "user/"
++    char *shortname;
++    if(strncmp(argv[i], "user/", 5) == 0)
++      shortname = argv[i] + 5;
++    else
++      shortname = argv[i];
++    
++    uint parent = rootino;
++    char *name = shortname;
++    char dirname[DIRSIZ+1];
++    char *slash = index(shortname, '/');
++
++    if(slash != 0){
++      int len = slash - shortname;
++      assert(len > 0 && len <= DIRSIZ);
++      assert(index(slash + 1, '/') == 0);
++      memmove(dirname, shortname, len);
++      dirname[len] = 0;
++      parent = getdir(rootino, dirname);
++      name = slash + 1;
++    }
++
++    if((fd = open(argv[i], 0)) < 0)
++      die(argv[i]);
++
++    // Skip leading _ in name when writing to file system.
++    // The binaries are named _rm, _cat, etc. to keep the
++    // build operating system from trying to execute them
++    // in place of system binaries like rm and cat.
++    if(name[0] == '_')
++      name += 1;
++
++    assert(strlen(name) <= DIRSIZ);
++    
++    inum = ialloc(T_FILE);
++
++    bzero(&de, sizeof(de));
++    de.inum = xshort(inum);
++    strncpy(de.name, name, DIRSIZ);
++    iappend(parent, &de, sizeof(de));
++
++    while((cc = read(fd, buf, sizeof(buf))) > 0)
++      iappend(inum, buf, cc);
++
++    close(fd);
++  }
++
++  // fix size of root inode dir
++  rinode(rootino, &din);
++  off = xint(din.size);
++  off = ((off/BSIZE) + 1) * BSIZE;
++  din.size = xint(off);
++  winode(rootino, &din);
++
++  balloc(freeblock);
++
++  exit(0);
++}
++
++void
++wsect(uint sec, void *buf)
++{
++  if(lseek(fsfd, sec * BSIZE, 0) != sec * BSIZE)
++    die("lseek");
++  if(write(fsfd, buf, BSIZE) != BSIZE)
++    die("write");
++}
++
++void
++winode(uint inum, struct dinode *ip)
++{
++  char buf[BSIZE];
++  uint bn;
++  struct dinode *dip;
++
++  bn = IBLOCK(inum, sb);
++  rsect(bn, buf);
++  dip = ((struct dinode*)buf) + (inum % IPB);
++  *dip = *ip;
++  wsect(bn, buf);
++}
++
++void
++rinode(uint inum, struct dinode *ip)
++{
++  char buf[BSIZE];
++  uint bn;
++  struct dinode *dip;
++
++  bn = IBLOCK(inum, sb);
++  rsect(bn, buf);
++  dip = ((struct dinode*)buf) + (inum % IPB);
++  *ip = *dip;
++}
++
++void
++rsect(uint sec, void *buf)
++{
++  if(lseek(fsfd, sec * BSIZE, 0) != sec * BSIZE)
++    die("lseek");
++  if(read(fsfd, buf, BSIZE) != BSIZE)
++    die("read");
++}
++
++uint
++ialloc(ushort type)
++{
++  uint inum = freeinode++;
++  struct dinode din;
++
++  bzero(&din, sizeof(din));
++  din.type = xshort(type);
++  din.nlink = xshort(1);
++  din.size = xint(0);
++  winode(inum, &din);
++  return inum;
++}
++
++void
++balloc(int used)
++{
++  uchar buf[BSIZE];
++  int i;
++
++  printf("balloc: first %d blocks have been allocated\n", used);
++  assert(used < BPB);
++  bzero(buf, BSIZE);
++  for(i = 0; i < used; i++){
++    buf[i/8] = buf[i/8] | (0x1 << (i%8));
++  }
++  printf("balloc: write bitmap block at sector %d\n", sb.bmapstart);
++  wsect(sb.bmapstart, buf);
++}
++
++uint
++getdir(uint rootino, char *name)
++{
++  struct dirent de;
++  uint inum;
++  int i;
++
++  for(i = 0; i < ndirs; i++){
++    if(strncmp(dirs[i].name, name, DIRSIZ) == 0)
++      return dirs[i].inum;
++  }
++
++  assert(ndirs < MAXDIRS);
++  inum = ialloc(T_DIR);
++
++  bzero(&de, sizeof(de));
++  de.inum = xshort(inum);
++  strcpy(de.name, ".");
++  iappend(inum, &de, sizeof(de));
++
++  bzero(&de, sizeof(de));
++  de.inum = xshort(rootino);
++  strcpy(de.name, "..");
++  iappend(inum, &de, sizeof(de));
++
++  bzero(&de, sizeof(de));
++  de.inum = xshort(inum);
++  strncpy(de.name, name, DIRSIZ);
++  iappend(rootino, &de, sizeof(de));
++
++  strncpy(dirs[ndirs].name, name, DIRSIZ);
++  dirs[ndirs].inum = inum;
++  ndirs++;
++  return inum;
++}
++
++#define min(a, b) ((a) < (b) ? (a) : (b))
++
++void
++iappend(uint inum, void *xp, int n)
++{
++  char *p = (char*)xp;
++  uint fbn, off, n1;
++  struct dinode din;
++  char buf[BSIZE];
++  uint indirect[NINDIRECT];
++  uint x;
++
++  rinode(inum, &din);
++  off = xint(din.size);
++  // printf("append inum %d at off %d sz %d\n", inum, off, n);
++  while(n > 0){
++    fbn = off / BSIZE;
++    assert(fbn < MAXFILE);
++    if(fbn < NDIRECT){
++      if(xint(din.addrs[fbn]) == 0){
++        din.addrs[fbn] = xint(freeblock++);
++      }
++      x = xint(din.addrs[fbn]);
++    } else {
++      if(xint(din.addrs[NDIRECT]) == 0){
++        din.addrs[NDIRECT] = xint(freeblock++);
++      }
++      rsect(xint(din.addrs[NDIRECT]), (char*)indirect);
++      if(indirect[fbn - NDIRECT] == 0){
++        indirect[fbn - NDIRECT] = xint(freeblock++);
++        wsect(xint(din.addrs[NDIRECT]), (char*)indirect);
++      }
++      x = xint(indirect[fbn-NDIRECT]);
++    }
++    n1 = min(n, (fbn + 1) * BSIZE - off);
++    rsect(x, buf);
++    bcopy(p, buf + off - (fbn * BSIZE), n1);
++    wsect(x, buf);
++    n -= n1;
++    off += n1;
++    p += n1;
++  }
++  din.size = xint(off);
++  winode(inum, &din);
++}
++
++void
++die(const char *s)
++{
++  perror(s);
++  exit(1);
++}
+diff --git a/./xv6-riscv-src/test-xv6.py b/./src/test-xv6.py
+index 563ca77..dd9f582 100644
+--- a/./xv6-riscv-src/test-xv6.py
++++ b/./src/test-xv6.py
+@@ -28,7 +28,7 @@ class QEMU(object):
+                                       stderr=subprocess.STDOUT)
+         self.output = ""
+         self.outbytes = bytearray()       
+-        time.sleep(1)
++        time.sleep(5)
+ 
+     def reset_fs(self):
+         try:
+diff --git a/./src/tests/hello.c b/./src/tests/hello.c
+new file mode 100644
+index 0000000..8875d4f
+--- /dev/null
++++ b/./src/tests/hello.c
+@@ -0,0 +1,8 @@
++#include "kernel/types.h"
++#include "user/user.h"
++
++void
++main()
++{
++  printf("Hello, world!\n");
++}
+diff --git a/./src/user/mount.c b/./src/user/mount.c
+new file mode 100644
+index 0000000..bbebd64
+--- /dev/null
++++ b/./src/user/mount.c
+@@ -0,0 +1,39 @@
++#include "kernel/types.h"
++#include "kernel/stat.h"
++#include "user/user.h"
++
++static int
++default_dev(char *fstype)
++{
++  if(strcmp(fstype, "xv6") == 0)
++    return 1;
++  if(strcmp(fstype, "ext2") == 0)
++    return 2;
++  if(strcmp(fstype, "fat32") == 0)
++    return 3;
++  return 0;
++}
++
++int
++main(int argc, char *argv[])
++{
++  int dev;
++
++  if(argc < 3 || argc > 4){
++    fprintf(2, "usage: mount fstype path [dev]\n");
++    exit(1);
++  }
++
++  if(argc == 4)
++    dev = atoi(argv[3]);
++  else
++    dev = default_dev(argv[1]);
++
++  if(mount(argv[1], argv[2], dev) < 0){
++    fprintf(2, "mount: failed\n");
++    exit(1);
++  }
++
++  printf("mount: %s on %s dev %d\n", argv[1], argv[2], dev);
++  exit(0);
++}
+diff --git a/./src/user/test1.c b/./src/user/test1.c
+new file mode 100644
+index 0000000..7606762
+--- /dev/null
++++ b/./src/user/test1.c
+@@ -0,0 +1,61 @@
++#include "kernel/types.h"
++#include "kernel/stat.h"
++#include "user/user.h"
++#include "kernel/fcntl.h"
++
++#define LEN 1024
++
++static int
++copy_file(const char *src, const char *dst)
++{
++  int inf, outf, n;
++  char buf[LEN];
++
++  if((inf = open(src, O_RDONLY)) < 0){
++    fprintf(2, "test1: open %s failed\n", src);
++    return 1;
++  }
++
++  if((outf = open(dst, O_WRONLY | O_CREATE | O_TRUNC)) < 0){
++    fprintf(2, "test1: open %s failed\n", dst);
++    close(inf);
++    return 1;
++  }
++
++  while((n = read(inf, buf, sizeof(buf))) > 0){
++    if(write(outf, buf, n) != n){
++      fprintf(2, "test1: write failed\n");
++      close(inf);
++      close(outf);
++      return 1;
++    }
++  }
++
++  close(inf);
++  close(outf);
++  if(n < 0)
++    return 1;
++
++  printf("copy %s -> %s: ok\n", src, dst);
++  return 0;
++}
++
++int
++main(int argc, char *argv[])
++{
++  int failed = 0;
++
++  (void)argc;
++  (void)argv;
++
++  failed |= copy_file("/mnt/hello.c", "/hello.c");
++  failed |= copy_file("/mnt/hello.c", "/tests/hello.c");
++  failed |= copy_file("/hello.c", "/mnt/hello.c");
++  failed |= copy_file("/tests/hello.c", "/mnt/hello.c");
++
++  if(failed)
++    printf("test1: failed\n");
++  else
++    printf("test1: succeed\n");
++  exit(failed);
++}
+diff --git a/./src/user/test2.c b/./src/user/test2.c
+new file mode 100644
+index 0000000..e59b59d
+--- /dev/null
++++ b/./src/user/test2.c
+@@ -0,0 +1,48 @@
++#include "kernel/types.h"
++#include "kernel/stat.h"
++#include "user/user.h"
++#include "kernel/fcntl.h"
++
++int
++main(int argc, char *argv[])
++{
++  int src, dst, n, failed;
++  char buf[512];
++
++  (void)argc;
++  (void)argv;
++
++  src = open("hello.c", O_RDONLY);
++  if(src < 0){
++    printf("test2: open source failed\n");
++    exit(1);
++  }
++
++  dst = open("/mnt/hello.c", O_WRONLY | O_CREATE);
++  if(dst < 0){
++    printf("test2: open destination failed\n");
++    close(src);
++    exit(1);
++  }
++
++  failed = 0;
++  while((n = read(src, buf, sizeof(buf))) > 0){
++    if(write(dst, buf, n) != n){
++      failed = 1;
++      break;
++    }
++  }
++  if(n < 0)
++    failed = 1;
++
++  close(src);
++  close(dst);
++
++  if(failed){
++    printf("test2: failed\n");
++    exit(1);
++  }
++
++  printf("test2: succeed\n");
++  exit(0);
++}
+diff --git a/./xv6-riscv-src/user/user.h b/./src/user/user.h
+index ac84de9..3353ed1 100644
+--- a/./xv6-riscv-src/user/user.h
++++ b/./src/user/user.h
+@@ -21,6 +21,7 @@ int mkdir(const char*);
+ int chdir(const char*);
+ int dup(int);
+ int getpid(void);
++int mount(const char*, const char*, int);
+ char* sys_sbrk(int,int);
+ int pause(int);
+ int uptime(void);
+diff --git a/./xv6-riscv-src/user/usys.pl b/./src/user/usys.pl
+index c5d4c3a..481870d 100644
+--- a/./xv6-riscv-src/user/usys.pl
++++ b/./src/user/usys.pl
+@@ -16,9 +16,15 @@ sub entry {
+ 	print ".global $name\n";
+ 	print "$name:\n";
+     }
++    print "#ifdef ARCH_LOONGARCH\n";
++    print " li.d \$a7, SYS_${name}\n";
++    print " syscall 0\n";
++    print " jirl \$zero, \$ra, 0\n";
++    print "#else\n";
+     print " li a7, SYS_${name}\n";
+     print " ecall\n";
+     print " ret\n";
++    print "#endif\n";
+ }
+ 	
+ entry("fork");
+@@ -39,6 +45,7 @@ entry("mkdir");
+ entry("chdir");
+ entry("dup");
+ entry("getpid");
++entry("mount");
+ entry("sbrk");
+ entry("pause");
+ entry("uptime");

@@ -1,19 +1,23 @@
 # tests
 
-> 本目录对源码测试进行详细记录。
+本目录用于保存项目测试样例、测试脚本和测试日志说明。每个子目录对应一个测试点，便于后续把公开测试、自制 ext2 测试、自制 fat32 测试和异常路径测试分开维护。
 
-每个子目录对应一个测试点。当前只有基线测试点：
+## 当前结构
 
 ```text
 tests/
-└── test_baseline/
-    ├── README.md
-    ├── src/
-    ├── run.sh
-    └── logs/
+|-- test_baseline/
+|   |-- README.md
+|   |-- run.sh
+|   `-- logs/
+|-- public_vfs/
+|   |-- README.md
+|   |-- cmds.sh
+|   |-- run.sh
+|   `-- logs/
+`-- runner/
+    `-- run_qemu_case.py
 ```
-
-`logs/` 下的 `.log` 文件是本地运行产物，不纳入版本控制。
 
 ## 根目录测试入口
 
@@ -24,17 +28,30 @@ make test_baseline
 make run
 ```
 
-也可以连写为：
+或：
 
 ```sh
-make test_baseline && make run
+make test_public_vfs
+make run
+```
+
+也可以连写：
+
+```sh
+make test_public_vfs && make run
 ```
 
 其中：
 
-- `make test_baseline`：完成基线测试的环境记录、源码清理和基础构建。
-- `make run`：运行已准备好的基线测试。
+- `make test_baseline`：构建基础镜像，准备运行 xv6 自带 `usertests -q`。
+- `make test_public_vfs`：构建包含公开 VFS 测试程序和 ext2/fat32 镜像的 `fs.img`。
+- `make run`：运行最近一次准备好的测试点。
 
 ## 当前测试点
 
-- `test_baseline`：对 xv6-riscv rev5 官方基线源码执行 RISC-V `usertests -q` 测试。
+- `test_baseline`：运行 xv6 自带 `usertests -q`，验证基础行为不退化。
+- `public_vfs`：显式 `mount ext2 /mnt` 后运行公开风格 `test1/test2`，验证 ext2 与 xv6 之间的跨文件系统复制。
+
+## 日志
+
+各测试点的 `logs/` 目录用于保存本地运行日志。日志文件属于运行产物，不纳入版本控制；仓库只保留 `logs/README.md`。

@@ -1,0 +1,57 @@
+ ./{xv6-riscv-src => src}/.gitignore                |    4 +-
+ ./{xv6-riscv-src => src}/Makefile                  |  159 ++-
+ /dev/null => ./src/hello.c                         |    8 +
+ /dev/null => ./src/kernel/arch/loongarch/apic.c    |   38 +
+ /dev/null => ./src/kernel/arch/loongarch/asm.h     |   18 +
+ /dev/null => ./src/kernel/arch/loongarch/entry.S   |   38 +
+ /dev/null => ./src/kernel/arch/loongarch/extioi.c  |   35 +
+ /dev/null => ./src/kernel/arch/loongarch/hal.c     |   45 +
+ /dev/null => ./src/kernel/arch/loongarch/kernel.ld |   48 +
+ .../src/kernel/arch/loongarch/kernelvec.S          |   85 ++
+ .../src/kernel/arch/loongarch/loongarch.h          |  332 +++++++
+ /dev/null => ./src/kernel/arch/loongarch/merror.S  |    7 +
+ /dev/null => ./src/kernel/arch/loongarch/ramdisk.c |   54 +
+ /dev/null => ./src/kernel/arch/loongarch/start.c   |    3 +
+ /dev/null => ./src/kernel/arch/loongarch/swtch.S   |   37 +
+ .../src/kernel/arch/loongarch/tlbrefill.S          |   22 +
+ /dev/null => ./src/kernel/arch/loongarch/trap.c    |  261 +++++
+ /dev/null => ./src/kernel/arch/loongarch/user.ld   |   39 +
+ /dev/null => ./src/kernel/arch/loongarch/uservec.S |  134 +++
+ .../src/kernel/arch/loongarch/virtio_pci.c         |  315 ++++++
+ /dev/null => ./src/kernel/arch/loongarch/vm.c      |  444 +++++++++
+ ./{xv6-riscv-src => src}/kernel/bio.c              |    5 +-
+ /dev/null => ./src/kernel/block.c                  |   52 +
+ /dev/null => ./src/kernel/block.h                  |    9 +
+ ./{xv6-riscv-src => src}/kernel/defs.h             |   43 +
+ ./{xv6-riscv-src => src}/kernel/exec.c             |    7 +
+ /dev/null => ./src/kernel/ext2.c                   | 1040 ++++++++++++++++++++
+ /dev/null => ./src/kernel/fat32.c                  |  895 +++++++++++++++++
+ ./{xv6-riscv-src => src}/kernel/file.c             |    7 +-
+ ./{xv6-riscv-src => src}/kernel/file.h             |    6 +
+ ./{xv6-riscv-src => src}/kernel/fs.c               |   29 +-
+ /dev/null => ./src/kernel/hal.c                    |   45 +
+ ./{xv6-riscv-src => src}/kernel/kalloc.c           |    4 +
+ ./{xv6-riscv-src => src}/kernel/main.c             |    9 +-
+ ./{xv6-riscv-src => src}/kernel/memlayout.h        |   33 +
+ ./{xv6-riscv-src => src}/kernel/param.h            |    5 +-
+ ./{xv6-riscv-src => src}/kernel/proc.c             |   23 +-
+ ./{xv6-riscv-src => src}/kernel/proc.h             |   45 +
+ ./{xv6-riscv-src => src}/kernel/riscv.h            |   11 +
+ ./{xv6-riscv-src => src}/kernel/syscall.c          |    2 +
+ ./{xv6-riscv-src => src}/kernel/syscall.h          |    1 +
+ ./{xv6-riscv-src => src}/kernel/sysfile.c          |   72 +-
+ ./{xv6-riscv-src => src}/kernel/trap.c             |    5 +-
+ /dev/null => ./src/kernel/vfs.c                    |  331 +++++++
+ /dev/null => ./src/kernel/vfs.h                    |   47 +
+ ./{xv6-riscv-src => src}/kernel/virtio.h           |    2 +
+ ./{xv6-riscv-src => src}/kernel/virtio_disk.c      |  220 ++++-
+ /dev/null => ./src/mkfs/mkfat32.c                  |  127 +++
+ /dev/null => ./src/mkfs/mkfs.c                     |  359 +++++++
+ ./{xv6-riscv-src => src}/test-xv6.py               |    2 +-
+ /dev/null => ./src/tests/hello.c                   |    8 +
+ /dev/null => ./src/user/mount.c                    |   39 +
+ /dev/null => ./src/user/test1.c                    |   61 ++
+ /dev/null => ./src/user/test2.c                    |   48 +
+ ./{xv6-riscv-src => src}/user/user.h               |    1 +
+ ./{xv6-riscv-src => src}/user/usys.pl              |    7 +
+ 56 files changed, 5623 insertions(+), 103 deletions(-)
