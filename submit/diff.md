@@ -14,9 +14,9 @@ git diff --no-index --minimal --find-renames --stat ./xv6-riscv-src ./src > subm
 当前统计：
 
 ```text
-submit/xv6-vfs-hal-final.diff       6669 lines
+submit/xv6-vfs-hal-final.diff       6699 lines
 submit/xv6-vfs-hal-final.diff.stat    57 lines
-56 files changed, 5623 insertions(+), 103 deletions(-)
+56 files changed, 5653 insertions(+), 103 deletions(-)
 ```
 
 ## 分类统计
@@ -25,13 +25,13 @@ submit/xv6-vfs-hal-final.diff.stat    57 lines
 
 | 分类 | diff行数 | 文件数 | 插入 | 删除 | 说明 |
 | --- | ---: | ---: | ---: | ---: | --- |
-| HAL / 平台支持 | 2579 | 25 | 2244 | 31 | LoongArch64架构目录、HAL入口、virtio-pci磁盘、架构相关内存和中断改动 |
+| HAL / 平台支持 | 2609 | 25 | 2274 | 31 | LoongArch64架构目录、HAL入口、virtio-pci磁盘、架构相关内存和中断改动 |
 | VFS / 文件系统支持 | 3805 | 29 | 3241 | 47 | VFS层、ext2、fat32、块设备抽象、mkfs和用户态mount/测试程序 |
 | 公共构建/配置 | 285 | 2 | 138 | 25 | `src/Makefile` 和 `src/.gitignore` 中同时服务HAL与VFS的公共调整 |
 
 合计：
 
 ```text
-6669 lines
-56 files changed, 5623 insertions(+), 103 deletions(-)
+6699 lines
+56 files changed, 5653 insertions(+), 103 deletions(-)
 ```

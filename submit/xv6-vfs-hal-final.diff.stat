@@ -13,12 +13,12 @@
  /dev/null => ./src/kernel/arch/loongarch/ramdisk.c |   54 +
  /dev/null => ./src/kernel/arch/loongarch/start.c   |    3 +
  /dev/null => ./src/kernel/arch/loongarch/swtch.S   |   37 +
- .../src/kernel/arch/loongarch/tlbrefill.S          |   22 +
- /dev/null => ./src/kernel/arch/loongarch/trap.c    |  261 +++++
+ .../src/kernel/arch/loongarch/tlbrefill.S          |   26 +
+ /dev/null => ./src/kernel/arch/loongarch/trap.c    |  270 +++++
  /dev/null => ./src/kernel/arch/loongarch/user.ld   |   39 +
  /dev/null => ./src/kernel/arch/loongarch/uservec.S |  134 +++
  .../src/kernel/arch/loongarch/virtio_pci.c         |  315 ++++++
- /dev/null => ./src/kernel/arch/loongarch/vm.c      |  444 +++++++++
+ /dev/null => ./src/kernel/arch/loongarch/vm.c      |  461 +++++++++
  ./{xv6-riscv-src => src}/kernel/bio.c              |    5 +-
  /dev/null => ./src/kernel/block.c                  |   52 +
  /dev/null => ./src/kernel/block.h                  |    9 +
@@ -54,4 +54,4 @@
  /dev/null => ./src/user/test2.c                    |   48 +
  ./{xv6-riscv-src => src}/user/user.h               |    1 +
  ./{xv6-riscv-src => src}/user/usys.pl              |    7 +
- 56 files changed, 5623 insertions(+), 103 deletions(-)
+ 56 files changed, 5653 insertions(+), 103 deletions(-)

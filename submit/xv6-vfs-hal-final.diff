@@ -649,7 +649,7 @@ index 0000000..b79ef17
 +        ertn
 diff --git a/./src/kernel/arch/loongarch/loongarch.h b/./src/kernel/arch/loongarch/loongarch.h
 new file mode 100644
-index 0000000..76c2d72
+index 0000000..3179e6a
 --- /dev/null
 +++ b/./src/kernel/arch/loongarch/loongarch.h
 @@ -0,0 +1,332 @@
@@ -981,7 +981,7 @@ index 0000000..76c2d72
 +#define PXSHIFT(level)  (PGSHIFT+(9*(level)))
 +#define PX(level, va) ((((uint64) (va)) >> PXSHIFT(level)) & PXMASK)
 +
-+#define MAXVA (1L << (9 + 12 - 1)) //Lower half virtual address
++#define MAXVA (1L << (9 + 9 + 9 + 9 + 12 - 1)) // Lower half virtual address
 +
 +typedef uint64 pte_t;
 +typedef uint64 *pagetable_t;
@@ -1113,10 +1113,10 @@ index 0000000..b252c77
 +	
 diff --git a/./src/kernel/arch/loongarch/tlbrefill.S b/./src/kernel/arch/loongarch/tlbrefill.S
 new file mode 100644
-index 0000000..cab0b84
+index 0000000..455c5cd
 --- /dev/null
 +++ b/./src/kernel/arch/loongarch/tlbrefill.S
-@@ -0,0 +1,22 @@
+@@ -0,0 +1,26 @@
 +#include "asm.h"
 +
 +.section tlbrentry
@@ -1126,13 +1126,17 @@ index 0000000..cab0b84
 +	csrwr	$t0, LOONGARCH_CSR_TLBRSAVE
 +	csrrd	$t0, LOONGARCH_CSR_PGD
 +//	lddir	$t0, $t0, 4
-+//	addi.d  $t0, $t0, -1
++//	srli.d	$t0, $t0, 12
++//	slli.d	$t0, $t0, 12
 +	lddir	$t0, $t0, 3
-+	addi.d  $t0, $t0, -1
++	srli.d	$t0, $t0, 12
++	slli.d	$t0, $t0, 12
 +	lddir	$t0, $t0, 2
-+	addi.d  $t0, $t0, -1
++	srli.d	$t0, $t0, 12
++	slli.d	$t0, $t0, 12
 +	lddir   $t0, $t0, 1
-+	addi.d  $t0, $t0, -1
++	srli.d	$t0, $t0, 12
++	slli.d	$t0, $t0, 12
 +	ldpte	$t0, 0
 +	ldpte	$t0, 1
 +	tlbfill
@@ -1141,10 +1145,10 @@ index 0000000..cab0b84
 +	
 diff --git a/./src/kernel/arch/loongarch/trap.c b/./src/kernel/arch/loongarch/trap.c
 new file mode 100644
-index 0000000..0e7af59
+index 0000000..157edc9
 --- /dev/null
 +++ b/./src/kernel/arch/loongarch/trap.c
-@@ -0,0 +1,261 @@
+@@ -0,0 +1,270 @@
 +#include "types.h"
 +#include "param.h"
 +#include "memlayout.h"
@@ -1168,6 +1172,10 @@ index 0000000..0e7af59
 +
 +#define LA_ECODE_PIL 0x1
 +#define LA_ECODE_PIS 0x2
++#define LA_ECODE_PIF 0x3
++#define LA_ECODE_PME 0x4
++#define LA_ECODE_PPI 0x7
++#define LA_ECODE_ADE 0x8
 +#define LA_ECODE_SYS 0xb
 +
 +static int
@@ -1179,6 +1187,11 @@ index 0000000..0e7af59
 +  }
 +  if(ecode == LA_ECODE_PIS){
 +    *read = 0;
++    return 1;
++  }
++  if(ecode == LA_ECODE_PIF || ecode == LA_ECODE_PME ||
++     ecode == LA_ECODE_PPI || ecode == LA_ECODE_ADE){
++    *read = ecode == LA_ECODE_PIF;
 +    return 1;
 +  }
 +  return 0;
@@ -1914,10 +1927,10 @@ index 0000000..f372c78
 +}
 diff --git a/./src/kernel/arch/loongarch/vm.c b/./src/kernel/arch/loongarch/vm.c
 new file mode 100644
-index 0000000..51b900c
+index 0000000..b043aae
 --- /dev/null
 +++ b/./src/kernel/arch/loongarch/vm.c
-@@ -0,0 +1,444 @@
+@@ -0,0 +1,461 @@
 +#include "param.h"
 +#include "types.h"
 +#include "memlayout.h"
@@ -2023,6 +2036,17 @@ index 0000000..51b900c
 +  return pa;
 +}
 +
++int
++ismapped(pagetable_t pagetable, uint64 va)
++{
++  pte_t *pte;
++
++  if(va >= MAXVA)
++    return 0;
++  pte = walk(pagetable, va, 0);
++  return pte != 0 && (*pte & PTE_V) != 0;
++}
++
 +// Create PTEs for virtual addresses starting at va that refer to
 +// physical addresses starting at pa. va and size might not
 +// be page-aligned. Returns 0 on success, -1 if walk() couldn't
@@ -2066,9 +2090,9 @@ index 0000000..51b900c
 +
 +  for(a = va; a < va + npages*PGSIZE; a += PGSIZE){
 +    if((pte = walk(pagetable, a, 0)) == 0)
-+      panic("uvmunmap: walk");
++      continue;
 +    if((*pte & PTE_V) == 0)
-+      panic("uvmunmap: not mapped");
++      continue;
 +    if(PTE_FLAGS(*pte) == PTE_V)
 +      panic("uvmunmap: not a leaf");
 +    if(do_free){
@@ -2128,7 +2152,9 @@ index 0000000..51b900c
 +      return 0;
 +    }
 +    memset(mem, 0, PGSIZE);
-+    perm = PTE_P|PTE_W|PTE_PLV|PTE_MAT|PTE_D|xperm;
++    perm = PTE_P|PTE_PLV|PTE_MAT|xperm;
++    if(xperm & PTE_W)
++      perm |= PTE_D;
 +    if(mappages(pagetable, a, PGSIZE, (uint64)mem, perm) != 0){
 +      kfree(mem);
 +      uvmdealloc(pagetable, a, oldsz);
@@ -2143,14 +2169,17 @@ index 0000000..51b900c
 +{
 +  char *mem;
 +  struct proc *p = myproc();
++  pte_t *pte;
 +
 +  (void)read;
 +
 +  if(va >= MAXVA || va >= p->sz)
 +    return 0;
 +  va = PGROUNDDOWN(va);
-+  if(walkaddr(pagetable, va) != 0)
-+    return walkaddr(pagetable, va);
++  pte = walk(pagetable, va, 0);
++  if(pte != 0 && (*pte & PTE_V) != 0){
++    return 0;
++  }
 +  mem = kalloc();
 +  if(mem == 0)
 +    return 0;
@@ -2160,6 +2189,7 @@ index 0000000..51b900c
 +    kfree(mem);
 +    return 0;
 +  }
++  tlbinit();
 +  return (uint64)mem;
 +}
 +
@@ -2227,9 +2257,9 @@ index 0000000..51b900c
 +
 +  for(i = 0; i < sz; i += PGSIZE){
 +    if((pte = walk(old, i, 0)) == 0)
-+      panic("uvmcopy: pte should exist");
++      continue;
 +    if((*pte & PTE_V) == 0)
-+      panic("uvmcopy: page not present");
++      continue;
 +    pa = PTE2PA(*pte);
 +    flags = PTE_FLAGS(*pte);
 +    if((mem = kalloc()) == 0)
