@@ -4,8 +4,10 @@
 
 计划提交文件：
 
-- `final.diff`：最终版本代码与初始 `xv6-riscv rev5` 源码之间的 `.diff` 文件
-- `diffstat.pdf`：对 `finla.diff` 文件的统计摘要
+- `final.diff`：最终版本代码与初始 `xv6-riscv rev5` 源码之间的 `.diff` 文件（仅含 VFS/HAL 相关 57 个文件，`-U0 --minimal`）
+- `gen-minimal-diff.ps1`：重新生成 `final.diff` 的脚本
+- `diffstat.txt`：`final.diff` 行数统计摘要
+- `diffstat.pdf`：对 `final.diff` 文件的统计摘要
 - `commit_history.pdf`：版本迭代记录
 - `final_test_summary.pdf`：最终测试摘要
 - `final_design.pdf`：最终设计文档
