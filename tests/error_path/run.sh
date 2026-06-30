@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+set -u
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+XV6_DIR="$ROOT_DIR/src"
+LOG_DIR="$SCRIPT_DIR/logs"
+RAW_LOG="$LOG_DIR/qemu-error-path.log"
+RESULT_LOG="$LOG_DIR/result.log"
+
+mkdir -p "$LOG_DIR"
+
+if [ ! -f "$XV6_DIR/fs.img" ]; then
+  echo "[error_path] fs.img not found"
+  echo "Use: make test_error_path"
+  exit 1
+fi
+
+echo "[error_path] running QEMU command test"
+python3 "$ROOT_DIR/tests/runner/run_qemu_case.py" \
+  --case error_path \
+  --xv6-dir "$XV6_DIR" \
+  --commands "$SCRIPT_DIR/cmds.sh" \
+  --log "$RAW_LOG" \
+  --expect "mount: failed" \
+  --expect "mount: ext2 on /mnt dev 2" \
+  --expect "mount: fat32 on /fat dev 3" \
+  --expect "link /mnt/hello.c /fat/cross.txt: failed" \
+  --expect "rm: /mnt/no_such_file failed to delete" \
+  --expect "rm: /fat/no_such.txt failed to delete" \
+  --expect "ERROR_PATH_DONE" \
+  --reject "panic:" \
+  --reject "kerneltrap"
+test_status=$?
+
+if [ "$test_status" -eq 0 ]; then
+  result="PASS"
+else
+  result="FAIL"
+fi
+
+{
+  echo "Result: $result"
+  echo "Test Status: $test_status"
+  echo "Command File: $SCRIPT_DIR/cmds.sh"
+  echo "Raw Log: $RAW_LOG"
+} > "$RESULT_LOG"
+
+echo "[error_path] result: $result"
+echo "[error_path] logs: $LOG_DIR"
+
+if [ "$result" != "PASS" ]; then
+  exit 1
+fi

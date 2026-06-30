@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+set -u
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+XV6_DIR="$ROOT_DIR/src"
+LOG_DIR="$SCRIPT_DIR/logs"
+RAW_LOG="$LOG_DIR/qemu-ext2.log"
+RESULT_LOG="$LOG_DIR/result.log"
+
+mkdir -p "$LOG_DIR"
+
+if [ ! -f "$XV6_DIR/fs.img" ]; then
+  echo "[ext2] fs.img not found"
+  echo "Use: make test_ext2"
+  exit 1
+fi
+
+echo "[ext2] running QEMU command test"
+python3 "$ROOT_DIR/tests/runner/run_qemu_case.py" \
+  --case ext2 \
+  --xv6-dir "$XV6_DIR" \
+  --commands "$SCRIPT_DIR/cmds.sh" \
+  --log "$RAW_LOG" \
+  --expect "mount: ext2 on /mnt dev 2" \
+  --expect "Hello, world" \
+  --expect "ext2-first" \
+  --expect "ext2-second" \
+  --expect "EXT2_DONE" \
+  --reject "panic:" \
+  --reject "kerneltrap" \
+  --reject "mount: failed" \
+  --reject "failed to delete" \
+  --reject "open /mnt/a.txt failed"
+test_status=$?
+
+if [ "$test_status" -eq 0 ]; then
+  result="PASS"
+else
+  result="FAIL"
+fi
+
+{
+  echo "Result: $result"
+  echo "Test Status: $test_status"
+  echo "Command File: $SCRIPT_DIR/cmds.sh"
+  echo "Raw Log: $RAW_LOG"
+} > "$RESULT_LOG"
+
+echo "[ext2] result: $result"
+echo "[ext2] logs: $LOG_DIR"
+
+if [ "$result" != "PASS" ]; then
+  exit 1
+fi
