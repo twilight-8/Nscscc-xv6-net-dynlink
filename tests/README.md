@@ -43,6 +43,17 @@ tests/
 |   |-- cmds.sh
 |   |-- run.sh
 |   `-- logs/
+|-- semantics/
+|   |-- README.md
+|   |-- cmds.sh
+|   |-- run.sh
+|   `-- logs/
+|-- persist/
+|   |-- README.md
+|   |-- write.cmds.sh
+|   |-- read.cmds.sh
+|   |-- run.sh
+|   `-- logs/
 `-- runner/
     `-- run_qemu_case.py
 ```
@@ -56,6 +67,10 @@ tests/
 - `fat32`: checks FAT32 mount and basic 8.3 short-name create, overwrite, and
   unlink through VFS.
 - `error`: checks that invalid VFS operations fail cleanly without panic.
+- `semantics`: checks mount-root `..`, ext2 hard link success, and FAT32 hard
+  link rejection.
+- `persist`: writes files to ext2/FAT32, restarts QEMU, remounts, and reads the
+  files back from the image.
 
 ## Commands
 
@@ -67,6 +82,8 @@ make public_vfs && make run
 make ext2 && make run
 make fat32 && make run
 make error && make run
+make semantics && make run
+make persist && make run
 ```
 
 The old names `make test_public_vfs`, `make test_ext2`, `make test_fat32`, and
@@ -82,6 +99,8 @@ make loongarch_public_vfs && make run
 make loongarch_ext2 && make run
 make loongarch_fat32 && make run
 make loongarch_error && make run
+make loongarch_semantics && make run
+make loongarch_persist && make run
 ```
 
 These targets build `src` with `ARCH=loongarch`, record the selected
@@ -119,3 +138,9 @@ test2
 Each test writes local logs into its own `logs/` directory. Generated `.log`
 files are ignored by Git. The `logs/README.md` files are kept so the directory
 structure is preserved in the repository.
+
+`test_baseline` shows `usertests -q` output in real time and also saves it to
+its log file. The VFS tests (`public_vfs`, `ext2`, `fat32`, and `error`) keep
+the terminal concise by default and save raw QEMU output to their log files.
+When invoking `tests/runner/run_qemu_case.py` directly, add `--live` if live
+QEMU output is needed.

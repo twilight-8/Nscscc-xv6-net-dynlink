@@ -5,8 +5,9 @@ STATE_FILE := .last-test
 ARCH_STATE_FILE := .last-test-arch
 TEST_ARCH ?= riscv
 
-.PHONY: test_baseline public_vfs ext2 fat32 error \
+.PHONY: test_baseline public_vfs ext2 fat32 error semantics persist \
 	loongarch_baseline loongarch_public_vfs loongarch_ext2 loongarch_fat32 loongarch_error \
+	loongarch_semantics loongarch_persist \
 	test_public_vfs test_ext2 test_fat32 test_error_path run
 
 test_baseline:
@@ -208,6 +209,84 @@ error:
 	echo "[error] prepare done"; \
 	echo "Next command: make run"
 
+semantics:
+	@set -eu; \
+	TEST_NAME="semantics"; \
+	TEST_DIR="tests/$$TEST_NAME"; \
+	LOG_DIR="$$TEST_DIR/logs"; \
+	mkdir -p "$$LOG_DIR"; \
+	echo "[semantics] record environment"; \
+	{ \
+		echo "Test Name: $$TEST_NAME"; \
+		echo "Date: $$(date -Iseconds)"; \
+		echo "Target: mount parent and link semantics test"; \
+		echo "Platform: $(TEST_ARCH)"; \
+		echo; \
+		echo "== Host =="; \
+		uname -a; \
+		echo; \
+		echo "== Tools =="; \
+		python3 --version 2>&1 || true; \
+		make --version 2>&1 | head -n 1 || true; \
+		qemu-system-riscv64 --version 2>&1 | head -n 1 || true; \
+		riscv64-unknown-elf-gcc --version 2>&1 | head -n 1 || true; \
+		echo; \
+		echo "== Git =="; \
+		git rev-parse --short HEAD 2>/dev/null || echo "unknown"; \
+		git status --short 2>/dev/null || true; \
+	} > "$$LOG_DIR/env.log" 2>&1; \
+	echo "[semantics] build xv6 fs image"; \
+	( \
+		cd "$(XV6_DIR)" && \
+		make ARCH="$(TEST_ARCH)" clean && \
+		make ARCH="$(TEST_ARCH)" kernel/kernel && \
+		rm -f fs.img ext2.img fat32.img && \
+		make ARCH="$(TEST_ARCH)" fs.img \
+	) > "$$LOG_DIR/build.log" 2>&1; \
+	printf "%s\n" "$$TEST_NAME" > "$(STATE_FILE)"; \
+	printf "%s\n" "$(TEST_ARCH)" > "$(ARCH_STATE_FILE)"; \
+	echo "[semantics] prepare done"; \
+	echo "Next command: make run"
+
+persist:
+	@set -eu; \
+	TEST_NAME="persist"; \
+	TEST_DIR="tests/$$TEST_NAME"; \
+	LOG_DIR="$$TEST_DIR/logs"; \
+	mkdir -p "$$LOG_DIR"; \
+	echo "[persist] record environment"; \
+	{ \
+		echo "Test Name: $$TEST_NAME"; \
+		echo "Date: $$(date -Iseconds)"; \
+		echo "Target: ext2/FAT32 image persistence test"; \
+		echo "Platform: $(TEST_ARCH)"; \
+		echo; \
+		echo "== Host =="; \
+		uname -a; \
+		echo; \
+		echo "== Tools =="; \
+		python3 --version 2>&1 || true; \
+		make --version 2>&1 | head -n 1 || true; \
+		qemu-system-riscv64 --version 2>&1 | head -n 1 || true; \
+		riscv64-unknown-elf-gcc --version 2>&1 | head -n 1 || true; \
+		echo; \
+		echo "== Git =="; \
+		git rev-parse --short HEAD 2>/dev/null || echo "unknown"; \
+		git status --short 2>/dev/null || true; \
+	} > "$$LOG_DIR/env.log" 2>&1; \
+	echo "[persist] build xv6 fs image"; \
+	( \
+		cd "$(XV6_DIR)" && \
+		make ARCH="$(TEST_ARCH)" clean && \
+		make ARCH="$(TEST_ARCH)" kernel/kernel && \
+		rm -f fs.img ext2.img fat32.img && \
+		make ARCH="$(TEST_ARCH)" fs.img \
+	) > "$$LOG_DIR/build.log" 2>&1; \
+	printf "%s\n" "$$TEST_NAME" > "$(STATE_FILE)"; \
+	printf "%s\n" "$(TEST_ARCH)" > "$(ARCH_STATE_FILE)"; \
+	echo "[persist] prepare done"; \
+	echo "Next command: make run"
+
 loongarch_baseline:
 	@$(MAKE) TEST_ARCH=loongarch test_baseline
 
@@ -222,6 +301,12 @@ loongarch_fat32:
 
 loongarch_error:
 	@$(MAKE) TEST_ARCH=loongarch error
+
+loongarch_semantics:
+	@$(MAKE) TEST_ARCH=loongarch semantics
+
+loongarch_persist:
+	@$(MAKE) TEST_ARCH=loongarch persist
 
 test_public_vfs: public_vfs
 test_ext2: ext2
@@ -243,5 +328,7 @@ run:
 		ext2) ARCH="$$TEST_ARCH" TEST_ARCH="$$TEST_ARCH" bash "tests/ext2/run.sh" ;; \
 		fat32) ARCH="$$TEST_ARCH" TEST_ARCH="$$TEST_ARCH" bash "tests/fat32/run.sh" ;; \
 		error) ARCH="$$TEST_ARCH" TEST_ARCH="$$TEST_ARCH" bash "tests/error/run.sh" ;; \
+		semantics) ARCH="$$TEST_ARCH" TEST_ARCH="$$TEST_ARCH" bash "tests/semantics/run.sh" ;; \
+		persist) ARCH="$$TEST_ARCH" TEST_ARCH="$$TEST_ARCH" bash "tests/persist/run.sh" ;; \
 		*) echo "Unknown prepared test: $$TEST_NAME"; exit 1 ;; \
 	esac

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -u
+set -o pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
@@ -26,7 +27,7 @@ echo "[test_baseline] running usertests -q on $TEST_ARCH"
 (
   cd "$XV6_DIR" || exit 1
   python3 test-xv6.py usertests -q
-) > "$TEST_LOG" 2>&1
+) 2>&1 | tee "$TEST_LOG"
 test_status=$?
 
 if [ "$test_status" -eq 0 ] && grep -q "ALL TESTS PASSED" "$TEST_LOG"; then

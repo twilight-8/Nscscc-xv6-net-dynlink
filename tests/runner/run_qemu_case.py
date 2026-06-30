@@ -28,17 +28,19 @@ def main():
     parser.add_argument("--reject", action="append", default=[])
     parser.add_argument("--boot-wait", type=float, default=5.0)
     parser.add_argument("--step-wait", type=float, default=1.0)
+    parser.add_argument("--live", action="store_true",
+                        help="mirror QEMU output to the terminal while saving the log")
     args = parser.parse_args()
 
     commands = read_commands(args.commands)
     os.makedirs(os.path.dirname(args.log), exist_ok=True)
 
-    print(f"== xv6 VFS Test Runner: {args.case} ==")
-    print(f"[case] commands: {args.commands}")
-    print(f"[case] raw log:  {args.log}")
+    print(f"== xv6 VFS Test Runner: {args.case} ==", flush=True)
+    print(f"[case] commands: {args.commands}", flush=True)
+    print(f"[case] raw log:  {args.log}", flush=True)
     arch = os.environ.get("ARCH", "riscv")
-    print(f"[case] arch:     {arch}")
-    print()
+    print(f"[case] arch:     {arch}", flush=True)
+    print(flush=True)
 
     qemu = subprocess.Popen(
         ["make", f"ARCH={arch}", "CPUS=1", "qemu"],
@@ -58,6 +60,9 @@ def main():
                 chunk = os.read(qemu.stdout.fileno(), 4096)
                 if chunk:
                     log.extend(chunk)
+                    if args.live:
+                        sys.stdout.buffer.write(chunk)
+                        sys.stdout.buffer.flush()
                 else:
                     time.sleep(0.05)
             except BlockingIOError:
@@ -72,7 +77,8 @@ def main():
     try:
         drain(args.boot_wait)
         for idx, command in enumerate(commands, 1):
-            print(f"[{idx:02d}/{len(commands):02d}] {command}")
+            prefix = "\n" if args.live else ""
+            print(f"{prefix}[{idx:02d}/{len(commands):02d}] {command}", flush=True)
             qemu.stdin.write((command + "\n").encode("utf-8"))
             qemu.stdin.flush()
             drain(args.step_wait)
@@ -92,7 +98,15 @@ def main():
                 failed_reason = "Missing expected output: " + ", ".join(missing)
     finally:
         try:
-            os.killpg(os.getpgid(qemu.pid), signal.SIGTERM)
+            if qemu.poll() is None and qemu.stdin:
+                qemu.stdin.write(b"\x01x")
+                qemu.stdin.flush()
+                qemu.wait(timeout=1.5)
+        except Exception:
+            pass
+        try:
+            if qemu.poll() is None:
+                os.killpg(os.getpgid(qemu.pid), signal.SIGTERM)
         except Exception:
             pass
         time.sleep(0.2)
