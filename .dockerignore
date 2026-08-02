@@ -1,0 +1,22 @@
+.git
+xv6-riscv-src
+submit
+docs
+
+# 测试状态与日志
+.last-test
+.last-test-arch
+tests/*/logs
+
+# 构建产物
+**/*.o
+**/*.asm
+**/*.sym
+**/.arch-*
+src/fs.img
+src/*.img
+src/kernel/kernel
+src/mkfs/mkfs
+src/mkfs/mkfat32
+
+**/__pycache__

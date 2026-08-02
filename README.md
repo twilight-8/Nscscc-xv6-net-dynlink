@@ -124,6 +124,22 @@ test1
 test2
 ```
 
+## Docker 环境
+
+仓库根目录提供 `Dockerfile`，镜像内预装 RISC-V / LoongArch64 交叉工具链、QEMU
+及全部测试依赖，并已预构建好两个架构的内核与 `fs.img`，开箱即用：
+
+```sh
+docker build -t xv6-vfs-hal .
+docker run --rm -it xv6-vfs-hal          # 进入容器，工作目录 /xv6
+```
+
+容器内可直接运行上述测试与 QEMU 命令（如 `make test_baseline && make run`，
+或 `cd src && make qemu` / `make ARCH=loongarch CPUS=1 qemu`）。
+
+注：若拉取 `ubuntu:24.04` 基础镜像超时，可先在 `/etc/docker/daemon.json` 配置
+`registry-mirrors` 镜像加速后重启 Docker。
+
 ## 许可证与合规性说明
 
 原始 xv6 代码保留 MIT License。团队新增代码拟采用比赛认可的开源协议，当前计划为 BSD-2-Clause License。技术文档、PPT 和演示视频说明采用 CC-BY-SA 4.0。
