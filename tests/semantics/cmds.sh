@@ -11,4 +11,6 @@ ln /mnt/hello.c /mnt/hlink.c
 cat /mnt/hlink.c
 echo fat-link > /fat/a.txt
 ln /fat/a.txt /fat/b.txt
+unlinkopen /mnt/uop.txt
+unlinkopen /fat/uop.txt
 echo SEMANTICS_DONE

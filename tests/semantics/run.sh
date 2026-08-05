@@ -34,12 +34,14 @@ python3 "$ROOT_DIR/tests/runner/run_qemu_case.py" \
   --expect "VFS_PARENT_OK" \
   --expect "Hello, world" \
   --expect "link /fat/a.txt /fat/b.txt: failed" \
+  --expect "unlinkopen: ok" \
   --expect "SEMANTICS_DONE" \
   --reject "panic:" \
   --reject "kerneltrap" \
   --reject "mount: failed" \
   --reject "link /mnt/hello.c /mnt/hlink.c: failed" \
-  --reject "open /mnt/hlink.c failed"
+  --reject "open /mnt/hlink.c failed" \
+  --reject "unlinkopen: FAIL"
 test_status=$?
 
 if [ "$test_status" -eq 0 ]; then

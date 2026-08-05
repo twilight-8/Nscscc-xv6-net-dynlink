@@ -345,6 +345,24 @@ iput(struct inode *ip)
     panic("iput");
 
   if(ip->fstype != FS_XV6){
+    if(ip->ref == 1 && ip->valid && ip->nlink == 0){
+      // Unlinked inode with no other references: release its
+      // on-disk resources through the filesystem's trunc hook.
+
+      // ip->ref == 1 means no other process can have ip locked,
+      // so this acquiresleep() won't block (or deadlock).
+      acquiresleep(&ip->lock);
+
+      release(&itable.lock);
+
+      vfs_itrunc(ip);
+      ip->valid = 0;
+
+      releasesleep(&ip->lock);
+
+      acquire(&itable.lock);
+    }
+
     ip->ref--;
     if(ip->ref == 0){
       ip->valid = 0;

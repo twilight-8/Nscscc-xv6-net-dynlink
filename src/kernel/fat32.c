@@ -375,7 +375,10 @@ fat32_iget(struct mount *mnt, struct fat32_dirent *de, uint entry_off)
   if(mnt->root != 0 && clus == fs->root_clus)
     return idup(mnt->root);
   ip = iget(mnt->dev, clus);
-  fat32_fill_inode(ip, mnt, de, entry_off);
+  // Refill only on a cache miss; a live inode may hold in-memory
+  // state that is newer than the on-disk directory entry.
+  if(!ip->valid)
+    fat32_fill_inode(ip, mnt, de, entry_off);
   return ip;
 }
 
@@ -707,6 +710,17 @@ fat32_itrunc(struct inode *ip)
 {
   struct fat32_fs *fs = (struct fat32_fs*)ip->mnt->fs_private;
 
+  if(ip->nlink == 0){
+    // Called from iput() after the last close of an unlinked file
+    // or empty directory: the directory entry is already gone, so
+    // release the whole cluster chain instead of keeping the first
+    // cluster around.
+    fat32_free_chain(fs, ip->addrs[0]);
+    ip->addrs[0] = 0;
+    ip->size = 0;
+    return;
+  }
+
   if(ip->type != T_FILE)
     return;
   fat32_free_after(fs, ip->addrs[0]);
@@ -837,7 +851,7 @@ fat32_unlink(struct inode *dp, char *name)
   struct fat32_dirent de;
   struct inode *ip;
   uchar name83[11];
-  uint entry_off, clus;
+  uint entry_off;
 
   if(fat32_name83(name, name83) < 0)
     return -1;
@@ -860,12 +874,11 @@ fat32_unlink(struct inode *dp, char *name)
     return -1;
   }
 
-  clus = ip->addrs[0];
   fat32_remove_entry(fs, entry_off);
-  fat32_free_chain(fs, clus);
+
+  // Only drop the link count here. The cluster chain is released by
+  // iput() once the last open reference goes away.
   ip->nlink = 0;
-  ip->size = 0;
-  ip->addrs[0] = 0;
   iunlockput(ip);
   return 0;
 }

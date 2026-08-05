@@ -219,18 +219,27 @@ ext2_iget(struct mount *mnt, uint inum)
   struct ext2_dinode di;
   struct inode *ip;
 
-  if(ext2_read_dinode(fs, inum, &di) < 0)
-    return 0;
-  if(di.i_mode == 0)
-    return 0;
-  if(!ext2_supported_mode(di.i_mode))
-    return 0;
-  if(di.i_block[13] || di.i_block[14])
-    return 0;
-
   ip = iget(mnt->dev, inum);
+  if(ip->valid)
+    return ip;
+
+  // Only a cache miss touches the disk; refilling a live inode
+  // would clobber in-memory state that is newer than the dinode.
+  if(ext2_read_dinode(fs, inum, &di) < 0)
+    goto bad;
+  if(di.i_mode == 0)
+    goto bad;
+  if(!ext2_supported_mode(di.i_mode))
+    goto bad;
+  if(di.i_block[13] || di.i_block[14])
+    goto bad;
+
   ext2_fill_inode(ip, mnt, &di);
   return ip;
+
+bad:
+  iput(ip);
+  return 0;
 }
 
 static int
@@ -311,13 +320,16 @@ ext2_alloc_block(struct ext2_fs *fs)
 {
   struct buf *bp, *dbp;
   uchar *bitmap;
-  uint i, blockno, start;
+  uint i, blockno, start, nblocks;
 
   bp = bread(fs->dev, fs->gd.bg_block_bitmap);
   bitmap = (uchar*)bp->data;
 
+  // Never allocate beyond the last block that exists in the image.
   start = fs->sb.s_first_data_block;
-  for(i = 0; i < fs->sb.s_blocks_per_group; i++){
+  nblocks = ext2_min(fs->sb.s_blocks_per_group,
+                     fs->sb.s_blocks_count - start);
+  for(i = 0; i < nblocks; i++){
     if(!ext2_test_bit(bitmap, i)){
       ext2_set_bit(bitmap, i);
       blockno = start + i;
@@ -369,7 +381,7 @@ ext2_alloc_inode(struct ext2_fs *fs)
 {
   struct buf *bp;
   uchar *bitmap;
-  uint i, inum, first;
+  uint i, inum, first, ninodes;
 
   bp = bread(fs->dev, fs->gd.bg_inode_bitmap);
   bitmap = (uchar*)bp->data;
@@ -378,7 +390,9 @@ ext2_alloc_inode(struct ext2_fs *fs)
   if(first == 0)
     first = 11;
 
-  for(i = first - 1; i < fs->sb.s_inodes_per_group; i++){
+  // Never allocate beyond the last inode that exists in the image.
+  ninodes = ext2_min(fs->sb.s_inodes_per_group, fs->sb.s_inodes_count);
+  for(i = first - 1; i < ninodes; i++){
     if(!ext2_test_bit(bitmap, i)){
       ext2_set_bit(bitmap, i);
       inum = i + 1;
@@ -787,12 +801,9 @@ ext2_unlink(struct inode *dp, char *name)
     ip->nlink--;
   }
 
-  if(ip->nlink == 0){
-    ext2_itrunc(ip);
-    ext2_free_inode(fs, ip->inum);
-  } else {
-    ext2_sync_inode(ip);
-  }
+  // Only drop the link count here. Blocks and the inode itself are
+  // released by iput() once the last open reference goes away.
+  ext2_sync_inode(ip);
   iunlockput(ip);
   return 0;
 }
@@ -969,6 +980,12 @@ ext2_itrunc(struct inode *ip)
 
   ip->size = 0;
   ext2_sync_inode(ip);
+
+  // Truncating an inode whose link count reached zero (called from
+  // iput() after the last close of an unlinked file) also releases
+  // the inode itself; O_TRUNC on a linked file keeps it.
+  if(ip->nlink == 0)
+    ext2_free_inode(fs, ip->inum);
 }
 
 static int

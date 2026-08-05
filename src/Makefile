@@ -220,6 +220,7 @@ UPROGS=\
 	$U/_hello\
 	$U/_test1\
 	$U/_test2\
+	$U/_unlinkopen\
 	$U/_usertests\
 	$U/_grind\
 	$U/_wc\
