@@ -47,6 +47,7 @@ struct fat32_fs {
   uint data_sec;
   uint data_start_sec;
   uint nclus;
+  uint next_free;
 };
 
 struct fat32_dirent {
@@ -194,9 +195,15 @@ fat32_zero_cluster(struct fat32_fs *fs, uint clus)
 static uint
 fat32_alloc_cluster(struct fat32_fs *fs)
 {
-  uint clus, val;
+  uint clus, val, start;
 
-  for(clus = 2; clus <= fs->nclus + 1; clus++){
+  // Next-free hint: continue where the last allocation stopped
+  // instead of rescanning the FAT from cluster 2 every time.
+  start = fs->next_free;
+  if(start < 2 || start > fs->nclus + 1)
+    start = 2;
+  clus = start;
+  for(;;){
     if(fat32_read_fat(fs, clus, &val) < 0)
       return 0;
     if(val == 0){
@@ -206,10 +213,15 @@ fat32_alloc_cluster(struct fat32_fs *fs)
         fat32_write_fat(fs, clus, 0);
         return 0;
       }
+      fs->next_free = clus + 1;
       return clus;
     }
+    clus++;
+    if(clus > fs->nclus + 1)
+      clus = 2;
+    if(clus == start)
+      return 0;
   }
-  return 0;
 }
 
 static void
@@ -227,6 +239,8 @@ fat32_free_after(struct fat32_fs *fs, uint first)
     if(fat32_read_fat(fs, cur, &next) < 0)
       break;
     fat32_write_fat(fs, cur, 0);
+    if(cur < fs->next_free)
+      fs->next_free = cur;
     cur = next;
   }
 }
@@ -235,8 +249,11 @@ static void
 fat32_free_chain(struct fat32_fs *fs, uint first)
 {
   fat32_free_after(fs, first);
-  if(first >= 2)
+  if(first >= 2){
     fat32_write_fat(fs, first, 0);
+    if(first < fs->next_free)
+      fs->next_free = first;
+  }
 }
 
 static uint
@@ -589,6 +606,7 @@ fat32_mount(struct mount *mnt)
 
   fat32fs.used = 1;
   fat32fs.dev = mnt->dev;
+  fat32fs.next_free = 2;
   mnt->fs_private = &fat32fs;
   mnt->root = fat32_root_inode(mnt);
   if(mnt->root == 0){
