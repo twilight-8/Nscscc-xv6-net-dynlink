@@ -38,7 +38,9 @@ python3 "$ROOT_DIR/tests/runner/run_qemu_case.py" \
   --reject "kerneltrap" \
   --reject "mount: failed" \
   --reject "failed to delete" \
-  --reject "open /mnt/a.txt failed"
+  --reject "open /mnt/a.txt failed" \
+  --reject "cannot stat" \
+  --reject "open /mnt/verylongfilename.txt failed"
 test_status=$?
 
 if [ "$test_status" -eq 0 ]; then

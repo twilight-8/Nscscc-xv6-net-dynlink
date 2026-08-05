@@ -266,6 +266,7 @@ D0 重新核对公开测试后确认：当前公开样例仍主要围绕 ext2 `/
 当前已完成：
 
 - 新增 `hal_disk_rw()`、`hal_intr_init()`、`hal_irq_claim()` 等薄接口。
+- 中断的 claim/complete 在两个平台统一经 `hal_irq_claim()`/`hal_irq_complete()` 分发；LoongArch 侧 EXTIOI 位掩码语义与 LS7A APIC 的电平/边沿、路由差异（virtio-pci 电平触发经 APIC 清除，UART 边沿触发无需 APIC 清除）全部收敛在 `arch/loongarch/hal.c` 内部，`trap.c` 不再直接接触中断控制器。
 - RISC-V 路径保持 PLIC 和 virtio-mmio 块设备，`fs.img` 可由 QEMU virtio 实际读写。
 - LoongArch64 路径接入 APIC/EXTIOI 和 PCI 配置空间扫描，并通过 virtio-pci 块设备访问 `fs.img`。
 - LoongArch64 已能在 `qemu-system-loongarch64` 启动到 shell，运行 `usertests -q`，并在挂载 ext2 后通过 `test1/test2`。
@@ -276,6 +277,20 @@ D0 重新核对公开测试后确认：当前公开样例仍主要围绕 ext2 `/
 - LoongArch64 virtio-pci 当前面向 QEMU virt 机器的单磁盘场景，不实现通用 PCI 总线管理器。
 
 当前已经完成至阶段 G，并通过阶段性测试。
+
+### 阶段 H：VFS 语义加固与评测流程对齐
+
+在功能齐备的基础上，对 inode 生命周期与挂载语义做了一轮以"对齐 xv6/POSIX 语义"为基准的加固：
+
+- exec 路径解析：不含 `/` 的裸命令名在当前目录查找失败时回退根目录查找，使安装在 `/` 的程序在任意工作目录可用（官方评测流程 `cd tests; cat cmds.sh | sh` 依赖该行为）。
+- 挂载点保护：三条 unlink 路径（xv6/ext2/fat32）均拒绝删除正被用作挂载点的目录；`vfs_mount` 拒绝 xv6 根文件系统的重复挂载。
+- inode 缓存一致性：`ext2_iget`/`fat32_iget` 仅在缓存未命中（`valid==0`）时读盘填充，不再用磁盘旧值覆盖活动 inode 的内存状态。
+- unlink 延迟释放：unlink 只减 nlink，数据块/inode/簇链的释放延迟到 `iput()` 的 `ref==1 && nlink==0` 分支，经各后端的 `itrunc` 钩子完成——打开中的文件被 unlink 后仍可读写，最后一次 close 时才释放，与 xv6 根文件系统语义一致。配套新增 `unlinkopen` 回归测试（ext2/fat32 双后端）。
+- ext2 块/inode 位图分配扫描上界钳位到 `s_blocks_count`/`s_inodes_count`，防止越界分配。
+- ext2 长文件名：目录列举时超长名字截断到 DIRSIZ 显示；查找时对恰为 DIRSIZ 长的查询名做唯一前缀别名匹配（namei 层本就把路径分量截断到 DIRSIZ），精确短名优先。外部镜像中的长名文件因此可以正常列出、stat 和读取。
+- fat32 簇分配增加 next-free 提示（含回绕扫描与释放端下调），避免每次分配都从簇 2 全表扫描。
+- 清理 LoongArch ramdisk 死代码（文件、Makefile 规则与残留声明）。
+- 测试与构建基建：官方测例逐字节入库并锚定版本（`tests/VFS_TESTS_PIN.txt`），`public_vfs` 复刻官方评测流程；新增 `tests/check_env.sh` 环境检查与 `tests/run_all.sh` 双架构一键回归；镜像构建补充 `kernel/param.h` 依赖与宿主工具检查。
 
 ### 阶段 F：双架构测试收口与提交材料
 

@@ -3,6 +3,7 @@
 mkdir /mnt
 mount ext2 /mnt
 cat /mnt/hello.c
+cat /mnt/verylongfilename.txt
 echo ext2-first > /mnt/a.txt
 cat /mnt/a.txt
 echo ext2-second > /mnt/a.txt

@@ -55,6 +55,8 @@ tests/
 |   |-- run.sh
 |   `-- logs/
 |-- VFS_TESTS_PIN.txt
+|-- check_env.sh
+|-- run_all.sh
 `-- runner/
     `-- run_qemu_case.py
 ```
@@ -136,6 +138,13 @@ mount ext2 /mnt
 cd tests
 cat cmds.sh | sh
 ```
+
+## Utility Scripts
+
+- `tests/check_env.sh`: verifies host tools, both cross toolchains, and
+  both QEMU emulators; exits non-zero and prints what is missing.
+- `tests/run_all.sh`: runs all seven test points on both architectures
+  back to back and prints a 14-line PASS/FAIL summary.
 
 ## Logs
 

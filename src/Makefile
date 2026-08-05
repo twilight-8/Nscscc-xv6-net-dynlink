@@ -43,7 +43,6 @@ USER_LD = $U/user.ld
 ARCH_CFLAGS = -DARCH_RISCV -mcmodel=medany
 ARCH_ASFLAGS =
 QEMU = qemu-system-riscv64
-RAMDISK_HDR =
 else ifeq ($(ARCH),loongarch)
 ARCH_OBJS = \
   $K/arch/loongarch/entry.o \
@@ -66,7 +65,6 @@ USER_LD = $K/arch/loongarch/user.ld
 ARCH_CFLAGS = -DARCH_LOONGARCH -I$K -I$K/arch/loongarch -march=loongarch64 -mabi=lp64s
 ARCH_ASFLAGS = -DARCH_LOONGARCH -I$K -I$K/arch/loongarch -march=loongarch64 -mabi=lp64s
 QEMU = qemu-system-loongarch64
-RAMDISK_HDR =
 else
 $(error unsupported ARCH=$(ARCH))
 endif
@@ -153,16 +151,10 @@ endif
 
 LDFLAGS = -z max-page-size=4096
 
-$K/kernel: $(OBJS) $(KERNEL_LD) $(RAMDISK_HDR)
+$K/kernel: $(OBJS) $(KERNEL_LD)
 	$(LD) $(LDFLAGS) -T $(KERNEL_LD) -o $K/kernel $(OBJS) 
 	$(OBJDUMP) -S $K/kernel > $K/kernel.asm
 	$(OBJDUMP) -t $K/kernel | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > $K/kernel.sym
-
-$K/arch/loongarch/ramdisk_img.o: fs.img
-	$(OBJCOPY) -I binary -O elf64-loongarch -B loongarch \
-	  --rename-section .data=.ramdisk,alloc,load,data,contents \
-	  --set-section-alignment .ramdisk=4096 \
-	  fs.img $@
 
 $K/%.o: $K/%.S
 	$(CC) $(ARCH_ASFLAGS) -g -c -o $@ $<
@@ -233,13 +225,18 @@ EXT2IMG = ext2.img
 EXT2_BLOCKS = 4096
 FAT32IMG = fat32.img
 
-$(EXT2IMG): hello.c
+# The on-disk layout constants (FSSIZE/EXT2SIZE/FAT32START) live in
+# kernel/param.h; rebuild the images when they change.
+$(EXT2IMG): hello.c $K/param.h
+	@command -v mkfs.ext2 >/dev/null || { echo "missing mkfs.ext2 (install e2fsprogs)"; exit 1; }
+	@command -v debugfs >/dev/null || { echo "missing debugfs (install e2fsprogs)"; exit 1; }
 	rm -f $(EXT2IMG)
 	dd if=/dev/zero of=$(EXT2IMG) bs=1024 count=$(EXT2_BLOCKS)
 	mkfs.ext2 -F -q -b 1024 -I 128 -m 0 $(EXT2IMG)
 	debugfs -w -R "write hello.c hello.c" $(EXT2IMG)
+	debugfs -w -R "write hello.c verylongfilename.txt" $(EXT2IMG)
 
-$(FAT32IMG): mkfs/mkfat32
+$(FAT32IMG): mkfs/mkfat32 $K/param.h
 	rm -f $(FAT32IMG)
 	mkfs/mkfat32 $(FAT32IMG)
 
@@ -267,7 +264,6 @@ clean:
 	*/*.o */*/*.o */*/*/*.o */*.d */*/*.d */*/*/*.d \
 	*/*.asm */*/*.asm */*/*/*.asm */*.sym */*/*.sym */*/*/*.sym \
 	$K/kernel fs.img \
-	$K/arch/loongarch/ramdisk_img.o \
 	.arch-* \
 	$(EXT2IMG) \
 	$(FAT32IMG) \
