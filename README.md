@@ -120,8 +120,8 @@ LoongArch64 当前使用 virtio-pci 块设备访问 `fs.img`。在 shell 中可�
 usertests -q
 mkdir /mnt
 mount ext2 /mnt 2
-test1
-test2
+cd tests
+cat cmds.sh | sh
 ```
 
 ## Docker 环境

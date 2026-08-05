@@ -13,7 +13,7 @@ if [ "$TEST_ARCH" != "riscv" ]; then
 fi
 
 TEST_LOG="$LOG_DIR/usertests-quick$LOG_SUFFIX.log"
-RESULT_LOG="$LOG_DIR/result.log"
+RESULT_LOG="$LOG_DIR/result$LOG_SUFFIX.log"
 
 mkdir -p "$LOG_DIR"
 

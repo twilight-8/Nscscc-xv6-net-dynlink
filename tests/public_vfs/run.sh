@@ -30,14 +30,19 @@ python3 "$ROOT_DIR/tests/runner/run_qemu_case.py" \
   --commands "$SCRIPT_DIR/cmds.sh" \
   --log "$RAW_LOG" \
   --expect "mount: ext2 on /mnt dev 2" \
-  --expect "test1: succeed" \
-  --expect "test2: succeed" \
+  --expect "test_copy_file(/mnt/hello.c,/hello.c): succeed" \
+  --expect "test_copy_file(/mnt/hello.c,/tests/hello.c): succeed" \
+  --expect "test_copy_file(/hello.c,/mnt/hello.c): succeed" \
+  --expect "test_copy_file(/tests/hello.c,/mnt/hello.c): succeed" \
+  --expect "test_cross_fs_copy(): succeed" \
   --expect "PUBLIC_VFS_DONE" \
   --reject "panic:" \
   --reject "kerneltrap" \
   --reject "mount: failed" \
-  --reject "test1: failed" \
-  --reject "test2: failed"
+  --reject "exec cat failed" \
+  --reject "exec test1 failed" \
+  --reject "exec test2 failed" \
+  --reject ": error"
 test_status=$?
 
 if [ "$test_status" -eq 0 ]; then

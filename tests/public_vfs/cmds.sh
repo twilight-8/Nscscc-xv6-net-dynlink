@@ -1,9 +1,10 @@
 # Commands sent to the xv6 shell for the public VFS test.
-# The ext2 image is preloaded with /hello.c by src/Makefile.
+# Reproduces the pinned upstream evaluation flow (see ../VFS_TESTS_PIN.txt):
+# mount ext2 on /mnt, then run the upstream cases from /tests.
 
 mkdir /mnt
 mount ext2 /mnt
-ls /mnt
-test1
-test2
+cd tests
+ls
+cat cmds.sh | sh
 echo PUBLIC_VFS_DONE

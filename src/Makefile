@@ -217,6 +217,7 @@ UPROGS=\
 	$U/_rm\
 	$U/_sh\
 	$U/_stressfs\
+	$U/_hello\
 	$U/_test1\
 	$U/_test2\
 	$U/_usertests\
@@ -241,8 +242,20 @@ $(FAT32IMG): mkfs/mkfat32
 	rm -f $(FAT32IMG)
 	mkfs/mkfat32 $(FAT32IMG)
 
-fs.img: mkfs/mkfs README hello.c tests/hello.c $(UPROGS) $(EXT2IMG) $(FAT32IMG)
-	mkfs/mkfs fs.img README hello.c tests/hello.c $(UPROGS)
+# Build-time symlinks that place the public VFS test binaries under
+# /tests in the xv6 root file system, matching the upstream layout
+# (tests/cmds.sh and tests/hello.c are checked in as regular files).
+tests/test1: $U/_test1
+	ln -sf ../user/_test1 $@
+
+tests/test2: $U/_test2
+	ln -sf ../user/_test2 $@
+
+tests/hello: $U/_hello
+	ln -sf ../user/_hello $@
+
+fs.img: mkfs/mkfs README hello.c tests/cmds.sh tests/hello.c tests/test1 tests/test2 tests/hello $(UPROGS) $(EXT2IMG) $(FAT32IMG)
+	mkfs/mkfs fs.img README hello.c tests/cmds.sh tests/hello.c tests/test1 tests/test2 tests/hello $(UPROGS)
 	cat $(EXT2IMG) >> fs.img
 	cat $(FAT32IMG) >> fs.img
 
@@ -258,6 +271,7 @@ clean:
 	$(EXT2IMG) \
 	$(FAT32IMG) \
 	mkfs/mkfs mkfs/mkfat32 .gdbinit \
+	tests/test1 tests/test2 tests/hello \
         $U/usys.S \
 	$(UPROGS)
 

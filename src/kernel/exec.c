@@ -38,7 +38,24 @@ kexec(char *path, char **argv)
   begin_op();
 
   // Open the executable file.
-  if((ip = namei(path)) == 0){
+  ip = namei(path);
+  if(ip == 0 && path[0] != '/'){
+    // Bare command names (no '/') fall back to the root directory,
+    // so programs installed in "/" work from any working directory.
+    int i, slash;
+    char rootpath[MAXPATH];
+
+    slash = 0;
+    for(i = 0; path[i]; i++)
+      if(path[i] == '/')
+        slash = 1;
+    if(!slash && strlen(path) + 2 <= sizeof(rootpath)){
+      rootpath[0] = '/';
+      safestrcpy(rootpath + 1, path, sizeof(rootpath) - 1);
+      ip = namei(rootpath);
+    }
+  }
+  if(ip == 0){
     end_op();
     return -1;
   }

@@ -54,6 +54,7 @@ tests/
 |   |-- read.cmds.sh
 |   |-- run.sh
 |   `-- logs/
+|-- VFS_TESTS_PIN.txt
 `-- runner/
     `-- run_qemu_case.py
 ```
@@ -61,14 +62,17 @@ tests/
 ## Test Points
 
 - `test_baseline`: runs xv6 `usertests -q` and checks baseline behavior.
-- `public_vfs`: reproduces the public VFS flow: explicit `mount ext2 /mnt`,
-  then `test1` and `test2`.
+- `public_vfs`: reproduces the pinned upstream VFS evaluation flow (see
+  `VFS_TESTS_PIN.txt`): `mount ext2 /mnt`, then `cd tests` and run the
+  upstream `cmds.sh`, including the `test1`/`test2` cross-filesystem
+  copy cases with their original output strings.
 - `ext2`: checks ext2 mount, read, create, overwrite, and unlink through VFS.
 - `fat32`: checks FAT32 mount and basic 8.3 short-name create, overwrite, and
   unlink through VFS.
 - `error`: checks that invalid VFS operations fail cleanly without panic.
-- `semantics`: checks mount-root `..`, ext2 hard link success, and FAT32 hard
-  link rejection.
+- `semantics`: checks mount-root `..`, ext2 hard link success, FAT32 hard
+  link rejection, and unlink-while-open semantics on ext2 and FAT32
+  (`unlinkopen`).
 - `persist`: writes files to ext2/FAT32, restarts QEMU, remounts, and reads the
   files back from the image.
 
@@ -129,8 +133,8 @@ After entering the xv6 shell, run:
 usertests -q
 mkdir /mnt
 mount ext2 /mnt
-test1
-test2
+cd tests
+cat cmds.sh | sh
 ```
 
 ## Logs

@@ -3,59 +3,65 @@
 #include "user/user.h"
 #include "kernel/fcntl.h"
 
+#define NULL 0
 #define LEN 1024
 
-static int
-copy_file(const char *src, const char *dst)
-{
-  int inf, outf, n;
-  char buf[LEN];
+/* 文件拷贝测试。
+   返回值：0表示成功，否则表示失败。*/
+int test_copy_file(const char *src, const char *dst) {
+  int inf, outf;
 
-  if((inf = open(src, O_RDONLY)) < 0){
-    fprintf(2, "test1: open %s failed\n", src);
+  if (src == NULL || dst == NULL) {
+    fprintf(2, "%s: illegal parameters\n", __func__);
     return 1;
   }
-
-  if((outf = open(dst, O_WRONLY | O_CREATE | O_TRUNC)) < 0){
-    fprintf(2, "test1: open %s failed\n", dst);
+  
+  if ((inf = open(src, O_RDONLY)) < 0) {
+    fprintf(2, "%s: open %s error\n", __func__, src);
+    return 2;
+  }
+  
+  if ((outf = open(dst, O_WRONLY | O_CREATE | O_TRUNC)) < 0) {
+    fprintf(2, "%s: open %s error\n", __func__, dst);
     close(inf);
-    return 1;
+    return 3;
   }
 
-  while((n = read(inf, buf, sizeof(buf))) > 0){
-    if(write(outf, buf, n) != n){
-      fprintf(2, "test1: write failed\n");
+  int i;
+  char buf[LEN];
+  do {
+    i = read(inf, buf, LEN);
+    if (write(outf, buf, i) != i) {
+      fprintf(2, "test1: write error\n");
       close(inf);
       close(outf);
-      return 1;
+      return 4;
     }
-  }
-
+  } while (i);
   close(inf);
   close(outf);
-  if(n < 0)
-    return 1;
 
-  printf("copy %s -> %s: ok\n", src, dst);
+  printf("%s(%s,%s): succeed\n", __func__, src, dst);
   return 0;
 }
 
-int
-main(int argc, char *argv[])
-{
-  int failed = 0;
 
-  (void)argc;
-  (void)argv;
+static const char * fnames[][2] = {
+  {"/mnt/hello.c",    "/hello.c"},
+  {"/mnt/hello.c",    "/tests/hello.c"},
+  {"/hello.c",        "/mnt/hello.c"},
+  {"/tests/hello.c",  "/mnt/hello.c"}
+};
 
-  failed |= copy_file("/mnt/hello.c", "/hello.c");
-  failed |= copy_file("/mnt/hello.c", "/tests/hello.c");
-  failed |= copy_file("/hello.c", "/mnt/hello.c");
-  failed |= copy_file("/tests/hello.c", "/mnt/hello.c");
+// number of elements in fixed-size array
+#define NELEM(x) (sizeof(x)/sizeof((x)[0]))
+#define NUM_TESTS NELEM(fnames)
 
-  if(failed)
-    printf("test1: failed\n");
-  else
-    printf("test1: succeed\n");
-  exit(failed);
+int main(int argc, char *argv[]) {
+  printf("\n--------- %s: begin... -----------------{\n", argv[0]);
+  for (int i=0; i<NUM_TESTS; i++) {
+    test_copy_file(fnames[i][0], fnames[i][1]);
+  }
+  printf("----------- %s: finished -----------------}\n", argv[0]);
+  return 0;
 }

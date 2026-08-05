@@ -15,6 +15,9 @@ mkfs/mkfs
 mkfs/mkfat32
 kernel/kernel
 user/usys.S
+tests/test1
+tests/test2
+tests/hello
 .gdbinit
 .arch-*
 TAGS
