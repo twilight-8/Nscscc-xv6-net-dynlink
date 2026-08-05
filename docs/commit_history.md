@@ -239,6 +239,57 @@ cat hello.c > /mnt/hello.c
 - RISC-V `usertests -q`：`ALL TESTS PASSED`。
 - RISC-V 显式 `mount ext2 /mnt 2` 后，`test1/test2`：通过。
 
+## 阶段 H：对接官方 VFS 测例与评测流程
+
+主要目标：
+
+使镜像内容、目录布局与评测流程逐字节对齐官方公开测例。
+
+主要改动：
+
+- 以官方原版替换 `test1.c/test2.c`，新增 `tests/cmds.sh`，`tests/hello.c` 与上游逐字节一致；上游版本锚定信息记录于 `tests/VFS_TESTS_PIN.txt`。
+- mkfs 将 `test1/test2/hello/cmds.sh/hello.c` 置入根文件系统 `/tests` 目录，复现官方参考流程布局；新增 `user/hello.c`。
+- 修复 exec 路径解析：不含 `/` 的裸命令名在当前目录查找失败时回退根目录查找。修复前在 `/tests` 下执行 `cat`/`ls`/`test1` 均 `exec failed`，官方流程 `cd tests; cat cmds.sh | sh` 无法运行。
+- `tests/public_vfs` 改为复刻官方评测流程并断言官方输出串；`test_baseline` 结果日志增加架构后缀。
+
+验证结果：
+
+- RISC-V/LoongArch64 `usertests -q`：`ALL TESTS PASSED`。
+- 官方流程双架构输出与上游参考输出逐字节一致。
+
+## 阶段 I：挂载点保护
+
+主要目标：
+
+消除挂载语义上的两个稳定性缺陷。
+
+主要改动：
+
+- `sys_unlink` 及 `ext2_unlink`/`fat32_unlink` 增加挂载点检查：删除正被用作挂载点的目录返回失败。修复前 `rm /mnt` 可成功，挂载关系即刻失效，已挂载文件系统中的数据不可达（双架构实证）。
+- `vfs_mount` 拒绝 fstype 为 xv6 的挂载请求：根文件系统启动时已挂载，再次挂载呈现损坏的目录视图。修复前 `mount xv6 /xv` 静默成功（双架构实证）。
+
+验证结果：
+
+- 双架构 error/ext2/fat32/semantics 测试点通过，无 panic。
+
+## 阶段 J：inode 缓存一致性与 unlink 延迟释放
+
+主要目标：
+
+将 ext2/fat32 的 inode 生命周期语义对齐 xv6/POSIX。
+
+主要改动：
+
+- `ext2_iget`/`fat32_iget` 仅在缓存未命中（`valid==0`）时读盘填充。修复前每次 iget 无条件用磁盘数据重填内存 inode，会将未同步的内存状态（size/nlink/addrs）回退为磁盘旧值。
+- unlink 只减 nlink，资源释放延迟至 `iput()` 的 `ref==1 && nlink==0` 分支，经 `itrunc` 钩子实现（ext2 释放数据块与 inode，fat32 释放整条簇链）。修复前 unlink 打开中的文件立即释放 inode，仍打开的 fd 读到已释放数据；修复后符合"unlink 后仍可读写、最后一次 close 时释放"的语义。
+- ext2 块/inode 位图分配扫描上界钳位到 `s_blocks_count`/`s_inodes_count`，防止越界分配。
+- 新增 `unlinkopen` 回归测试（ext2/fat32 双后端），并入 semantics 测试点。
+
+验证结果：
+
+- RISC-V/LoongArch64 `usertests -q`：`ALL TESTS PASSED`。
+- 双架构 7 个测试点全部通过，`unlinkopen: ok`（ext2/fat32 各一）。
+
 ## 当前阶段总览
 
 ```mermaid
@@ -251,8 +302,11 @@ flowchart LR
     SE["阶段 E：轻量 HAL 与 LoongArch64 启动"]
     SF["阶段 F：LoongArch64 virtio-pci 块设备"]
     SG["阶段 G：LoongArch64 回归测试修复"]
+    SH["阶段 H：对接官方 VFS 测例"]
+    SI["阶段 I：挂载点保护"]
+    SJ["阶段 J：inode 缓存一致性与延迟释放"]
 
-    S0 --> SA --> SB --> SC --> SD --> SE --> SF --> SG
+    S0 --> SA --> SB --> SC --> SD --> SE --> SF --> SG --> SH --> SI --> SJ
 ```
 
 - 阶段 0：建立项目基线，保留原 xv6 测试能力。
@@ -263,8 +317,13 @@ flowchart LR
 - 阶段 E：引入轻量 HAL，RISC-V 继续使用 PLIC/virtio，LoongArch64 使用 APIC/EXTIOI 与 ramdisk 启动到 shell。
 - 阶段 F：LoongArch64 接入 virtio-pci，复用公共 virtio 磁盘路径并支持写回 `fs.img`。
 - 阶段 G：修复 LoongArch64 虚拟内存和 TLB refill 问题，两架构均通过 `usertests -q` 和 `test1/test2`。
+- 阶段 H：对接官方 VFS 测例，`/tests` 布局与官方评测流程逐字节对齐，修复 exec 裸命令名根目录回退。
+- 阶段 I：挂载点删除保护与 xv6 根文件系统重复挂载拒绝。
+- 阶段 J：ext2/fat32 inode 缓存一致性修复与 unlink 延迟释放，位图分配钳位，新增 unlinkopen 回归测试。
 
 ## 后续提交方向
 
+- HAL 中断抽象双平台对称化与死代码清理。
+- ext2 双重间接块与 fat32 长文件名支持。
 - `docs: finalize design demo and test report`
 - `submit: generate final diff against xv6-riscv rev5`
