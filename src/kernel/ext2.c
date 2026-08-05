@@ -489,11 +489,16 @@ ext2_lookup(struct inode *dp, char *name)
   struct ext2_fs *fs = (struct ext2_fs*)dp->mnt->fs_private;
   uchar buf[BSIZE];
   struct ext2_dirent *de;
-  uint off, bno, pos;
+  uint off, bno, pos, alias;
 
   if(dp->type != T_DIR)
     return 0;
 
+  // Path components are truncated to DIRSIZ characters by the namei
+  // layer, so a query of exactly DIRSIZ chars may be the truncation of
+  // a longer on-disk name.  Remember the first such alias candidate;
+  // an exact short match always wins.
+  alias = 0;
   for(off = 0; off < dp->size; off += fs->block_size){
     bno = ext2_bmap(dp, off / fs->block_size, 0);
     if(bno == 0)
@@ -505,12 +510,21 @@ ext2_lookup(struct inode *dp, char *name)
       de = (struct ext2_dirent*)(buf + pos);
       if(de->rec_len < 8 || pos + de->rec_len > fs->block_size)
         break;
-      if(de->inode != 0 && de->name_len <= DIRSIZ &&
-         ext2_nameeq(name, de->name, de->name_len))
-        return ext2_iget(dp->mnt, de->inode);
+      if(de->inode != 0){
+        if(de->name_len <= DIRSIZ){
+          if(ext2_nameeq(name, de->name, de->name_len))
+            return ext2_iget(dp->mnt, de->inode);
+        } else if(alias == 0 && ext2_namelen(name) == DIRSIZ &&
+                  memcmp(name, de->name, DIRSIZ) == 0){
+          alias = de->inode;
+        }
+      }
       pos += de->rec_len;
     }
   }
+
+  if(alias)
+    return ext2_iget(dp->mnt, alias);
 
   return 0;
 }
@@ -873,11 +887,13 @@ ext2_readi(struct inode *ip, int user_dst, uint64 dst, uint off, uint n)
         de = (struct ext2_dirent*)(buf + pos);
         if(de->rec_len < 8 || pos + de->rec_len > fs->block_size)
           break;
-        if(de->inode != 0 && de->name_len <= DIRSIZ){
+        if(de->inode != 0){
           if(seen++ == want){
             memset(&xde, 0, sizeof(xde));
             xde.inum = de->inode;
-            memmove(xde.name, de->name, de->name_len);
+            // Names longer than DIRSIZ are shown truncated; they can
+            // still be looked up through the alias rule in ext2_lookup.
+            memmove(xde.name, de->name, ext2_min(de->name_len, DIRSIZ));
             if(either_copyout(user_dst, dst, (char*)&xde, sizeof(xde)) < 0)
               return -1;
             return sizeof(xde);
