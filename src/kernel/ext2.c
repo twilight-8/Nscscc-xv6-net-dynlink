@@ -768,6 +768,12 @@ ext2_unlink(struct inode *dp, char *name)
     return -1;
   }
 
+  if(vfs_mountpoint(ip) != 0){
+    // Cannot unlink a directory that is used as a mount point.
+    iunlockput(ip);
+    return -1;
+  }
+
   if(ext2_remove_dirent(fs, entry_off) < 0){
     iunlockput(ip);
     return -1;

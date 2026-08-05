@@ -144,6 +144,11 @@ vfs_mount(char *fstype, char *path, int dev)
   if(type == FS_NONE || ops == 0)
     return -1;
 
+  // The xv6 root filesystem is mounted at boot and cannot be
+  // mounted again.
+  if(type == FS_XV6)
+    return -1;
+
   if(path[0] == '/' && path[1] == '\0')
     return -1;
 

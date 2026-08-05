@@ -854,6 +854,12 @@ fat32_unlink(struct inode *dp, char *name)
     return -1;
   }
 
+  if(vfs_mountpoint(ip) != 0){
+    // Cannot unlink a directory that is used as a mount point.
+    iunlockput(ip);
+    return -1;
+  }
+
   clus = ip->addrs[0];
   fat32_remove_entry(fs, entry_off);
   fat32_free_chain(fs, clus);

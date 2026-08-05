@@ -214,6 +214,12 @@ sys_unlink(void)
     goto bad;
   ilock(ip);
 
+  if(vfs_mountpoint(ip) != 0){
+    // Cannot unlink a directory that is used as a mount point.
+    iunlockput(ip);
+    goto bad;
+  }
+
   if(ip->nlink < 1)
     panic("unlink: nlink < 1");
   if(ip->type == T_DIR && !isdirempty(ip)){
