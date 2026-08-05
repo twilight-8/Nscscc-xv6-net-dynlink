@@ -36,8 +36,6 @@ void            apic_complete(uint64);
 uint64          extioi_claim(void);
 void            extioi_complete(uint64);
 void            extioiinit(void);
-void            ramdiskinit(void);
-void            ramdiskrw(struct buf*, int);
 
 // console.c
 void            consoleinit(void);

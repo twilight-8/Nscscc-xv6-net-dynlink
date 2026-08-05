@@ -231,24 +231,20 @@ devintr()
   if(estat & ecfg & HWI_VEC) {
     // this is a hardware interrupt, via IOCR.
 
-    // irq indicates which device interrupted.
-    uint64 irq = extioi_claim();
+    // irq indicates which devices interrupted, as a bitmask.
+    uint64 irq = hal_irq_claim();
     if(irq & (1UL << UART0_IRQ)){
       uartintr();
 
-    // tell the apic the device is
-    // now allowed to interrupt again.
-
-      extioi_complete(1UL << UART0_IRQ);
+      // tell the interrupt controller the device is
+      // now allowed to interrupt again.
+      hal_irq_complete(1UL << UART0_IRQ);
     } else if(irq & (1UL << VIRTIO0_IRQ)){
       virtio_disk_intr();
-      apic_complete(1UL << VIRTIO0_IRQ);
-      extioi_complete(1UL << VIRTIO0_IRQ);
+      hal_irq_complete(1UL << VIRTIO0_IRQ);
     } else if(irq){
        printf("unexpected interrupt irq=0x%lx\n", irq);
-
-      apic_complete(irq); 
-      extioi_complete(irq);        
+       hal_irq_complete(irq);
     }
 
     return 1;

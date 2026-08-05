@@ -23,13 +23,20 @@ hal_intr_inithart(void)
 int
 hal_irq_claim(void)
 {
-  return 0;
+  // EXTIOI reports pending interrupts as a bitmask.
+  return extioi_claim();
 }
 
 void
 hal_irq_complete(int irq)
 {
-  (void)irq;
+  // The virtio-pci interrupt is level-triggered and routed through
+  // the LS7A APIC, so it must be cleared there as well.  The UART is
+  // edge-triggered and needs no APIC clear.  Every interrupt is
+  // acknowledged at the EXTIOI.
+  if(irq & (1UL << VIRTIO0_IRQ))
+    apic_complete(1UL << VIRTIO0_IRQ);
+  extioi_complete(irq);
 }
 
 void
