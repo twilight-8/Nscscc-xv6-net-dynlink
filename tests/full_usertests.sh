@@ -36,7 +36,26 @@ echo "[full_usertests] running complete usertests on $ARCH (CPUS=3, no -q)"
 (
   cd "$XV6_DIR" || exit 1
   ( sleep 8; printf 'usertests\n'; sleep 780 ) | timeout 800 make ARCH="$ARCH" CPUS=3 qemu
-) > "$LOG" 2>&1
+) > "$LOG" 2>&1 &
+runpid=$!
+
+# The guest verdict appears long before the stdin pipe closes; watch
+# the log and stop QEMU as soon as the outcome is known.
+for i in $(seq 1 150); do
+  if grep -q "ALL TESTS PASSED" "$LOG" 2>/dev/null; then
+    break
+  fi
+  if grep -q "panic:" "$LOG" 2>/dev/null; then
+    break
+  fi
+  if ! kill -0 "$runpid" 2>/dev/null; then
+    break
+  fi
+  sleep 5
+done
+pkill -f "qemu-system" 2>/dev/null
+kill "$runpid" 2>/dev/null
+wait "$runpid" 2>/dev/null
 
 if grep -q "ALL TESTS PASSED" "$LOG" && ! grep -q "panic:" "$LOG"; then
   echo "[full_usertests] $ARCH: PASS"
