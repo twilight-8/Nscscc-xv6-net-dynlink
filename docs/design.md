@@ -167,7 +167,7 @@ sys_read/sys_write/sys_fstat/sys_open
 - 支持目录项查找。
 - 支持普通文件创建。
 - 支持普通文件 read/write/stat/trunc。
-- 支持直接块和一级间接块。
+- 支持直接块、一级间接块和双重间接块（单文件上限约 64MB，实际受镜像容量约束）；仅三重间接（`i_block[14]`）维持拒读。
 - 支持块位图和 inode 位图的最小分配。
 
 当前暂不追求完整 ext2：
@@ -176,6 +176,7 @@ sys_read/sys_write/sys_fstat/sys_open
 - 不支持完整时间戳维护。
 - 支持基础 `unlink/link`，但不支持 `rename`，也不追求完整 ext2 链接语义和复杂异常恢复。
 - 不支持多块组 ext2。
+- 不支持三重间接块。
 - 当前主要面向公开测试所需的普通文件路径。
 
 这是一种有意的“教学型最小实现”：功能边界清晰，代码集中，便于说明和维护。
@@ -267,6 +268,7 @@ D0 重新核对公开测试后确认：当前公开样例仍主要围绕 ext2 `/
 
 - 新增 `hal_disk_rw()`、`hal_intr_init()`、`hal_irq_claim()` 等薄接口。
 - 中断的 claim/complete 在两个平台统一经 `hal_irq_claim()`/`hal_irq_complete()` 分发；LoongArch 侧 EXTIOI 位掩码语义与 LS7A APIC 的电平/边沿、路由差异（virtio-pci 电平触发经 APIC 清除，UART 边沿触发无需 APIC 清除）全部收敛在 `arch/loongarch/hal.c` 内部，`trap.c` 不再直接接触中断控制器。
+- LoongArch 传统 INTx 信号链存在一个已实证并修复的缺陷：一次完成中断正在确认（ack/EOI）的窗口内到达的下一次完成，可能被 APIC/EXTIOI 链吞没且不再产生新中断（经完整版 `usertests` 的 `manywrites` 暴露，gdb 取证确认设备已投递完成项而客户机未处理）。修复为两层：devintr 的 virtio 分支处理循环（确认后重查 used 环），以及挂接在定时器路径上的 `virtio_disk_watchdog()` 看门狗（定时器不经过外部中断链，每 tick 兜底清理积压完成项，从机制上消除该类死锁）。
 - RISC-V 路径保持 PLIC 和 virtio-mmio 块设备，`fs.img` 可由 QEMU virtio 实际读写。
 - LoongArch64 路径接入 APIC/EXTIOI 和 PCI 配置空间扫描，并通过 virtio-pci 块设备访问 `fs.img`。
 - LoongArch64 已能在 `qemu-system-loongarch64` 启动到 shell，运行 `usertests -q`，并在挂载 ext2 后通过 `test1/test2`。
@@ -291,6 +293,13 @@ D0 重新核对公开测试后确认：当前公开样例仍主要围绕 ext2 `/
 - fat32 簇分配增加 next-free 提示（含回绕扫描与释放端下调），避免每次分配都从簇 2 全表扫描。
 - 清理 LoongArch ramdisk 死代码（文件、Makefile 规则与残留声明）。
 - 测试与构建基建：官方测例逐字节入库并锚定版本（`tests/VFS_TESTS_PIN.txt`），`public_vfs` 复刻官方评测流程；新增 `tests/check_env.sh` 环境检查与 `tests/run_all.sh` 双架构一键回归；镜像构建补充 `kernel/param.h` 依赖与宿主工具检查。
+
+### 阶段 I：ext2 大文件支持与测试覆盖扩展
+
+- 双重间接块：`ext2_bmap` 增加两级查找分支（`ext2_bmap_double`），按需分配外层表/内层表/数据块；`ext2_itrunc` 对称释放（内层表逐块→内层表→外层表）；`ext2_sync_inode` 回写 `i_block[13]` 并将间接表计入 `i_blocks`。内存 inode 地址槽位扩展为 `NDIRECT+2`（xv6 后端仍只用 +1，磁盘格式不变）；配套约束：`ilock`/`iupdate` 与磁盘 dinode 之间一律以 `sizeof(dip->addrs)` 为拷贝上界，内存扩展槽位绝不外溢到相邻 dinode。`ext2_iget` 拒读条件由"含双/三重间接"收紧为"仅三重间接"。
+- 大文件回归：新增 `bigfile` 用户程序（写入 1MiB 确定性模式→逐字节读回校验→unlink，另含 `keep`/`verify` 模式供跨启动持久性验证）；ext2 镜像常驻注入 1MiB 外部文件 `hostbig.bin`（必含双重间接块），系统内以 `wc` 校验全量字节可读。
+- 目录操作覆盖：ext2/fat32 套件补充 `mkdir`、嵌套路径、多文件列举用例。
+- 测试运行器增加 `--final-wait`：末条命令后持续等待至全部 expect 模式出现再判定，支撑 bigfile 等长耗时用例，正常套件零拖慢。
 
 ### 阶段 F：双架构测试收口与提交材料
 

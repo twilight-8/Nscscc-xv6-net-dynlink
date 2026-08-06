@@ -57,6 +57,7 @@ tests/
 |-- VFS_TESTS_PIN.txt
 |-- check_env.sh
 |-- run_all.sh
+|-- full_usertests.sh
 `-- runner/
     `-- run_qemu_case.py
 ```
@@ -145,6 +146,21 @@ cat cmds.sh | sh
   both QEMU emulators; exits non-zero and prints what is missing.
 - `tests/run_all.sh`: runs all seven test points on both architectures
   back to back and prints a 14-line PASS/FAIL summary.
+- `tests/full_usertests.sh [arch]`: runs the complete `usertests`
+  (without `-q`, so the six slow tests `bigdir`, `manywrites`,
+  `badwrite`, `execout`, `diskfull`, `outofinodes` are included) in the
+  official CPUS=3 QEMU environment, and saves the raw log under
+  `test_baseline/logs/`.
+
+## Pre-push Gate
+
+Both of the following must be green before every push to the remote:
+
+```sh
+bash tests/run_all.sh                      # 14/14 on both architectures
+bash tests/full_usertests.sh riscv         # complete usertests, no -q
+bash tests/full_usertests.sh loongarch
+```
 
 ## Logs
 
