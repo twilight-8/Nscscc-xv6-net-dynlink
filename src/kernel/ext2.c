@@ -209,6 +209,7 @@ ext2_fill_inode(struct inode *ip, struct mount *mnt, struct ext2_dinode *di)
   for(i = 0; i < NDIRECT; i++)
     ip->addrs[i] = di->i_block[i];
   ip->addrs[NDIRECT] = di->i_block[12];
+  ip->addrs[NDIRECT+1] = di->i_block[13];
   ip->valid = 1;
 }
 
@@ -231,7 +232,8 @@ ext2_iget(struct mount *mnt, uint inum)
     goto bad;
   if(!ext2_supported_mode(di.i_mode))
     goto bad;
-  if(di.i_block[13] || di.i_block[14])
+  // Triple-indirect files are out of scope and refused.
+  if(di.i_block[14])
     goto bad;
 
   ext2_fill_inode(ip, mnt, &di);
@@ -272,6 +274,28 @@ ext2_sync_inode(struct inode *ip)
     for(i = 0; i < fs->block_size / sizeof(uint); i++)
       if(indirect[i])
         blocks++;
+    brelse(bp);
+  }
+  di.i_block[13] = ip->addrs[NDIRECT+1];
+  if(ip->addrs[NDIRECT+1]){
+    blocks++;
+    bp = bread(fs->dev, ip->addrs[NDIRECT+1]);
+    indirect = (uint*)bp->data;
+    for(i = 0; i < fs->block_size / sizeof(uint); i++){
+      if(indirect[i]){
+        struct buf *ibp;
+        uint *inner;
+        int j;
+
+        blocks++;
+        ibp = bread(fs->dev, indirect[i]);
+        inner = (uint*)ibp->data;
+        for(j = 0; j < fs->block_size / sizeof(uint); j++)
+          if(inner[j])
+            blocks++;
+        brelse(ibp);
+      }
+    }
     brelse(bp);
   }
   di.i_blocks = blocks * (fs->block_size / 512);
@@ -439,6 +463,62 @@ ext2_free_inode(struct ext2_fs *fs, uint inum)
   ext2_write_dinode(fs, inum, &di);
 }
 
+// Double-indirect branch of ext2_bmap: outer table in
+// addrs[NDIRECT+1], up to (block_size/4) inner single-indirect tables.
+static uint
+ext2_bmap_double(struct inode *ip, uint bn, int alloc)
+{
+  struct ext2_fs *fs = (struct ext2_fs*)ip->mnt->fs_private;
+  struct buf *bp;
+  uint *indirect;
+  uint nind, inner, blockno;
+
+  nind = fs->block_size / sizeof(uint);
+  if(bn >= nind * nind)
+    return 0;
+
+  if(ip->addrs[NDIRECT+1] == 0){
+    if(!alloc)
+      return 0;
+    ip->addrs[NDIRECT+1] = ext2_alloc_block(fs);
+    if(ip->addrs[NDIRECT+1] == 0)
+      return 0;
+  }
+
+  bp = bread(fs->dev, ip->addrs[NDIRECT+1]);
+  indirect = (uint*)bp->data;
+  inner = indirect[bn / nind];
+  if(inner == 0){
+    if(!alloc){
+      brelse(bp);
+      return 0;
+    }
+    inner = ext2_alloc_block(fs);
+    if(inner == 0){
+      brelse(bp);
+      return 0;
+    }
+    indirect[bn / nind] = inner;
+    bwrite(bp);
+  }
+  brelse(bp);
+
+  bp = bread(fs->dev, inner);
+  indirect = (uint*)bp->data;
+  blockno = indirect[bn % nind];
+  if(blockno == 0 && alloc){
+    blockno = ext2_alloc_block(fs);
+    if(blockno == 0){
+      brelse(bp);
+      return 0;
+    }
+    indirect[bn % nind] = blockno;
+    bwrite(bp);
+  }
+  brelse(bp);
+  return blockno;
+}
+
 static uint
 ext2_bmap(struct inode *ip, uint bn, int alloc)
 {
@@ -455,7 +535,7 @@ ext2_bmap(struct inode *ip, uint bn, int alloc)
 
   bn -= NDIRECT;
   if(bn >= fs->block_size / sizeof(uint))
-    return 0;
+    return ext2_bmap_double(ip, bn - fs->block_size / sizeof(uint), alloc);
 
   if(ip->addrs[NDIRECT] == 0){
     if(!alloc)
@@ -992,6 +1072,29 @@ ext2_itrunc(struct inode *ip)
     brelse(bp);
     ext2_free_block(fs, ip->addrs[NDIRECT]);
     ip->addrs[NDIRECT] = 0;
+  }
+
+  if(ip->addrs[NDIRECT+1]){
+    bp = bread(fs->dev, ip->addrs[NDIRECT+1]);
+    indirect = (uint*)bp->data;
+    for(i = 0; i < fs->block_size / sizeof(uint); i++){
+      if(indirect[i]){
+        struct buf *ibp;
+        uint *inner;
+        int j;
+
+        ibp = bread(fs->dev, indirect[i]);
+        inner = (uint*)ibp->data;
+        for(j = 0; j < fs->block_size / sizeof(uint); j++)
+          if(inner[j])
+            ext2_free_block(fs, inner[j]);
+        brelse(ibp);
+        ext2_free_block(fs, indirect[i]);
+      }
+    }
+    brelse(bp);
+    ext2_free_block(fs, ip->addrs[NDIRECT+1]);
+    ip->addrs[NDIRECT+1] = 0;
   }
 
   ip->size = 0;

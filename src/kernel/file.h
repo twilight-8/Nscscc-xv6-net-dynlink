@@ -32,7 +32,7 @@ struct inode {
   short minor;
   short nlink;
   uint size;
-  uint addrs[NDIRECT+1];
+  uint addrs[NDIRECT+2];   // +1: xv6 single indirect; +2: ext2 double indirect
 };
 
 // map major device number to device functions.

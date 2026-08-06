@@ -213,6 +213,7 @@ UPROGS=\
 	$U/_test1\
 	$U/_test2\
 	$U/_unlinkopen\
+	$U/_bigfile\
 	$U/_usertests\
 	$U/_grind\
 	$U/_wc\
@@ -235,6 +236,9 @@ $(EXT2IMG): hello.c $K/param.h
 	mkfs.ext2 -F -q -b 1024 -I 128 -m 0 $(EXT2IMG)
 	debugfs -w -R "write hello.c hello.c" $(EXT2IMG)
 	debugfs -w -R "write hello.c verylongfilename.txt" $(EXT2IMG)
+	dd if=/dev/zero bs=1024 count=1024 of=hostbig.bin 2>/dev/null
+	debugfs -w -R "write hostbig.bin hostbig.bin" $(EXT2IMG)
+	rm -f hostbig.bin
 
 $(FAT32IMG): mkfs/mkfat32 $K/param.h
 	rm -f $(FAT32IMG)

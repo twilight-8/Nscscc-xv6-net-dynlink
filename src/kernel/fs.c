@@ -234,7 +234,11 @@ iupdate(struct inode *ip)
   dip->minor = ip->minor;
   dip->nlink = ip->nlink;
   dip->size = ip->size;
-  memmove(dip->addrs, ip->addrs, sizeof(ip->addrs));
+  // Copy only as many addresses as the on-disk dinode can hold:
+  // struct inode carries one extra slot for the ext2 backend's
+  // double-indirect pointer, which must not spill into the next
+  // dinode in the block.
+  memmove(dip->addrs, ip->addrs, sizeof(dip->addrs));
   log_write(bp);
   brelse(bp);
 }
@@ -311,7 +315,8 @@ ilock(struct inode *ip)
     ip->minor = dip->minor;
     ip->nlink = dip->nlink;
     ip->size = dip->size;
-    memmove(ip->addrs, dip->addrs, sizeof(ip->addrs));
+    // See iupdate(): copy only the on-disk address count.
+    memmove(ip->addrs, dip->addrs, sizeof(dip->addrs));
     brelse(bp);
     ip->valid = 1;
     if(ip->type == 0)
