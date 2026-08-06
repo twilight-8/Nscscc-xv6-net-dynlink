@@ -26,7 +26,9 @@ fi
 echo "[test_baseline] running usertests -q on $TEST_ARCH"
 (
   cd "$XV6_DIR" || exit 1
-  python3 test-xv6.py usertests -q
+  # Hard time limit: if the guest panics, test-xv6.py blocks forever on
+  # an empty output pipe; turn that into a visible FAIL instead.
+  timeout 420 python3 test-xv6.py usertests -q
 ) 2>&1 | tee "$TEST_LOG"
 test_status=$?
 

@@ -32,12 +32,15 @@ python3 "$ROOT_DIR/tests/runner/run_qemu_case.py" \
   --expect "mount: fat32 on /fat dev 3" \
   --expect "fat32-one" \
   --expect "fat32-two" \
+  --expect "fat-nested" \
   --expect "FAT32_DONE" \
   --reject "panic:" \
   --reject "kerneltrap" \
   --reject "mount: failed" \
   --reject "failed to delete" \
-  --reject "open /fat/a.txt failed"
+  --reject "open /fat/a.txt failed" \
+  --reject "mkdir: /fat/d1 failed" \
+  --reject "open /fat/d1/d2/f.txt failed"
 test_status=$?
 
 if [ "$test_status" -eq 0 ]; then

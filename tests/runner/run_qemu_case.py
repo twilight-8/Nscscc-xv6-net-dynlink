@@ -28,6 +28,9 @@ def main():
     parser.add_argument("--reject", action="append", default=[])
     parser.add_argument("--boot-wait", type=float, default=5.0)
     parser.add_argument("--step-wait", type=float, default=1.0)
+    parser.add_argument("--final-wait", type=float, default=0.0,
+                        help="after the last command, keep draining up to this many "
+                             "seconds until all --expect patterns have appeared")
     parser.add_argument("--live", action="store_true",
                         help="mirror QEMU output to the terminal while saving the log")
     args = parser.parse_args()
@@ -90,6 +93,15 @@ def main():
                 break
 
         drain(0.5)
+        if args.final_wait > 0 and result == "PASS":
+            end = time.time() + args.final_wait
+            while time.time() < end:
+                current = text()
+                if all(pattern in current for pattern in args.expect):
+                    break
+                if any(pattern in current for pattern in args.reject):
+                    break
+                drain(0.5)
         current = text()
         if result == "PASS":
             missing = [pattern for pattern in args.expect if pattern not in current]

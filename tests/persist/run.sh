@@ -34,12 +34,15 @@ python3 "$ROOT_DIR/tests/runner/run_qemu_case.py" \
   --expect "mount: fat32 on /fat dev 3" \
   --expect "persist-ext2" \
   --expect "persist-fat" \
+  --expect "bigfile: ok (1048576 bytes, keep)" \
   --expect "PERSIST_WRITE_DONE" \
   --reject "panic:" \
   --reject "kerneltrap" \
   --reject "mount: failed" \
+  --reject "bigfile: FAIL" \
   --reject "open /mnt/persist.txt failed" \
-  --reject "open /fat/p.txt failed"
+  --reject "open /fat/p.txt failed" \
+  --final-wait 150
 write_status=$?
 
 if [ "$write_status" -eq 0 ]; then
@@ -53,12 +56,16 @@ if [ "$write_status" -eq 0 ]; then
     --expect "mount: fat32 on /fat dev 3" \
     --expect "persist-ext2" \
     --expect "persist-fat" \
+    --expect "bigfile: ok (1048576 bytes, verify)" \
+    --expect "0 1 1048576" \
     --expect "PERSIST_READ_DONE" \
     --reject "panic:" \
     --reject "kerneltrap" \
     --reject "mount: failed" \
+    --reject "bigfile: FAIL" \
     --reject "open /mnt/persist.txt failed" \
-    --reject "open /fat/p.txt failed"
+    --reject "open /fat/p.txt failed" \
+    --final-wait 150
   read_status=$?
 else
   read_status=1

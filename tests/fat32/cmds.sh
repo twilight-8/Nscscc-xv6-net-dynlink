@@ -12,4 +12,9 @@ echo > /fat/e.txt
 cat /fat/e.txt
 rm /fat/a.txt
 rm /fat/e.txt
+mkdir /fat/d1
+mkdir /fat/d1/d2
+echo fat-nested > /fat/d1/d2/f.txt
+cat /fat/d1/d2/f.txt
+ls /fat
 echo FAT32_DONE

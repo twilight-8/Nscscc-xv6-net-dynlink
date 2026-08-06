@@ -33,6 +33,9 @@ python3 "$ROOT_DIR/tests/runner/run_qemu_case.py" \
   --expect "Hello, world" \
   --expect "ext2-first" \
   --expect "ext2-second" \
+  --expect "ext2-nested" \
+  --expect "bigfile: ok" \
+  --expect "0 1 1048576" \
   --expect "EXT2_DONE" \
   --reject "panic:" \
   --reject "kerneltrap" \
@@ -40,7 +43,10 @@ python3 "$ROOT_DIR/tests/runner/run_qemu_case.py" \
   --reject "failed to delete" \
   --reject "open /mnt/a.txt failed" \
   --reject "cannot stat" \
-  --reject "open /mnt/verylongfilename.txt failed"
+  --reject "open /mnt/verylongfilename.txt failed" \
+  --reject "mkdir: /mnt/d1 failed" \
+  --reject "bigfile: FAIL" \
+  --final-wait 150
 test_status=$?
 
 if [ "$test_status" -eq 0 ]; then
