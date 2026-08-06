@@ -38,6 +38,85 @@ write_sector(FILE *f, uint32_t sec, unsigned char *buf)
   }
 }
 
+// ---- LFN fixture files ----
+// Two pre-made files with long-name directory entries, used by the
+// fat32 test point to verify the kernel's LFN read path:
+//   longfilename.txt  (16 chars, two-fragment chain, alias lookup)
+//   ShortLong.txt     (13 chars, single fragment, case-insensitive)
+
+static unsigned char
+lfn_checksum(const unsigned char *name83)
+{
+  unsigned char sum = 0;
+  int i;
+
+  for(i = 0; i < 11; i++)
+    sum = ((sum & 1) << 7) + (sum >> 1) + name83[i];
+  return sum;
+}
+
+// Write one LFN directory entry.  frag points at this fragment's slice
+// of the full name, n is the number of characters in the slice (<=13).
+static void
+put_lfn(unsigned char *de, int seq, int last, unsigned char cksum,
+        const char *frag, int n)
+{
+  static const unsigned char off[13] =
+    { 1, 3, 5, 7, 9, 14, 16, 18, 20, 22, 24, 28, 30 };
+  int i;
+
+  memset(de, 0, 32);
+  de[0] = seq | (last ? 0x40 : 0);
+  for(i = 0; i < 13; i++){
+    unsigned short c = 0xffff;
+    if(i < n)
+      c = (unsigned char)frag[i];
+    else if(i == n)
+      c = 0x0000;
+    de[off[i]] = c & 0xff;
+    de[off[i] + 1] = c >> 8;
+  }
+  de[11] = 0x0f;    // LFN attribute
+  de[13] = cksum;
+}
+
+static void
+put_sfn(unsigned char *de, const char *name83, uint32_t clus, uint32_t size)
+{
+  memset(de, 0, 32);
+  memcpy(de, name83, 11);
+  de[11] = 0x20;    // archive
+  put16(de, 26, clus);
+  put32(de, 28, size);
+}
+
+static void
+inject_lfn_fixtures(FILE *f, uint32_t data_start)
+{
+  static const char lfn1[] = "longfilename.txt";
+  static const char lfn2[] = "ShortLong.txt";
+  static const char content[] = "fat32-lfn-ok\n";
+  unsigned char root[FAT32_BPS], data[FAT32_BPS];
+  unsigned char ck1, ck2;
+
+  ck1 = lfn_checksum((const unsigned char *)"LONGFI~1TXT");
+  ck2 = lfn_checksum((const unsigned char *)"SHORTL~1TXT");
+
+  memset(root, 0, sizeof(root));
+  // fragments of one name are stored in reverse order, last first
+  put_lfn(root + 0, 2, 1, ck1, lfn1 + 13, 3);       // "txt"
+  put_lfn(root + 32, 1, 0, ck1, lfn1, 13);          // "longfilename."
+  put_sfn(root + 64, "LONGFI~1TXT", 3, sizeof(content) - 1);
+  put_lfn(root + 96, 1, 1, ck2, lfn2, 13);          // single fragment
+  put_sfn(root + 128, "SHORTL~1TXT", 4, sizeof(content) - 1);
+  write_sector(f, data_start, root);                // root dir is cluster 2
+
+  memset(data, 0, sizeof(data));
+  memcpy(data, content, sizeof(content) - 1);
+  write_sector(f, data_start + 1, data);            // cluster 3
+  write_sector(f, data_start + 2, data);            // cluster 4
+}
+
 int
 main(int argc, char **argv)
 {
@@ -119,8 +198,12 @@ main(int argc, char **argv)
   put32(fat, 0, 0x0ffffff8);
   put32(fat, 4, 0xffffffff);
   put32(fat, 8, 0x0fffffff);
+  put32(fat, 12, 0x0fffffff);   // cluster 3: fixture file 1 data
+  put32(fat, 16, 0x0fffffff);   // cluster 4: fixture file 2 data
   write_sector(f, FAT32_RSVD_SEC, fat);
   write_sector(f, FAT32_RSVD_SEC + FAT32_FAT_SEC, fat);
+
+  inject_lfn_fixtures(f, data_start);
 
   fclose(f);
   return 0;

@@ -618,21 +618,201 @@ fat32_mount(struct mount *mnt)
   return 0;
 }
 
+// ---- FAT32 long file name (LFN) read support ----
+// Only lookup and directory listing understand LFN chains; create and
+// unlink stay on 8.3 short names.  The xv6 namespace truncates path
+// components to DIRSIZ characters, so assembling the first DIRSIZ
+// characters of a long name is sufficient: names that fit match
+// exactly (case-insensitive, per the FAT rules), longer ones follow
+// the same truncated-alias rule as the ext2 backend.
+
+struct fat32_lfn {
+  int expect;            // next fragment sequence expected, 0 = no chain
+  int ready;             // a complete chain waits for its short entry
+  uchar cksum;           // checksum shared by all fragments
+  int endpos;            // name length; > DIRSIZ means "longer than DIRSIZ"
+  char name[DIRSIZ];
+};
+
+static uchar
+fat32_lfn_checksum(uchar *name83)
+{
+  uchar sum = 0;
+  int i;
+
+  for(i = 0; i < 11; i++)
+    sum = ((sum & 1) << 7) + (sum >> 1) + name83[i];
+  return sum;
+}
+
+static ushort
+fat32_lfn_char(struct fat32_dirent *de, int i)
+{
+  // the 13 UTF-16LE characters of a fragment live at byte offsets
+  // 1..10, 14..25 and 28..31
+  static const uchar off[13] = { 1, 3, 5, 7, 9, 14, 16, 18, 20, 22, 24, 28, 30 };
+  uchar *p = (uchar*)de;
+
+  return p[off[i]] | (p[off[i] + 1] << 8);
+}
+
+static void
+fat32_lfn_reset(struct fat32_lfn *st)
+{
+  st->expect = 0;
+  st->ready = 0;
+}
+
+// Feed one LFN fragment (attr 0x0F directory entry) into the assembly
+// state.  Fragments of one name are stored in reverse order on disk.
+static void
+fat32_lfn_feed(struct fat32_lfn *st, struct fat32_dirent *de)
+{
+  int seq, i, pos;
+  ushort w;
+
+  seq = de->name[0] & 0x3F;
+  if(de->name[0] & 0x40){
+    // logically last fragment, stored first: starts a new chain
+    st->expect = seq;
+    st->ready = 0;
+    st->cksum = de->name[13];
+    st->endpos = seq * 13;
+    memset(st->name, 0, sizeof(st->name));
+  } else if(st->expect == 0 || seq != st->expect || de->name[13] != st->cksum){
+    fat32_lfn_reset(st);        // out of order or checksum mismatch
+    return;
+  }
+
+  for(i = 0; i < 13; i++){
+    pos = (seq - 1) * 13 + i;
+    w = fat32_lfn_char(de, i);
+    if(w == 0x0000 || w == 0xFFFF){
+      if(pos < st->endpos)
+        st->endpos = pos;       // terminator or padding
+      continue;
+    }
+    if(pos < DIRSIZ && pos < st->endpos)
+      st->name[pos] = w < 0x80 ? w : '?';
+  }
+
+  if(seq == 1)
+    st->ready = 1;              // chain complete
+  else
+    st->expect = seq - 1;
+}
+
+// Consult the assembled chain when its short-name entry shows up.
+// Returns 1 and copies the (truncated) long name when the chain is
+// complete and its checksum matches this entry's 8.3 name.
+static int
+fat32_lfn_take(struct fat32_lfn *st, struct fat32_dirent *de,
+               char *name, int *len)
+{
+  int ok;
+
+  ok = st->ready && st->cksum == fat32_lfn_checksum(de->name);
+  if(ok){
+    memmove(name, st->name, DIRSIZ);
+    *len = st->endpos;
+  }
+  fat32_lfn_reset(st);
+  return ok;
+}
+
+static int
+fat32_lfn_match(char *query, int qlen, char *lname, int llen)
+{
+  int i;
+
+  if(llen <= DIRSIZ){
+    if(qlen != llen)            // exact match for names that fit
+      return 0;
+  } else {
+    if(qlen != DIRSIZ)          // longer name: truncated-alias only
+      return 0;
+    llen = DIRSIZ;
+  }
+  for(i = 0; i < llen; i++)
+    if(fat32_tolower(query[i]) != fat32_tolower(lname[i]))
+      return 0;
+  return 1;
+}
+
+static int
+fat32_namelen(char *name)
+{
+  int len;
+
+  for(len = 0; len < DIRSIZ && name[len]; len++)
+    ;
+  return len;
+}
+
+// Long-name fallback of fat32_lookup: scan the directory for an LFN
+// chain whose assembled name matches the query.
+static struct inode*
+fat32_lookup_lfn(struct inode *dp, char *name)
+{
+  struct fat32_fs *fs = (struct fat32_fs*)dp->mnt->fs_private;
+  struct fat32_dirent de;
+  struct fat32_lfn st;
+  char lname[DIRSIZ];
+  uint clus, next, pos, off;
+  int llen, qlen;
+
+  qlen = fat32_namelen(name);
+  memset(&st, 0, sizeof(st));
+  clus = dp->addrs[0];
+  while(clus >= 2){
+    for(pos = 0; pos < fs->cluster_size; pos += sizeof(de)){
+      off = fat32_clus_offset(fs, clus) + pos;
+      if(fat32_read_entry(fs, off, &de) < 0)
+        return 0;
+      if(de.name[0] == 0x00)
+        return 0;
+      if(de.name[0] == 0xe5){
+        fat32_lfn_reset(&st);   // deleted entry breaks a chain
+        continue;
+      }
+      if((de.attr & FAT32_ATTR_LFN) == FAT32_ATTR_LFN){
+        fat32_lfn_feed(&st, &de);
+        continue;
+      }
+      if(de.attr & FAT32_ATTR_VOL){
+        fat32_lfn_reset(&st);
+        continue;
+      }
+      if(fat32_lfn_take(&st, &de, lname, &llen) &&
+         fat32_lfn_match(name, qlen, lname, llen))
+        return fat32_iget(dp->mnt, &de, off);
+    }
+    if(fat32_read_fat(fs, clus, &next) < 0 || fat32_is_eoc(next))
+      break;
+    clus = next;
+  }
+  return 0;
+}
+
 static int
 fat32_readi(struct inode *ip, int user_dst, uint64 dst, uint off, uint n)
 {
   struct fat32_fs *fs = (struct fat32_fs*)ip->mnt->fs_private;
   struct dirent xde;
   struct fat32_dirent de;
+  struct fat32_lfn lst;
   char name[DIRSIZ];
+  char lname[DIRSIZ];
   uchar buf[BSIZE];
   uint want, seen, clus, next, pos, deoff, m;
+  int llen, has_lfn;
 
   if(ip->type == T_DIR){
     if(n < sizeof(xde) || off % sizeof(xde) != 0)
       return 0;
     want = off / sizeof(xde);
     seen = 0;
+    memset(&lst, 0, sizeof(lst));
     clus = ip->addrs[0];
     while(clus >= 2){
       for(pos = 0; pos < fs->cluster_size; pos += sizeof(de)){
@@ -641,13 +821,25 @@ fat32_readi(struct inode *ip, int user_dst, uint64 dst, uint off, uint n)
           return -1;
         if(de.name[0] == 0x00)
           return 0;
-        if(!fat32_is_valid_entry(&de))
+        if((de.attr & FAT32_ATTR_LFN) == FAT32_ATTR_LFN &&
+           de.name[0] != 0xe5){
+          fat32_lfn_feed(&lst, &de);
           continue;
+        }
+        if(!fat32_is_valid_entry(&de)){
+          fat32_lfn_reset(&lst);        // deleted/volume entry breaks a chain
+          continue;
+        }
+        has_lfn = fat32_lfn_take(&lst, &de, lname, &llen);
         if(seen++ == want){
           memset(&xde, 0, sizeof(xde));
           xde.inum = fat32_first_cluster(&de);
-          fat32_name_from83(&de, name);
-          memmove(xde.name, name, fat32_min(strlen(name), DIRSIZ));
+          if(has_lfn)
+            memmove(xde.name, lname, fat32_min(llen, DIRSIZ));
+          else {
+            fat32_name_from83(&de, name);
+            memmove(xde.name, name, fat32_min(strlen(name), DIRSIZ));
+          }
           if(either_copyout(user_dst, dst, (char*)&xde, sizeof(xde)) < 0)
             return -1;
           return sizeof(xde);
@@ -760,15 +952,15 @@ fat32_lookup(struct inode *dp, char *name)
     memset(name83, ' ', sizeof(name83));
     name83[0] = '.';
     name83[1] = '.';
-  } else if(fat32_name83(name, name83) < 0){
-    return 0;
+    if(fat32_find_entry(dp, name83, &de, &entry_off) == 0)
+      return fat32_iget(dp->mnt, &de, entry_off);
+    return idup(dp);
   }
-  if(fat32_find_entry(dp, name83, &de, &entry_off) < 0){
-    if(namecmp(name, "..") == 0)
-      return idup(dp);
-    return 0;
-  }
-  return fat32_iget(dp->mnt, &de, entry_off);
+  if(fat32_name83(name, name83) == 0 &&
+     fat32_find_entry(dp, name83, &de, &entry_off) == 0)
+    return fat32_iget(dp->mnt, &de, entry_off);
+  // Not found by the 8.3 name (or no 8.3 form): try long names.
+  return fat32_lookup_lfn(dp, name);
 }
 
 static struct inode*

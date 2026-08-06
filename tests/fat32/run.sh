@@ -33,6 +33,9 @@ python3 "$ROOT_DIR/tests/runner/run_qemu_case.py" \
   --expect "fat32-one" \
   --expect "fat32-two" \
   --expect "fat-nested" \
+  --expect "fat32-lfn-ok" \
+  --expect "longfilename.t" \
+  --expect "ShortLong.txt" \
   --expect "FAT32_DONE" \
   --reject "panic:" \
   --reject "kerneltrap" \
@@ -40,7 +43,10 @@ python3 "$ROOT_DIR/tests/runner/run_qemu_case.py" \
   --reject "failed to delete" \
   --reject "open /fat/a.txt failed" \
   --reject "mkdir: /fat/d1 failed" \
-  --reject "open /fat/d1/d2/f.txt failed"
+  --reject "open /fat/d1/d2/f.txt failed" \
+  --reject "LONGFI~1" \
+  --reject "open /fat/longfilename.txt failed" \
+  --reject "open /fat/shortlong.txt failed"
 test_status=$?
 
 if [ "$test_status" -eq 0 ]; then

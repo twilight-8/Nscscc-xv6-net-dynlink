@@ -17,4 +17,7 @@ mkdir /fat/d1/d2
 echo fat-nested > /fat/d1/d2/f.txt
 cat /fat/d1/d2/f.txt
 ls /fat
+cat /fat/longfilename.txt
+cat /fat/shortlong.txt
+cat /fat/longfi~1.txt
 echo FAT32_DONE
