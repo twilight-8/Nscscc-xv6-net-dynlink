@@ -489,3 +489,32 @@ virtio_disk_intr()
 
   release(&disk.vdisk_lock);
 }
+
+// Nonzero if the device has posted used-ring completions that the
+// driver has not processed yet.  Used by trap code to retry after
+// acknowledging the interrupt, because with legacy INTx signalling a
+// completion that arrives mid-acknowledge can be swallowed by the
+// interrupt-controller chain without raising a new interrupt.
+int
+virtio_disk_pending(void)
+{
+  __sync_synchronize();
+  return disk.used_idx != disk.used->idx;
+}
+
+// Backstop for lost completion interrupts (observed with LoongArch
+// legacy INTx: the controller chain can swallow a completion that
+// arrives while the previous one is being acknowledged, so no further
+// interrupt is ever raised).  Called from the timer interrupt, which
+// does not depend on that chain; drains pending completions unless
+// the disk lock is busy somewhere else, in which case the next tick
+// retries.
+void
+virtio_disk_watchdog(void)
+{
+  if(disk.vdisk_lock.locked)
+    return;
+  if(!virtio_disk_pending())
+    return;
+  virtio_disk_intr();
+}

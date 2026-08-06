@@ -240,8 +240,16 @@ devintr()
       // now allowed to interrupt again.
       hal_irq_complete(1UL << UART0_IRQ);
     } else if(irq & (1UL << VIRTIO0_IRQ)){
-      virtio_disk_intr();
-      hal_irq_complete(1UL << VIRTIO0_IRQ);
+      // With legacy INTx signalling, a completion that arrives while
+      // the previous one is being acknowledged can be swallowed by
+      // the APIC/EXTIOI chain (the line never drops, so nothing new
+      // is raised).  Loop until every posted completion has been
+      // processed, otherwise the waiter on the disk buffer would
+      // sleep forever.
+      do {
+        virtio_disk_intr();
+        hal_irq_complete(1UL << VIRTIO0_IRQ);
+      } while(virtio_disk_pending());
     } else if(irq){
        printf("unexpected interrupt irq=0x%lx\n", irq);
        hal_irq_complete(irq);
@@ -253,8 +261,11 @@ devintr()
 
     if(cpuid() == 0){
       clockintr();
+      // Backstop for lost virtio completion interrupts: the timer
+      // does not depend on the external interrupt chain.
+      virtio_disk_watchdog();
     }
-    
+
     // acknowledge the timer interrupt by clearing
     // the TI bit in TICLR.
     w_csr_ticlr(r_csr_ticlr() | CSR_TICLR_CLR);
