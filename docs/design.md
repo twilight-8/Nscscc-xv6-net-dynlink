@@ -294,6 +294,14 @@ D0 重新核对公开测试后确认：当前公开样例仍主要围绕 ext2 `/
 - 清理 LoongArch ramdisk 死代码（文件、Makefile 规则与残留声明）。
 - 测试与构建基建：官方测例逐字节入库并锚定版本（`tests/VFS_TESTS_PIN.txt`），`public_vfs` 复刻官方评测流程；新增 `tests/check_env.sh` 环境检查与 `tests/run_all.sh` 双架构一键回归；镜像构建补充 `kernel/param.h` 依赖与宿主工具检查。
 
+### 阶段 J：并发稳定性与性能修复
+
+以 SMP 并发压测（`tests/smp`，CPUS=3，后台三路 `bigfile` 并发 + 挂载点内 `stressfs`）取证并修复了两处深层问题：
+
+- **后端分配器竞争（C1）**：fat32 的 FAT 分配"读-判零-写"序列与 `next_free` 提示此前无锁，SMP 下并发 `bigfile` 会双重分配同一簇、交叉链接后写者挂死（修复前红灯实证）；ext2 位图操作因持有缓冲块锁天然串行，但超级块/组描述符空闲计数存在内存读改写竞争。修复：两个后端各增加一把 sleeplock 包裹分配/释放路径（仅 inode 锁之后、缓冲锁之前获取），并发语义对齐预期。
+- **fat32 大文件 O(n²) 链漫游**：`fat32_cluster_at` 此前每块都从链头重扫，写 1MiB 文件需约 200 万次 FAT 查询，分钟级耗时。修复：内存 inode 的 `addrs[2]/[3]` 缓存最近漫游位置（索引→簇号），顺序访问退化为 O(1)/块；缓存随 inode 填充/截断失效。修复后三路并发 1MiB fat32 写入约一分钟内全部完成并逐字节校验通过。
+- 测试驱动 runner 增加 `--cpus` 与提示符等待（输出静默 + 行尾 `$ ` 双条件判定，规避 UART 128 字节输入缓冲溢出与后台命令早提示的误判）。
+
 ### 阶段 I：ext2 大文件支持与测试覆盖扩展
 
 - 双重间接块：`ext2_bmap` 增加两级查找分支（`ext2_bmap_double`），按需分配外层表/内层表/数据块；`ext2_itrunc` 对称释放（内层表逐块→内层表→外层表）；`ext2_sync_inode` 回写 `i_block[13]` 并将间接表计入 `i_blocks`。内存 inode 地址槽位扩展为 `NDIRECT+2`（xv6 后端仍只用 +1，磁盘格式不变）；配套约束：`ilock`/`iupdate` 与磁盘 dinode 之间一律以 `sizeof(dip->addrs)` 为拷贝上界，内存扩展槽位绝不外溢到相邻 dinode。`ext2_iget` 拒读条件由"含双/三重间接"收紧为"仅三重间接"。

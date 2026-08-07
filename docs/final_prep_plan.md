@@ -102,7 +102,7 @@
 
 ### 3.3 C 类：稳定性问题（优先级 P1）
 
-**C1. SMP 环境下后端全局状态无锁保护**（严重度：中）
+**C1. SMP 环境下后端全局状态无锁保护**（严重度：中，已于 Day 5 修复）
 - 位置：`src/kernel/ext2.c:103`（`ext2fs`）、`fat32.c:67`（`fat32fs`）。
 - 问题：静态全局结构无锁保护；`begin_op` 允许多个并发事务，CPUS>1 时两个 CPU 可同时进入 `ext2_create`/`ext2_alloc_block`；超级块/组描述符计数的读改写及多步元数据操作存在竞争。（`mtable.lock` 本身使用正确，无持锁睡眠。）
 - 修复方法：为后端增加 sleeplock 包裹 ext2/fat32 变更操作；或在文档中声明 CPUS=1 基线并附 SMP 实测结果。
@@ -111,11 +111,11 @@
 - 位置：`src/kernel/block.c:47`（`block_write_bytes` 直接 `bwrite`）。
 - 处置：不修改设计（符合教学系统定位），但文档须正面说明该取舍及掉电影响，并准备答辩应答。
 
-**C3. 测试 runner 定时硬编码，慢速主机上结果不稳定**（严重度：中）
+**C3. 测试 runner 定时硬编码，慢速主机上结果不稳定**（严重度：中，已于 Day 5 落地提示符等待）
 - 位置：`tests/runner/run_qemu_case.py:29-30`（`--boot-wait 5.0`、`--step-wait 1.0`），各 `run.sh` 未覆盖默认值；`--expect` 仅在结束时检查一次。
 - 修复方法：改为按 shell 提示符 pattern 等待就绪，超时参数化。
 
-**C4. 压力、并发与边界场景测试空白**（严重度：中）
+**C4. 压力、并发与边界场景测试空白**（严重度：中，已于 Day 5 补齐 tests/smp）
 - 现状：ext2/fat32 的全部写入均为一行 echo 级别；未对挂载点执行 `stressfs` 压测；无 SMP 测试（runner 固定 `CPUS=1`）；无反复创建/删除循环（位图/FAT 泄漏探测）；无挂载点内 mkdir、嵌套目录、大文件用例。
 - 处置：见 Day 5 任务安排。
 
@@ -250,7 +250,8 @@
 | Day 1 官方测例合规 + B 类修复 | 已完成 | 14/14 回归 PASS，已推送（4 笔提交） |
 | Day 2 HAL 对称化与批量修复 | 已完成 | 14/14 回归 PASS，已推送（4 笔提交） |
 | Day 3 ext2 双重间接 + 大文件测试 | 已完成 | 14/14 回归 PASS；完整 usertests（不带 -q）双架构 PASS；e2fsck 离线校验零错误；已推送（5 笔提交） |
-| Day 4 fat32 LFN 读支持 | 已完成 | 14/14 回归 PASS；完整 usertests 双架构 PASS；3 笔提交待推送 |
+| Day 4 fat32 LFN 读支持 | 已完成 | 14/14 回归 PASS；完整 usertests 双架构 PASS；已推送（3 笔提交） |
+| Day 5 稳定性证据与一键复现 | 已完成 | 16/16 回归 PASS（新增 smp 双架构）；完整 usertests 双架构 PASS；SMP 压测后 e2fsck 零错误；证据入库 tests/evidence/；待推送 |
 
 推送前门禁（自 Day 3 起强制执行）：`tests/run_all.sh` 14/14 + `tests/full_usertests.sh` 双架构全绿，缺一不推。
 
@@ -287,9 +288,9 @@
 - 回退预案：未触发（实现一次调通，双架构行为一致）。
 
 **Day 5（8.8，周六）：稳定性证据与一键复现（含选做冲刺项）**
-- [ ] 上午：C4 在 ext2/fat32 挂载点执行 `stressfs` 压测；`CPUS=2`/`CPUS=4` 下双架构 `usertests -q` 与挂载点并发读写；反复创建/删除循环（位图/FAT 泄漏探测）。若暴露 C1 类竞争，按预案增加后端 sleeplock。
-- [ ] 下午：C3 runner 改造（pattern 等待替代固定延时）；A3 根 Makefile 新增 `verify-all` 目标（14 组串行 + 汇总表）；全量执行并将 14 份日志与双架构全量启动输出提交入库。
-- [ ] 晚上（选做）：仅当前四天全部达标时实施 D5（ROOT_FSTYPE=ext2 启动）；否则用于修复不稳定项，收尾必须 14/14 通过。
+- [✔] 上午：C4 SMP 压测取证——新增 `tests/smp` 测试点（runner 增加 `--cpus`），CPUS=3 下 ext2/fat32 挂载点三路并发 `bigfile` + 挂载点内 `stressfs`。修复前红灯实证：fat32 并发写挂死（C1 坐实）。
+- [✔] 下午：C1 修复落地（两后端各一把 sleeplock 包裹分配/释放路径，锁序：inode 锁 → 后端锁 → 缓冲锁）；计划外修复 fat32 链漫游 O(n²)（inode 空槽位缓存漫游位置，O(1)/块）；C3 落地为 runner 提示符等待（静默+`$ `双判定）；A3 新增 `make verify-all`；修复后 SMP 双架构 PASS，压测后 e2fsck 五阶段零错误。
+- [✔] 晚上：门禁双项全绿（16/16 + 完整 usertests 双架构）；证据归档 `tests/evidence/`（16 项汇总、双架构完整 usertests、双架构 SMP 原始输出）。D5 经评估放弃：超出赛题硬性要求，需 ext2 设备节点与启动路径改动，收尾期风险/收益不成立，记档不实施。
 - 产出：完整 usertests、SMP、压力测试证据；评审可一行命令复现全部声明。
 
 ### 第二阶段：文档体系建设与展示材料（Day 6–8）
