@@ -48,6 +48,10 @@ struct fat32_fs {
   uint data_start_sec;
   uint nclus;
   uint next_free;
+  // Serializes FAT allocation and free paths (including the next_free
+  // hint) across CPUs.  Only ever taken after inode locks and before
+  // buffer locks.
+  struct sleeplock lock;
 };
 
 struct fat32_dirent {
@@ -197,6 +201,8 @@ fat32_alloc_cluster(struct fat32_fs *fs)
 {
   uint clus, val, start;
 
+  acquiresleep(&fs->lock);
+
   // Next-free hint: continue where the last allocation stopped
   // instead of rescanning the FAT from cluster 2 every time.
   start = fs->next_free;
@@ -204,23 +210,31 @@ fat32_alloc_cluster(struct fat32_fs *fs)
     start = 2;
   clus = start;
   for(;;){
-    if(fat32_read_fat(fs, clus, &val) < 0)
+    if(fat32_read_fat(fs, clus, &val) < 0){
+      releasesleep(&fs->lock);
       return 0;
+    }
     if(val == 0){
-      if(fat32_write_fat(fs, clus, FAT32_EOC) < 0)
+      if(fat32_write_fat(fs, clus, FAT32_EOC) < 0){
+        releasesleep(&fs->lock);
         return 0;
+      }
       if(fat32_zero_cluster(fs, clus) < 0){
         fat32_write_fat(fs, clus, 0);
+        releasesleep(&fs->lock);
         return 0;
       }
       fs->next_free = clus + 1;
+      releasesleep(&fs->lock);
       return clus;
     }
     clus++;
     if(clus > fs->nclus + 1)
       clus = 2;
-    if(clus == start)
+    if(clus == start){
+      releasesleep(&fs->lock);
       return 0;
+    }
   }
 }
 
@@ -248,25 +262,35 @@ fat32_free_after(struct fat32_fs *fs, uint first)
 static void
 fat32_free_chain(struct fat32_fs *fs, uint first)
 {
+  acquiresleep(&fs->lock);
   fat32_free_after(fs, first);
   if(first >= 2){
     fat32_write_fat(fs, first, 0);
     if(first < fs->next_free)
       fs->next_free = first;
   }
+  releasesleep(&fs->lock);
 }
 
 static uint
 fat32_cluster_at(struct inode *ip, uint index, int alloc)
 {
   struct fat32_fs *fs = (struct fat32_fs*)ip->mnt->fs_private;
-  uint clus, next;
+  uint clus, next, cur;
 
-  clus = ip->addrs[0];
+  // Walk the chain from the cached position when possible; rescanning
+  // from the head for every block makes large files quadratic.
+  if(ip->addrs[3] >= 2 && ip->addrs[2] <= index){
+    clus = ip->addrs[3];
+    cur = ip->addrs[2];
+  } else {
+    clus = ip->addrs[0];
+    cur = 0;
+  }
   if(clus < 2)
     return 0;
 
-  while(index-- > 0){
+  while(cur < index){
     if(fat32_read_fat(fs, clus, &next) < 0)
       return 0;
     if(fat32_is_eoc(next)){
@@ -281,7 +305,11 @@ fat32_cluster_at(struct inode *ip, uint index, int alloc)
       }
     }
     clus = next;
+    cur++;
   }
+
+  ip->addrs[2] = cur;
+  ip->addrs[3] = clus;
   return clus;
 }
 
@@ -376,6 +404,8 @@ fat32_fill_inode(struct inode *ip, struct mount *mnt, struct fat32_dirent *de,
   ip->size = (ip->type == T_DIR) ? 0 : de->size;
   ip->addrs[0] = clus;
   ip->addrs[1] = entry_off;
+  ip->addrs[2] = 0;   // chain-walk cache
+  ip->addrs[3] = 0;
   ip->valid = 1;
 }
 
@@ -415,6 +445,8 @@ fat32_root_inode(struct mount *mnt)
   ip->size = 0;
   ip->addrs[0] = fat32fs.root_clus;
   ip->addrs[1] = 0;
+  ip->addrs[2] = 0;   // chain-walk cache
+  ip->addrs[3] = 0;
   ip->valid = 1;
   return ip;
 }
@@ -607,6 +639,7 @@ fat32_mount(struct mount *mnt)
   fat32fs.used = 1;
   fat32fs.dev = mnt->dev;
   fat32fs.next_free = 2;
+  initsleeplock(&fat32fs.lock, "fat32fs");
   mnt->fs_private = &fat32fs;
   mnt->root = fat32_root_inode(mnt);
   if(mnt->root == 0){
@@ -927,14 +960,20 @@ fat32_itrunc(struct inode *ip)
     // cluster around.
     fat32_free_chain(fs, ip->addrs[0]);
     ip->addrs[0] = 0;
+    ip->addrs[2] = 0;
+    ip->addrs[3] = 0;
     ip->size = 0;
     return;
   }
 
   if(ip->type != T_FILE)
     return;
+  acquiresleep(&fs->lock);
   fat32_free_after(fs, ip->addrs[0]);
+  releasesleep(&fs->lock);
   fat32_zero_cluster(fs, ip->addrs[0]);
+  ip->addrs[2] = 0;
+  ip->addrs[3] = 0;
   ip->size = 0;
   fat32_sync_inode(ip);
 }

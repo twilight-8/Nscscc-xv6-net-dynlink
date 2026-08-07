@@ -98,6 +98,10 @@ struct ext2_fs {
   uint inode_size;
   struct ext2_super sb;
   struct ext2_group_desc gd;
+  // Serializes allocator and free paths (bitmap + in-memory free
+  // counters) across CPUs.  Only ever taken after inode locks and
+  // before buffer locks.
+  struct sleeplock lock;
 };
 
 static struct ext2_fs ext2fs;
@@ -346,6 +350,7 @@ ext2_alloc_block(struct ext2_fs *fs)
   uchar *bitmap;
   uint i, blockno, start, nblocks;
 
+  acquiresleep(&fs->lock);
   bp = bread(fs->dev, fs->gd.bg_block_bitmap);
   bitmap = (uchar*)bp->data;
 
@@ -369,11 +374,13 @@ ext2_alloc_block(struct ext2_fs *fs)
       memset(dbp->data, 0, BSIZE);
       bwrite(dbp);
       brelse(dbp);
+      releasesleep(&fs->lock);
       return blockno;
     }
   }
 
   brelse(bp);
+  releasesleep(&fs->lock);
   return 0;
 }
 
@@ -386,6 +393,7 @@ ext2_free_block(struct ext2_fs *fs, uint blockno)
 
   if(blockno == 0)
     return;
+  acquiresleep(&fs->lock);
   bp = bread(fs->dev, fs->gd.bg_block_bitmap);
   bitmap = (uchar*)bp->data;
   bit = blockno - fs->sb.s_first_data_block;
@@ -398,6 +406,7 @@ ext2_free_block(struct ext2_fs *fs, uint blockno)
     ext2_write_group(fs);
   }
   brelse(bp);
+  releasesleep(&fs->lock);
 }
 
 static uint
@@ -407,6 +416,7 @@ ext2_alloc_inode(struct ext2_fs *fs)
   uchar *bitmap;
   uint i, inum, first, ninodes;
 
+  acquiresleep(&fs->lock);
   bp = bread(fs->dev, fs->gd.bg_inode_bitmap);
   bitmap = (uchar*)bp->data;
 
@@ -428,11 +438,13 @@ ext2_alloc_inode(struct ext2_fs *fs)
         fs->gd.bg_free_inodes_count--;
       ext2_write_super(fs);
       ext2_write_group(fs);
+      releasesleep(&fs->lock);
       return inum;
     }
   }
 
   brelse(bp);
+  releasesleep(&fs->lock);
   return 0;
 }
 
@@ -446,6 +458,7 @@ ext2_free_inode(struct ext2_fs *fs, uint inum)
 
   if(inum == 0)
     return;
+  acquiresleep(&fs->lock);
   bp = bread(fs->dev, fs->gd.bg_inode_bitmap);
   bitmap = (uchar*)bp->data;
   bit = inum - 1;
@@ -461,6 +474,7 @@ ext2_free_inode(struct ext2_fs *fs, uint inum)
 
   memset(&di, 0, sizeof(di));
   ext2_write_dinode(fs, inum, &di);
+  releasesleep(&fs->lock);
 }
 
 // Double-indirect branch of ext2_bmap: outer table in
@@ -1148,6 +1162,7 @@ ext2_mount(struct mount *mnt)
   ext2fs.inode_size = inode_size;
   ext2fs.sb = sb;
   ext2fs.gd = gd;
+  initsleeplock(&ext2fs.lock, "ext2fs");
 
   mnt->fs_private = &ext2fs;
   mnt->root = ext2_iget(mnt, EXT2_ROOT_INO);
