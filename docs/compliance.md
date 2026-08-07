@@ -14,7 +14,17 @@
 
 ## 新增代码许可证
 
-本队新增代码计划采用 BSD-2-Clause License。若后续调整，以最终提交说明为准。
+本队新增代码采用 BSD-2-Clause License，全文见仓库根目录 `LICENSE`。自有新增源文件首行标注 `SPDX-License-Identifier: BSD-2-Clause`。
+
+## 逐文件来源说明
+
+| 文件/目录 | 来源 | 说明 |
+|---|---|---|
+| `src/kernel/vfs.c`、`vfs.h`、`ext2.c`、`fat32.c`、`block.c`、`block.h`、`hal.c` | 本队自有 | SPDX: BSD-2-Clause |
+| `src/mkfs/mkfat32.c`、`src/user/mount.c`、`unlinkopen.c`、`bigfile.c`、`hello.c` | 本队自有 | SPDX: BSD-2-Clause |
+| `src/kernel/arch/loongarch/` | 衍生自 xv6-loongarch-exp（xv6 系，MIT） | 移植参考后由本队大量修改（HAL 对称化、TLB refill、virtio-pci、中断看门狗等） |
+| `src/user/test1.c`、`test2.c`、`src/tests/hello.c`、`src/tests/cmds.sh` | 官方测例仓库 [xv6-extend-vfs](https://github.com/yanjun-wen/xv6-extend-vfs)（GPL-3） | 逐字节引入，版本锚定见 `tests/VFS_TESTS_PIN.txt` |
+| 其余 `src/` 文件 | MIT xv6-riscv rev5 | 见 `src/LICENSE` |
 
 ## 文档许可证
 

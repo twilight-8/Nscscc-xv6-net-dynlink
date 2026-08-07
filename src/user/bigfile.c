@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: BSD-2-Clause
 // Large-file exercise for the ext2 backend: writes 1 MiB of a
 // deterministic pattern (past the 268 KiB direct+single-indirect
 // limit, forcing double-indirect allocation), reads it back and

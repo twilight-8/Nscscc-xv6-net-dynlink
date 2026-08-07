@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: BSD-2-Clause
 #include "types.h"
 #include "riscv.h"
 #include "defs.h"

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: BSD-2-Clause
 #include "kernel/types.h"
 #include "user/user.h"
 

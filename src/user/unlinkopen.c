@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: BSD-2-Clause
 // Regression test: an unlinked file that is still open must remain
 // readable until the last close (POSIX unlink semantics).
 // Usage: unlinkopen [path]   (default path: /mnt/uop.txt)

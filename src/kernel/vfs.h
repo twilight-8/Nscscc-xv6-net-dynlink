@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: BSD-2-Clause
 #ifndef XV6_VFS_H
 #define XV6_VFS_H
 

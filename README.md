@@ -142,9 +142,7 @@ docker run --rm -it xv6-vfs-hal          # 进入容器，工作目录 /xv6
 
 ## 许可证与合规性说明
 
-原始 xv6 代码保留 MIT License。团队新增代码拟采用比赛认可的开源协议，当前计划为 BSD-2-Clause License。技术文档、PPT 和演示视频说明采用 CC-BY-SA 4.0。
-
-详细说明见 `docs/compliance.md`。
+原始 xv6 代码保留 MIT License（见 `src/LICENSE`）。团队新增代码采用 BSD-2-Clause License（全文见仓库根目录 `LICENSE`），自有新增源文件以单行 SPDX 注释标注。第三方来源（xv6-loongarch-exp 移植参考、官方测例文件）的逐文件说明见 `docs/compliance.md`。技术文档、PPT 和演示视频说明采用 CC-BY-SA 4.0。
 
 ## AI 使用声明
 

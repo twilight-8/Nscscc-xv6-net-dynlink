@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: BSD-2-Clause
 #include "types.h"
 #include "param.h"
 #include "memlayout.h"
