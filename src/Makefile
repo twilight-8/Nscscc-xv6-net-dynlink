@@ -214,6 +214,7 @@ UPROGS=\
 	$U/_test2\
 	$U/_unlinkopen\
 	$U/_bigfile\
+	$U/_vfsbench\
 	$U/_usertests\
 	$U/_grind\
 	$U/_wc\
