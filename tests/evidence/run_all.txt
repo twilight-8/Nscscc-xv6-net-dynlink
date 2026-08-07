@@ -1,0 +1,41 @@
+===== test_baseline : 2026-08-07T09:57:28+08:00 =====
+test_baseline            PASS
+===== public_vfs : 2026-08-07T09:58:31+08:00 =====
+public_vfs               PASS
+===== ext2 : 2026-08-07T09:58:47+08:00 =====
+ext2                     PASS
+===== fat32 : 2026-08-07T09:59:17+08:00 =====
+fat32                    PASS
+===== error : 2026-08-07T09:59:49+08:00 =====
+error                    PASS
+===== semantics : 2026-08-07T10:00:08+08:00 =====
+semantics                PASS
+===== persist : 2026-08-07T10:00:30+08:00 =====
+persist                  PASS
+===== smp : 2026-08-07T10:01:05+08:00 =====
+smp                      PASS
+===== loongarch_baseline : 2026-08-07T10:02:58+08:00 =====
+loongarch_baseline       PASS
+===== loongarch_public_vfs : 2026-08-07T10:04:43+08:00 =====
+loongarch_public_vfs     PASS
+===== loongarch_ext2 : 2026-08-07T10:04:58+08:00 =====
+loongarch_ext2           PASS
+===== loongarch_fat32 : 2026-08-07T10:05:55+08:00 =====
+loongarch_fat32          PASS
+===== loongarch_error : 2026-08-07T10:06:25+08:00 =====
+loongarch_error          PASS
+===== loongarch_semantics : 2026-08-07T10:06:44+08:00 =====
+loongarch_semantics      PASS
+===== loongarch_persist : 2026-08-07T10:07:06+08:00 =====
+loongarch_persist        PASS
+===== loongarch_smp : 2026-08-07T10:08:06+08:00 =====
+loongarch_smp            PASS
+run_all: PASS (16/16)
+[full_usertests] building riscv kernel and fs.img
+[full_usertests] running complete usertests on riscv (CPUS=3, no -q)
+[full_usertests] riscv: PASS
+[full_usertests] log: /home/laimanxi/xv6-vfs-hal/tests/test_baseline/logs/usertests-full.log
+[full_usertests] building loongarch kernel and fs.img
+[full_usertests] running complete usertests on loongarch (CPUS=3, no -q)
+[full_usertests] loongarch: PASS
+[full_usertests] log: /home/laimanxi/xv6-vfs-hal/tests/test_baseline/logs/usertests-full-loongarch.log

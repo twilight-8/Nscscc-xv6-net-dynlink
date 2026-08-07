@@ -5,10 +5,10 @@ STATE_FILE := .last-test
 ARCH_STATE_FILE := .last-test-arch
 TEST_ARCH ?= riscv
 
-.PHONY: test_baseline public_vfs ext2 fat32 error semantics persist \
+.PHONY: test_baseline public_vfs ext2 fat32 error semantics persist smp \
 	loongarch_baseline loongarch_public_vfs loongarch_ext2 loongarch_fat32 loongarch_error \
-	loongarch_semantics loongarch_persist \
-	test_public_vfs test_ext2 test_fat32 test_error_path run
+	loongarch_semantics loongarch_persist loongarch_smp \
+	test_public_vfs test_ext2 test_fat32 test_error_path run verify-all
 
 test_baseline:
 	@set -eu; \
@@ -308,6 +308,28 @@ loongarch_semantics:
 loongarch_persist:
 	@$(MAKE) TEST_ARCH=loongarch persist
 
+smp:
+	@set -eu; \
+	TEST_NAME="smp"; \
+	TEST_DIR="tests/$$TEST_NAME"; \
+	LOG_DIR="$$TEST_DIR/logs"; \
+	mkdir -p "$$LOG_DIR"; \
+	echo "[smp] build $(TEST_ARCH) kernel and fs image"; \
+	( \
+		cd "$(XV6_DIR)" && \
+		make ARCH="$(TEST_ARCH)" clean && \
+		make ARCH="$(TEST_ARCH)" kernel/kernel && \
+		rm -f fs.img ext2.img fat32.img && \
+		make ARCH="$(TEST_ARCH)" fs.img \
+	) > "$$LOG_DIR/build.log" 2>&1; \
+	printf "%s\n" "$$TEST_NAME" > "$(STATE_FILE)"; \
+	printf "%s\n" "$(TEST_ARCH)" > "$(ARCH_STATE_FILE)"; \
+	echo "[smp] prepare done"; \
+	echo "Next command: make run"
+
+loongarch_smp:
+	@$(MAKE) TEST_ARCH=loongarch smp
+
 test_public_vfs: public_vfs
 test_ext2: ext2
 test_fat32: fat32
@@ -330,5 +352,13 @@ run:
 		error) ARCH="$$TEST_ARCH" TEST_ARCH="$$TEST_ARCH" bash "tests/error/run.sh" ;; \
 		semantics) ARCH="$$TEST_ARCH" TEST_ARCH="$$TEST_ARCH" bash "tests/semantics/run.sh" ;; \
 		persist) ARCH="$$TEST_ARCH" TEST_ARCH="$$TEST_ARCH" bash "tests/persist/run.sh" ;; \
+		smp) ARCH="$$TEST_ARCH" TEST_ARCH="$$TEST_ARCH" bash "tests/smp/run.sh" ;; \
 		*) echo "Unknown prepared test: $$TEST_NAME"; exit 1 ;; \
 	esac
+
+verify-all:
+	@bash tests/check_env.sh
+	@bash tests/run_all.sh
+	@bash tests/full_usertests.sh riscv
+	@bash tests/full_usertests.sh loongarch
+	@echo "verify-all: ALL GREEN"

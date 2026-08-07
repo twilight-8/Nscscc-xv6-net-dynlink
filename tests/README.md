@@ -54,6 +54,11 @@ tests/
 |   |-- read.cmds.sh
 |   |-- run.sh
 |   `-- logs/
+|-- smp/
+|   |-- README.md
+|   |-- cmds.sh
+|   |-- run.sh
+|   `-- logs/
 |-- VFS_TESTS_PIN.txt
 |-- check_env.sh
 |-- run_all.sh
@@ -78,6 +83,9 @@ tests/
   (`unlinkopen`).
 - `persist`: writes files to ext2/FAT32, restarts QEMU, remounts, and reads the
   files back from the image.
+- `smp`: runs with `--cpus 3`; concurrent bigfile writers on ext2 and FAT32
+  with post-write verification, plus `stressfs` inside each mount point.
+  Exercises the backend allocator serialization (C1).
 
 ## Commands
 
@@ -91,6 +99,7 @@ make fat32 && make run
 make error && make run
 make semantics && make run
 make persist && make run
+make smp && make run
 ```
 
 The old names `make test_public_vfs`, `make test_ext2`, `make test_fat32`, and
@@ -108,6 +117,7 @@ make loongarch_fat32 && make run
 make loongarch_error && make run
 make loongarch_semantics && make run
 make loongarch_persist && make run
+make loongarch_smp && make run
 ```
 
 These targets build `src` with `ARCH=loongarch`, record the selected
@@ -144,8 +154,8 @@ cat cmds.sh | sh
 
 - `tests/check_env.sh`: verifies host tools, both cross toolchains, and
   both QEMU emulators; exits non-zero and prints what is missing.
-- `tests/run_all.sh`: runs all seven test points on both architectures
-  back to back and prints a 14-line PASS/FAIL summary.
+- `tests/run_all.sh`: runs all eight test points on both architectures
+  back to back and prints a 16-line PASS/FAIL summary.
 - `tests/full_usertests.sh [arch]`: runs the complete `usertests`
   (without `-q`, so the six slow tests `bigdir`, `manywrites`,
   `badwrite`, `execout`, `diskfull`, `outofinodes` are included) in the
@@ -157,10 +167,13 @@ cat cmds.sh | sh
 Both of the following must be green before every push to the remote:
 
 ```sh
-bash tests/run_all.sh                      # 14/14 on both architectures
+bash tests/run_all.sh                      # 16/16 on both architectures
 bash tests/full_usertests.sh riscv         # complete usertests, no -q
 bash tests/full_usertests.sh loongarch
 ```
+
+`make verify-all` runs the whole gate (environment check, all suites,
+both complete usertests) with a single command.
 
 ## Logs
 

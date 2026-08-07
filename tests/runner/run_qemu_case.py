@@ -28,6 +28,14 @@ def main():
     parser.add_argument("--reject", action="append", default=[])
     parser.add_argument("--boot-wait", type=float, default=5.0)
     parser.add_argument("--step-wait", type=float, default=1.0)
+    parser.add_argument("--cpus", type=int, default=1,
+                        help="number of guest CPUs (-smp); default 1")
+    parser.add_argument("--prompt-wait", action="store_true",
+                        help="wait for the shell prompt after each command "
+                             "instead of a fixed delay; prevents dropping "
+                             "input when the guest is busy (UART buffer is 128B)")
+    parser.add_argument("--cmd-timeout", type=float, default=180.0,
+                        help="per-command prompt wait limit in seconds")
     parser.add_argument("--final-wait", type=float, default=0.0,
                         help="after the last command, keep draining up to this many "
                              "seconds until all --expect patterns have appeared")
@@ -46,7 +54,7 @@ def main():
     print(flush=True)
 
     qemu = subprocess.Popen(
-        ["make", f"ARCH={arch}", "CPUS=1", "qemu"],
+        ["make", f"ARCH={arch}", f"CPUS={args.cpus}", "qemu"],
         cwd=args.xv6_dir,
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
@@ -82,9 +90,38 @@ def main():
         for idx, command in enumerate(commands, 1):
             prefix = "\n" if args.live else ""
             print(f"{prefix}[{idx:02d}/{len(commands):02d}] {command}", flush=True)
-            qemu.stdin.write((command + "\n").encode("utf-8"))
-            qemu.stdin.flush()
-            drain(args.step_wait)
+            if args.prompt_wait:
+                # Wait until the guest is both idle (no new output for
+                # a short settle window) and sitting at a fresh shell
+                # prompt.  Counting prompts is not enough: with '&'
+                # background jobs the shell can re-prompt while earlier
+                # work is still running.
+                qemu.stdin.write((command + "\n").encode("utf-8"))
+                qemu.stdin.flush()
+                end = time.time() + args.cmd_timeout
+                quiet_since = None
+                while time.time() < end:
+                    before = len(text())
+                    drain(0.2)
+                    cur = text()
+                    if len(cur) != before:
+                        quiet_since = None
+                        continue
+                    if not cur.rstrip().endswith("$"):
+                        quiet_since = None
+                        continue
+                    if quiet_since is None:
+                        quiet_since = time.time()
+                    if time.time() - quiet_since >= 0.5:
+                        break
+                if os.environ.get("RUNNER_DEBUG"):
+                    print(f"    [prompt-wait] quiet-idle at {len(text())} bytes",
+                          flush=True)
+                drain(0.2)
+            else:
+                qemu.stdin.write((command + "\n").encode("utf-8"))
+                qemu.stdin.flush()
+                drain(args.step_wait)
             current = text()
             hit = [pattern for pattern in args.reject if pattern in current]
             if hit:
