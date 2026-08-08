@@ -1,6 +1,6 @@
 # tests
 
-[中文](README.md) | [中文](README.md) | [English](README.en.md)
+[中文](README.md) | [English](README.en.md)
 
 本目录是项目的测试编排体系（宿主机侧）：测试用例、驱动脚本、运行入口与
 通过证据。镜像内的 `/tests` 内容（官方测例数据）位于 `src/tests/`，
