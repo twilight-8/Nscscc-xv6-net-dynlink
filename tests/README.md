@@ -1,188 +1,86 @@
 # tests
 
-This directory stores project test cases, test scripts, and local test logs.
-Each subdirectory is one test point. The root `Makefile` provides a simple
-two-step workflow:
+[中文](README.md) | [中文](README.md) | [English](README.en.md)
 
-```sh
-make <name>
-make run
-```
+本目录是项目的测试编排体系（宿主机侧）：测试用例、驱动脚本、运行入口与
+通过证据。镜像内的 `/tests` 内容（官方测例数据）位于 `src/tests/`，
+二者职责不同，见根 `README.md`。
 
-or:
-
-```sh
-make <name> && make run
-```
-
-## Layout
+## 布局
 
 ```text
 tests/
-|-- test_baseline/
-|   |-- README.md
-|   |-- run.sh
-|   `-- logs/
-|-- public_vfs/
-|   |-- README.md
-|   |-- cmds.sh
-|   |-- run.sh
-|   `-- logs/
-|-- ext2/
-|   |-- README.md
-|   |-- cmds.sh
-|   |-- run.sh
-|   `-- logs/
-|-- fat32/
-|   |-- README.md
-|   |-- cmds.sh
-|   |-- run.sh
-|   `-- logs/
-|-- error/
-|   |-- README.md
-|   |-- cmds.sh
-|   |-- run.sh
-|   `-- logs/
-|-- semantics/
-|   |-- README.md
-|   |-- cmds.sh
-|   |-- run.sh
-|   `-- logs/
-|-- persist/
-|   |-- README.md
-|   |-- write.cmds.sh
-|   |-- read.cmds.sh
-|   |-- run.sh
-|   `-- logs/
-|-- smp/
-|   |-- README.md
-|   |-- cmds.sh
-|   |-- run.sh
-|   `-- logs/
-|-- VFS_TESTS_PIN.txt
-|-- check_env.sh
-|-- run_all.sh
-|-- full_usertests.sh
-`-- runner/
-    `-- run_qemu_case.py
+|-- README.md / README.en.md     本文件（双语）
+|-- MATRIX.md / MATRIX.en.md     测试覆盖矩阵
+|-- VFS_TESTS_PIN.txt            官方测例版本锚定
+|-- check_env.sh                 环境自检
+|-- run_all.sh                   16 项一键双架构回归
+|-- full_usertests.sh            完整 usertests（不带 -q）
+|-- runner/
+|   `-- run_qemu_case.py         QEMU 测试驱动
+|-- evidence/                    通过证据归档（README + 原始输出）
+|-- test_baseline/               官方测例 A：usertests（快速版/完整版）
+|-- public_vfs/                  官方测例 B：公开 VFS 流程复刻
+|-- ext2/                        ext2 功能面（含双间接大文件、长名）
+|-- fat32/                       fat32 功能面（含 LFN 长名）
+|-- error/                       错误路径稳定性
+|-- semantics/                   挂载/链接/unlink 语义
+|-- persist/                     双会话持久性
+`-- smp/                         CPUS=3 并发压测
 ```
 
-## Test Points
+每个测试点目录为统一三件套：`README.md`（双语四段式说明）+
+`*.cmds.sh`（喂给 xv6 shell 的命令）+ `run.sh`（expect/reject 断言）+
+`logs/`（运行产物，不入库）。
 
-- `test_baseline`: runs xv6 `usertests -q` and checks baseline behavior.
-- `public_vfs`: reproduces the pinned upstream VFS evaluation flow (see
-  `VFS_TESTS_PIN.txt`): `mount ext2 /mnt`, then `cd tests` and run the
-  upstream `cmds.sh`, including the `test1`/`test2` cross-filesystem
-  copy cases with their original output strings.
-- `ext2`: checks ext2 mount, read, create, overwrite, and unlink through VFS.
-- `fat32`: checks FAT32 mount and basic 8.3 short-name create, overwrite, and
-  unlink through VFS.
-- `error`: checks that invalid VFS operations fail cleanly without panic.
-- `semantics`: checks mount-root `..`, ext2 hard link success, FAT32 hard
-  link rejection, and unlink-while-open semantics on ext2 and FAT32
-  (`unlinkopen`).
-- `persist`: writes files to ext2/FAT32, restarts QEMU, remounts, and reads the
-  files back from the image.
-- `smp`: runs with `--cpus 3`; concurrent bigfile writers on ext2 and FAT32
-  with post-write verification, plus `stressfs` inside each mount point.
-  Exercises the backend allocator serialization (C1).
+## 测试点
 
-## Commands
+- `test_baseline`：官方自带测例（赛题任务 3），`usertests -q`；
+  完整版由 `full_usertests.sh` 承担。
+- `public_vfs`：官方 VFS 评测流程逐字节复刻（赛题任务 4）。
+- `ext2`：挂载/读写/删除/嵌套目录/长名别名/1MiB 双间接大文件/外部大文件。
+- `fat32`：挂载/8.3 增删改/嵌套目录/LFN 长名三条访问路径。
+- `error`：非法挂载、跨盘硬链接、删除不存在文件等错误路径不 panic。
+- `semantics`：挂载点 `..`、ext2 硬链接、fat32 拒链、unlinkopen 双后端。
+- `persist`：写入→重启→重挂载→逐字节读回（含 1MiB 双间接文件）。
+- `smp`：CPUS=3 三路并发 bigfile + 挂载点内 stressfs（C1 回归）。
 
-Run from the repository root:
+## 运行
+
+仓库根目录两步式：
 
 ```sh
-make test_baseline && make run
-make public_vfs && make run
-make ext2 && make run
-make fat32 && make run
-make error && make run
-make semantics && make run
-make persist && make run
-make smp && make run
+make <name> && make run        # name: 测试点名（如 ext2、smp）
+make loongarch_<name> && make run
 ```
 
-The old names `make test_public_vfs`, `make test_ext2`, `make test_fat32`, and
-`make test_error_path` are kept as compatibility aliases.
-
-## LoongArch Commands
-
-The same test flow can be prepared for LoongArch with short targets:
+聚合入口：
 
 ```sh
-make loongarch_baseline && make run
-make loongarch_public_vfs && make run
-make loongarch_ext2 && make run
-make loongarch_fat32 && make run
-make loongarch_error && make run
-make loongarch_semantics && make run
-make loongarch_persist && make run
-make loongarch_smp && make run
+bash tests/run_all.sh          # 16 项双架构回归
+bash tests/full_usertests.sh riscv
+bash tests/full_usertests.sh loongarch
+make verify-all                # 环境检查 + 全部上述内容
 ```
 
-These targets build `src` with `ARCH=loongarch`, record the selected
-architecture in `.last-test-arch`, and then `make run` launches the matching
-LoongArch QEMU command through the shared runner.
+## 推送前门禁
 
-## Manual Dual-Architecture Checks
-
-RISC-V:
+推送远端前必须全部通过：
 
 ```sh
-cd src
-make ARCH=riscv CPUS=1 qemu
-```
-
-LoongArch64:
-
-```sh
-cd src
-make ARCH=loongarch CPUS=1 qemu
-```
-
-After entering the xv6 shell, run:
-
-```sh
-usertests -q
-mkdir /mnt
-mount ext2 /mnt
-cd tests
-cat cmds.sh | sh
-```
-
-## Utility Scripts
-
-- `tests/check_env.sh`: verifies host tools, both cross toolchains, and
-  both QEMU emulators; exits non-zero and prints what is missing.
-- `tests/run_all.sh`: runs all eight test points on both architectures
-  back to back and prints a 16-line PASS/FAIL summary.
-- `tests/full_usertests.sh [arch]`: runs the complete `usertests`
-  (without `-q`, so the six slow tests `bigdir`, `manywrites`,
-  `badwrite`, `execout`, `diskfull`, `outofinodes` are included) in the
-  official CPUS=3 QEMU environment, and saves the raw log under
-  `test_baseline/logs/`.
-
-## Pre-push Gate
-
-Both of the following must be green before every push to the remote:
-
-```sh
-bash tests/run_all.sh                      # 16/16 on both architectures
-bash tests/full_usertests.sh riscv         # complete usertests, no -q
+bash tests/run_all.sh                      # 16/16 双架构
+bash tests/full_usertests.sh riscv         # 完整 usertests（无 -q）
 bash tests/full_usertests.sh loongarch
 ```
 
-`make verify-all` runs the whole gate (environment check, all suites,
-both complete usertests) with a single command.
+## 规范约定
 
-## Logs
-
-Each test writes local logs into its own `logs/` directory. Generated `.log`
-files are ignored by Git. The `logs/README.md` files are kept so the directory
-structure is preserved in the repository.
-
-`test_baseline` shows `usertests -q` output in real time and also saves it to
-its log file. The VFS tests (`public_vfs`, `ext2`, `fat32`, and `error`) keep
-the terminal concise by default and save raw QEMU output to their log files.
-When invoking `tests/runner/run_qemu_case.py` directly, add `--live` if live
-QEMU output is needed.
+1. 命令文件：单会话测试点用 `cmds.sh`；多会话用 `<阶段>.cmds.sh`
+   （如 `write.cmds.sh`/`read.cmds.sh`）。
+2. 断言模式：`--expect` 只写"成功才出现的串"；`--reject` 只写
+   "失败/异常串"；每个测试点必须含 `panic:`/`kerneltrap` 负断言。
+3. `logs/` 为本地运行产物，不入库；最终通过证据归 `evidence/`。
+4. README 双语四段式：目的 / 覆盖点 / 关键断言 / 关联；`README.md`
+   为中文主版，`README.en.md` 为英文镜像，**改一处必同步另一处**。
+5. 新增测试点 = 新建同名目录（三件套）+ 根 Makefile 目标 +
+   `run_all.sh` 登记 + `MATRIX.md` 增行。

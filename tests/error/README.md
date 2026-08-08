@@ -1,61 +1,25 @@
 # error
 
-This test checks that invalid VFS operations fail cleanly instead of crashing the kernel.
+[中文](README.md) | [English](README.en.md)
 
-## Scope
+## 目的
 
-- Reject mounting on a missing path.
-- Mount ext2 and FAT32 explicitly.
-- Reject a cross-filesystem hard link.
-- Reject removal of missing files.
-- Confirm that none of these error paths causes `panic` or `kerneltrap`.
+验证 VFS 非法操作路径的稳定性：错误输入必须干净地失败，不得造成
+panic 或系统状态损坏。
 
-## Run
+## 覆盖点
 
-From the repository root:
+- 挂载到不存在的目录（`mount ext2 /no_such_dir`）。
+- 正常挂载 ext2 与 fat32 后，尝试跨文件系统硬链接
+  （`ln /mnt/hello.c /fat/cross.txt`）。
+- 删除不存在的文件（ext2 与 fat32 各一）。
 
-```sh
-make error
-make run
-```
+## 关键断言
 
-Or:
+- expect：各错误路径的 `failed` 提示；`ERROR_PATH_DONE` 到达结尾
+  （证明系统仍在正常运行）。
+- reject：`panic:`、`kerneltrap`、`mount: failed`（合法挂载不得失败）。
 
-```sh
-make error && make run
-```
+## 关联
 
-The old `make test_error_path` target is kept as a compatibility alias.
-
-## Commands
-
-The xv6 shell commands are stored in:
-
-```text
-tests/error/cmds.sh
-```
-
-## Pass Criteria
-
-Required output:
-
-- `mount: failed`
-- `mount: ext2 on /mnt dev 2`
-- `mount: fat32 on /fat dev 3`
-- `link /mnt/hello.c /fat/cross.txt: failed`
-- `rm: /mnt/no_such_file failed to delete`
-- `rm: /fat/no_such.txt failed to delete`
-- `ERROR_PATH_DONE`
-
-Rejected output:
-
-- `panic:`
-- `kerneltrap`
-
-## Logs
-
-Runtime logs are written to:
-
-```text
-tests/error/logs/
-```
+- 赛题"系统运行稳定"要求；B5（非法挂载拒绝）。

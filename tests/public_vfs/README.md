@@ -1,83 +1,30 @@
 # public_vfs
 
-本测试点用于复现赛题公开 VFS 测试流程：系统从 xv6 文件系统启动，启动后手动将 ext2 挂载到 `/mnt`，再运行公开风格的 `test1`、`test2` 跨文件系统复制测试。
+[中文](README.md) | [English](README.en.md)
 
-## 测试目标
+## 目的
 
-- 验证 `mount ext2 /mnt` 是显式挂载，不依赖自动挂载。
-- 验证 `/mnt/hello.c` 能从 ext2 中读取。
-- 验证 ext2 与 xv6 文件系统之间可以双向复制普通文件。
-- 验证测试过程中不会出现 `panic` 或 `kerneltrap`。
+逐字节复刻赛题指定的官方 VFS 评测流程：从 xv6 文件系统启动，手动挂载
+ext2 到 `/mnt`，然后 `cd tests; cat cmds.sh | sh` 运行官方 `test1`/`test2`
+跨文件系统复制用例。对应赛题任务 4。官方测例文件的版本锚定见
+`tests/VFS_TESTS_PIN.txt`。
 
-## 运行方式
+## 覆盖点
 
-在仓库根目录执行：
+- 显式挂载 `mount ext2 /mnt`（不依赖自动挂载）。
+- 镜像 `/tests` 目录布局与官方参考一致（cmds.sh、hello.c、test1、test2、hello）。
+- test1：ext2↔xv6 四方向普通文件复制。
+- test2：xv6→ext2 复制并读回验证内容。
+- exec 裸命令名根目录回退（`/tests` 下直接运行 `cat`/`test1` 等根目录程序）。
 
-```sh
-make public_vfs
-make run
-```
+## 关键断言
 
-也可以连写：
+- expect：`mount: ext2 on /mnt dev 2`；四条 `test_copy_file(...): succeed`；
+  `test_cross_fs_copy(): succeed`；`PUBLIC_VFS_DONE`。
+- reject：`panic:`、`kerneltrap`、`mount: failed`、`exec cat failed`、
+  `exec test1 failed`、`exec test2 failed`、`: error`。
 
-```sh
-make public_vfs && make run
-```
+## 关联
 
-其中：
-
-- `make public_vfs`：清理并构建 RISC-V 内核和 `fs.img`，同时生成 ext2/fat32 镜像。
-- `make run`：启动 QEMU，读取 `tests/public_vfs/cmds.sh`，自动向 xv6 shell 输入测试命令。
-
-旧入口 `make test_public_vfs` 仍保留为兼容别名。
-
-## 测试命令
-
-实际投喂给 xv6 shell 的命令保存在：
-
-```text
-tests/public_vfs/cmds.sh
-```
-
-当前命令为：
-
-```sh
-mkdir /mnt
-mount ext2 /mnt
-ls /mnt
-test1
-test2
-echo PUBLIC_VFS_DONE
-```
-
-## 判定标准
-
-必须出现：
-
-- `mount: ext2 on /mnt dev 2`
-- `test1: succeed`
-- `test2: succeed`
-- `PUBLIC_VFS_DONE`
-
-不得出现：
-
-- `panic:`
-- `kerneltrap`
-- `mount: failed`
-- `test1: failed`
-- `test2: failed`
-
-## 日志
-
-运行日志保存在：
-
-```text
-tests/public_vfs/logs/
-```
-
-主要文件：
-
-- `env.log`：环境信息。
-- `build.log`：构建输出。
-- `qemu-public-vfs.log`：QEMU 原始输出。
-- `result.log`：测试摘要。
+- 赛题任务 4。
+- 官方测例来源与版本：`tests/VFS_TESTS_PIN.txt`。

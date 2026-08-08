@@ -1,65 +1,28 @@
 # persist
 
-This test checks that writes to ext2 and FAT32 are written back to `fs.img`.
-It runs two QEMU sessions without rebuilding the image between them.
+[中文](README.md) | [English](README.en.md)
 
-## Scope
+## 目的
 
-- First session: mount ext2 and FAT32, write one file to each file system, and
-  read the files back immediately.
-- The runner exits QEMU with the same control sequence as `Ctrl-A x` when
-  possible, then falls back to termination if needed.
-- Second session: boot again, remount ext2 and FAT32, and read the files created
-  in the first session.
+验证对 ext2/fat32 的写入真正落盘到 `fs.img`：写入后关闭并重启 QEMU，
+重新挂载并逐字节读回校验。区分"真实文件系统"与"内存演示"。
 
-## Run
+## 覆盖点
 
-From the repository root:
+- 第一段会话（write.cmds.sh）：挂载双后端，写入 `persist.txt`/`p.txt`
+  并即时读回；`bigfile /mnt/bigfile keep` 写入 1 MiB 双间接大文件。
+- 重启 QEMU（镜像不变）。
+- 第二段会话（read.cmds.sh）：重新挂载，读回全部文件；
+  `bigfile verify` 逐字节校验 1 MiB 内容；`wc` 复核外部注入大文件。
 
-```sh
-make persist && make run
-```
+## 关键断言
 
-LoongArch:
+- expect：两会话的挂载成功串；`persist-ext2`/`persist-fat` 读回；
+  `bigfile: ok (1048576 bytes, keep)` 与 `(..., verify)`；`0 1 1048576`；
+  两个 DONE 标记。
+- reject：`panic:`、`kerneltrap`、`mount: failed`、`bigfile: FAIL`、
+  各 open 失败串。
 
-```sh
-make loongarch_persist && make run
-```
+## 关联
 
-## Commands
-
-The first session commands are stored in:
-
-```text
-tests/persist/write.cmds.sh
-```
-
-The second session commands are stored in:
-
-```text
-tests/persist/read.cmds.sh
-```
-
-## Pass Criteria
-
-Required output across the two sessions:
-
-- `PERSIST_WRITE_DONE`
-- `PERSIST_READ_DONE`
-- `persist-ext2`
-- `persist-fat`
-
-Rejected output:
-
-- `panic:`
-- `kerneltrap`
-- `mount: failed`
-- file open failures for the persisted paths
-
-## Logs
-
-Runtime logs are written to:
-
-```text
-tests/persist/logs/
-```
+- 赛题"系统运行稳定"与持久化要求；D1（双间接）跨启动一致性。

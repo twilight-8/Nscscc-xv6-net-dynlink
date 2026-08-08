@@ -1,47 +1,27 @@
 # test_baseline
 
-> 本测试点用于对当前改造后的项目运行 xv6-riscv rev5 自带回归测试，确认原有行为不退化。
+[中文](README.md) | [English](README.en.md)
 
-## 测试目标
+## 目的
 
-运行 xv6 自带的 `usertests -q`，确认当前 VFS/HAL/ext2/fat32 改动没有破坏 xv6 原有进程、内存、文件系统和系统调用行为。
+在改造后的系统上运行 xv6-riscv rev5 自带的官方回归测试，确认原有进程、
+内存、文件系统与系统调用行为不退化。对应赛题任务 3（通过自带测例）。
 
-## 运行方式
+## 覆盖点
 
-在仓库根目录执行：
+- `usertests -q` 全部快速测试项（进程/内存/文件系统/系统调用等 60+ 项）。
+- 双架构执行：RISC-V 与 LoongArch64，CPUS=3（经官方入口 `test-xv6.py`）。
+- 完整版（不带 `-q`，另含 bigdir/manywrites/badwrite/execout/diskfull/
+  outofinodes 六项慢测试）由 `tests/full_usertests.sh` 承担。
 
-```sh
-make test_baseline
-make run
-```
+## 关键断言
 
-也可以连写为：
+- expect：输出以 `ALL TESTS PASSED` 结尾。
+- reject：`panic:`。
+- `run.sh` 内含 420 秒超时兜底：guest panic 时官方脚本会阻塞读死等，
+  超时会将其转为可见的 FAIL 而非挂死。
 
-```sh
-make test_baseline && make run
-```
+## 关联
 
-其中：
-
-- `make test_baseline`：记录环境信息，清理并构建当前项目镜像。
-- `make run`：启动 QEMU，运行 xv6 自带 `usertests -q`。
-
-## 日志
-
-日志保存到：
-
-```text
-tests/test_baseline/logs/
-```
-
-## 测试环境
-
-- Host OS: WSL2 Ubuntu 24.04 LTS
-- Shell: Bash
-- Build tools: `make`, `gcc`, `python3`, `perl`, `bc`
-- Debug tool: `gdb-multiarch`
-- Version control: `git`
-
-## 测试结果
-
-通过
+- 赛题任务 3。
+- 完整版结果证据：`tests/evidence/usertests-full-*.txt`。
