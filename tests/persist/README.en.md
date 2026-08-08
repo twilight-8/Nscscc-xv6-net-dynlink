@@ -4,10 +4,8 @@
 
 ## Purpose
 
-Verify that writes to ext2 and FAT32 truly land in `fs.img`: after writing,
-QEMU is shut down and restarted, the file systems are remounted, and the
-contents are read back and verified byte by byte.  This is the difference
-between a real file system and an in-memory demo.
+Verify that writes to ext2 and FAT32 truly land in `fs.img`: after writing, QEMU is shut down and restarted, the file systems are remounted, and the
+contents are read back and verified byte by byte. This is the difference between a real file system and an in-memory demo.
 
 ## Coverage
 

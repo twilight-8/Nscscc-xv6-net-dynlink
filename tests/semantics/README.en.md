@@ -4,8 +4,7 @@
 
 ## Purpose
 
-Verify mount and link semantics not covered by the basic smoke tests:
-mount-point `..` resolution, ext2 hard links, FAT32 hard-link rejection, and
+Verify mount and link semantics not covered by the basic smoke tests:mount-point `..` resolution, ext2 hard links, FAT32 hard-link rejection, and
 POSIX unlink-while-open semantics.
 
 ## Coverage

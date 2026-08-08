@@ -1,10 +1,8 @@
-# tests/evidence
+# evidence
 
 [中文](README.md) | [English](README.en.md)
 
-This directory archives the final passing evidence of the key test runs
-(raw QEMU output and summaries), for reviewers to cross-check and
-reproduce.  Everything here can be regenerated with `make verify-all`.
+This directory archives the final passing evidence of the key test runs (raw QEMU output and summaries), for reviewers to cross-check and reproduce.  Everything here can be regenerated with `make verify-all`.
 
 ## Contents
 

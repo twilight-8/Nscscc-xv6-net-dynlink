@@ -2,8 +2,7 @@
 
 [中文](MATRIX.md) | [English](MATRIX.en.md)
 
-8 个测试点 × 双架构的覆盖总览。每项均可在 `tests/evidence/` 找到最终
-通过证据；执行入口见 `tests/README.md`。
+8 个测试点 × 双架构的覆盖总览。每项均可在 `tests/evidence/` 找到最终通过证据；执行入口见 `tests/README.md`。
 
 | 测试点 | 覆盖功能面 | 关联需求/缺陷 | RISC-V | LoongArch |
 |---|---|---|---|---|

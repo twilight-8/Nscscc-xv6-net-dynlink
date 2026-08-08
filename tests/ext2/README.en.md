@@ -4,9 +4,7 @@
 
 ## Purpose
 
-Verify the ext2 backend's full functional surface through the VFS: mount,
-read, create, overwrite, unlink, nested directories, long file names,
-double-indirect large files, and readability of externally created images.
+Verify the ext2 backend's full functional surface through the VFS: mount, read, create, overwrite, unlink, nested directories, long file names, double-indirect large files, and readability of externally created images.
 
 ## Coverage
 

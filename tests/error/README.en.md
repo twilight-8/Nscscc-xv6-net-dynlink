@@ -4,8 +4,7 @@
 
 ## Purpose
 
-Verify the stability of VFS error paths: invalid operations must fail
-cleanly without panicking or corrupting system state.
+Verify the stability of VFS error paths: invalid operations must fail cleanly without panicking or corrupting system state.
 
 ## Coverage
 

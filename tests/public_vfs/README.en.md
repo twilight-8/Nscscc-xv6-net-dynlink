@@ -4,11 +4,7 @@
 
 ## Purpose
 
-Byte-for-byte reproduction of the official VFS evaluation flow: boot from the
-xv6 file system, manually mount ext2 at `/mnt`, then run the official
-`test1`/`test2` cross-filesystem copy cases via `cd tests; cat cmds.sh | sh`.
-Maps to contest task 4. The pinned upstream version of the official test
-files is recorded in `tests/VFS_TESTS_PIN.txt`.
+Byte-for-byte reproduction of the official VFS evaluation flow: boot from the xv6 file system, manually mount ext2 at `/mnt`, then run the official `test1`/`test2` cross-filesystem copy cases via `cd tests; cat cmds.sh | sh`.Maps to contest task 4. The pinned upstream version of the official test files is recorded in `tests/VFS_TESTS_PIN.txt`.
 
 ## Coverage
 

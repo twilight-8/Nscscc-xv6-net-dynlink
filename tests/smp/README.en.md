@@ -4,8 +4,7 @@
 
 ## Purpose
 
-Apply true multi-core (CPUS=3) concurrency pressure to both file-system
-backends, validating the backend allocator serialization (C1 fix) and the
+Apply true multi-core (CPUS=3) concurrency pressure to both file-system backends, validating the backend allocator serialization (C1 fix) and the
 FAT32 chain-walk cache.
 
 ## Coverage

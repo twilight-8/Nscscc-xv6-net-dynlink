@@ -2,10 +2,7 @@
 
 [中文](README.md) | [English](README.en.md)
 
-This directory holds the project's host-side test infrastructure: test
-cases, driver scripts, entry points, and passing evidence.  The guest-side
-`/tests` directory content (official test-case data files) lives in
-`src/tests/`; the two serve different roles — see the root `README.md`.
+This directory holds the project's host-side test infrastructure: test cases, driver scripts, entry points, and passing evidence.  The guest-side `/tests` directory content (official test-case data files) lives in `src/tests/`; the two serve different roles — see the root `README.md`.
 
 ## Layout
 

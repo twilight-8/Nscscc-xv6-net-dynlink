@@ -4,10 +4,7 @@
 
 ## 目的
 
-逐字节复刻赛题指定的官方 VFS 评测流程：从 xv6 文件系统启动，手动挂载
-ext2 到 `/mnt`，然后 `cd tests; cat cmds.sh | sh` 运行官方 `test1`/`test2`
-跨文件系统复制用例。对应赛题任务 4。官方测例文件的版本锚定见
-`tests/VFS_TESTS_PIN.txt`。
+逐字节复刻赛题指定的官方 VFS 评测流程：从 xv6 文件系统启动，手动挂载 ext2 到 `/mnt`，然后 `cd tests; cat cmds.sh | sh` 运行官方 `test1`/`test2` 跨文件系统复制用例。对应赛题任务 4。官方测例文件的版本锚定见`tests/VFS_TESTS_PIN.txt`。
 
 ## 覆盖点
 

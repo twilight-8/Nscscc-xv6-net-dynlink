@@ -4,9 +4,7 @@
 
 ## Purpose
 
-Verify the FAT32 backend through the VFS: mount, 8.3 short-name file
-operations, empty files, nested directories, and FAT32 long-file-name (LFN)
-reading and directory listing.
+Verify the FAT32 backend through the VFS: mount, 8.3 short-name file operations, empty files, nested directories, and FAT32 long-file-name (LFN) reading and directory listing.
 
 ## Coverage
 

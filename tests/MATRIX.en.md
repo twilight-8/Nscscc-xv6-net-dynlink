@@ -2,9 +2,7 @@
 
 [中文](MATRIX.md) | [English](MATRIX.en.md)
 
-Overview of the 8 test points on both architectures.  Final passing
-evidence for each lives in `tests/evidence/`; entry points are documented
-in `tests/README.md`.
+Overview of the 8 test points on both architectures.  Final passing evidence for each lives in `tests/evidence/`; entry points are documented in `tests/README.md`.
 
 | Test point | Covered surface | Related requirement/defect | RISC-V | LoongArch |
 |---|---|---|---|---|

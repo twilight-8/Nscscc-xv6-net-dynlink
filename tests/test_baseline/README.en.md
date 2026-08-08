@@ -4,9 +4,7 @@
 
 ## Purpose
 
-Run the stock xv6-riscv rev5 regression tests on the modified system to
-confirm that the original process, memory, file-system, and syscall behavior
-has not regressed. Maps to contest task 3 (pass the bundled tests).
+Run the stock xv6-riscv rev5 regression tests on the modified system to confirm that the original process, memory, file-system, and syscall behavior has not regressed. Maps to contest task 3 (pass the bundled tests).
 
 ## Coverage
 
