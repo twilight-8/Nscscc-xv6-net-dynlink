@@ -16,4 +16,4 @@
 | `05-vfs-design-walkthrough.md` | VFS 设计推导：需求→形态→验证 |
 | `06-hal-design-walkthrough.md` | HAL 设计推导：接口边界与差异收敛 |
 | `07-debug-cases.md` | 调试方法论与工程教训、缺陷索引 |
-
+| `08-references.md` | 相关资料调研清单（参考文档与规范出处） |

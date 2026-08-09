@@ -16,3 +16,4 @@ Index of the learning notes.  Read in numbered order: from source layout, to spe
 | `05-vfs-design-walkthrough.md` | VFS design derivation: requirements → shape → verification |
 | `06-hal-design-walkthrough.md` | HAL design derivation: interface boundary and divergence confinement |
 | `07-debug-cases.md` | Debugging methodology, engineering lessons, defect index |
+| `08-references.md` | Related research list (references and spec sources) |
