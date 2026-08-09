@@ -11,7 +11,7 @@
 
 ### 1.1 硬性任务
 
-| # | 任务 | 现状 |
+|   | 任务 | 现状 |
 |---|------|------|
 | 1 | 同时支持 xv6、ext2、fat32 文件系统 | 已实现，深度存在短板（见 §3.4） |
 | 2 | 同时支持 RISC-V 和 LoongArch 平台 | 已实现（约 2000 行 arch 代码的完整移植） |
@@ -23,7 +23,7 @@
 
 设计精巧度、功能实现完成度、运行稳定性、文档质量和完整性、Demo 质量。
 
-### 1.3 提交物要求（"功能挑战"赛道）
+### 1.3 提交物要求（“功能挑战”赛道）
 
 1. 完整的设计方案等开发文档、项目源代码、项目测试结果的功能/性能/创新性分析（包括与类似项目的对比分析）；
 2. 作品进展汇报幻灯片，内容包括参赛队员分工、项目开发时间进度安排及相应任务的推进与完成情况；
@@ -52,25 +52,25 @@
 
 ### 3.1 A 类：赛题合规性问题（优先级 P0）
 
-**A1. 官方外部测例未原样运行**（严重度：高，对应任务 4）
-- 现状：`src/user/test1.c`、`test2.c` 为自行重写版（输出 `test1: succeed`），官方原版输出为 `test_copy_file(...): succeed` 及中文提示；`docs/compliance.md:17` 自述"后续复制测试文件"；`docs/test_report.md` 未声明 test1/test2 是重写版。
+**A1. 官方外部测例未原样运行**（严重度：高，已于 Day 1 修复）
+- 现状：`src/user/test1.c`、`test2.c` 为自行重写版（输出 `test1: succeed`），官方原版输出为 `test_copy_file(...): succeed` 及中文提示；`docs/contest/compliance.md:17` 自述“后续复制测试文件”；`docs/contest/test_report.md` 未声明 test1/test2 是重写版。
 - 已核实：官方 `test1.c/test2.c/cmds.sh/hello.c` 仅使用标准 xv6 系统调用（open/read/write/close/printf），涉及路径 `/hello.c`、`/tests/hello.c`、`/mnt/hello.c` 在本地镜像中均已具备，可原样编译并通过，内核层面无障碍；仅需同步测试断言字符串。官方流程为启动后手动 `mount ext2 /mnt` 再执行测试。
 - 修复方法：官方 4 个文件原样入库并加入 UPROGS（替换现有重写版），双架构原样跑通，test_report 增设官方测例映射表。
 
-**A2. 自带测例仅执行快速版**（严重度：高，对应任务 3）
+**A2. 自带测例仅执行快速版**（严重度：高，已于 Day 3 修复并固化为推送门禁）
 - 现状：`tests/test_baseline/run.sh` 执行 `usertests -q`，完整版（`bigfile`、`bigdir`、`fourteen` 等慢速用例）在两个架构上均无通过记录。
 - 修复方法：双架构执行完整 `usertests`，结果写入测试报告。
 
-**A3. 测试证据不可复现**（严重度：高）
+**A3. 测试证据不可复现**（严重度：高，已于 Day 5 修复）
 - 现状：所有 `*.log` 被 gitignore，历史日志已删除；`tests/*/logs/` 仅有占位 README；根 Makefile 无一键全量测试目标。
 - 修复方法：新增 `make verify-all`（双架构 × 7 测试点共 14 组串行执行并输出汇总表）；14 份代表性日志与双架构全量启动测试输出（`riscv_test_output.txt`、`loongarch_test_output.txt`）提交入库。
 
-**A4. 评审验收体验未对齐官方参考流程**（严重度：中）
+**A4. 评审验收体验未对齐官方参考流程**（严重度：中，已于 Day 1 修复）
 - 现状：测试二进制位于镜像根目录（`_test1`），评审须自行查阅文档才能操作；启动后须手动挂载 ext2。
 - 修复方法：镜像 `/tests` 目录内置入官方 test1/test2 二进制与 cmds.sh、hello.c，支持 `cd /tests; cat cmds.sh | sh` 官方流程；`user/init.c` 在启动 shell 前自动执行 `mount("none","/mnt","ext2")`，手动挂载路径保留。
 
-**A5. 官方测例无版本锚定**（严重度：低）
-- 背景：官方测试仓库声明"测例建设中，会动态扩充"，且经核实上游测例内容已发生过变动。
+**A5. 官方测例无版本锚定**（严重度：低，已于 Day 1 修复）
+- 背景：官方测试仓库声明“测例建设中，会动态扩充”，且经核实上游测例内容已发生过变动。
 - 修复方法：新增 `tests/VFS_TESTS_PIN.txt`，填写完整的 repository_url、pinned_commit、pinned_date，锁定开发、测试、提交的统一测例基准。
 
 ### 3.2 B 类：内核正确性缺陷（优先级 P0，可导致数据损坏）
@@ -107,7 +107,7 @@
 - 问题：静态全局结构无锁保护；`begin_op` 允许多个并发事务，CPUS>1 时两个 CPU 可同时进入 `ext2_create`/`ext2_alloc_block`；超级块/组描述符计数的读改写及多步元数据操作存在竞争。（`mtable.lock` 本身使用正确，无持锁睡眠。）
 - 修复方法：为后端增加 sleeplock 包裹 ext2/fat32 变更操作；或在文档中声明 CPUS=1 基线并附 SMP 实测结果。
 
-**C2. ext2/fat32 写入绕过日志，无崩溃一致性**（严重度：已知设计取舍）
+**C2. ext2/fat32 写入绕过日志，无崩溃一致性**（严重度：已知设计取舍；取舍说明已文档化）
 - 位置：`src/kernel/block.c:47`（`block_write_bytes` 直接 `bwrite`）。
 - 处置：不修改设计（符合教学系统定位），但文档须正面说明该取舍及掉电影响，并准备答辩应答。
 
@@ -123,7 +123,7 @@
 
 **D1. ext2 不支持双重间接块，文件上限约 268KB**（严重度：高，已于 Day 3 修复）
 - 位置：`src/kernel/ext2.c:436-444`（12 直接 + 256 单间接 = 274,432 字节）；`ext2.c:228` 直接拒绝读取含双重间接的外来 ext2 文件（`ext2_iget` 返回 0）。
-- 评估：双重间接为 ext2 标准结构，实现后单文件上限提升至约 64MB。在测例动态扩充的背景下，"跨文件系统复制大文件"是自然的扩充方向，此项为功能完成度的直接缺口。
+- 评估：双重间接为 ext2 标准结构，实现后单文件上限提升至约 64MB。在测例动态扩充的背景下，“跨文件系统复制大文件”是自然的扩充方向，此项为功能完成度的直接缺口。
 - 处置：Day 3 实现（含截断释放路径），解除拒读限制。
 
 **D2. 挂载点内目录操作无测试覆盖**（严重度：中，已于 Day 3 补测）
@@ -149,37 +149,37 @@
 
 ### 3.5 E 类：设计与代码整洁（优先级 P1，对应设计精巧度）
 
-**E1. HAL 中断抽象在 LoongArch 侧未生效，两平台不对称**（严重度：中）
+**E1. HAL 中断抽象在 LoongArch 侧未生效，两平台不对称**（严重度：中，已于 Day 2 修复）
 - 位置：`src/kernel/arch/loongarch/hal.c:24-33`（`hal_irq_claim` 返回 0、`hal_irq_complete` 为空操作）；`arch/loongarch/trap.c:235-251` 直接调用 `extioi_claim/complete`，绕过 HAL。RISC-V 侧正常经 HAL 分发（`trap.c:194,208` → `hal.c:24-33` → plic）。
-- 影响：评审阅读 diff 时容易发现的"设计不精巧"问题。
+- 影响：评审阅读 diff 时容易发现的“设计不精巧”问题。
 - 修复方法：LoongArch `trap.c` 改经 `hal_irq_*` 分发，`extioi_*` 调用收进 `arch/loongarch/hal.c`，两平台对称。改动小、收益高。
 
-**E2. `arch/loongarch/ramdisk.c` 为死代码**（严重度：低）
+**E2. `arch/loongarch/ramdisk.c` 为死代码**（严重度：低，已于 Day 2 修复）
 - 确认依据：`src/Makefile:48-63` 的 LoongArch `ARCH_OBJS` 不含 `ramdisk.o`；`RAMDISK_HDR` 在两个架构均为空；`ramdisk_img.o` 构建规则无依赖者。
 - 修复方法：删除该文件及 Makefile 残留规则。
 
-**E3. Makefile 构建脆弱点**（严重度：低）
+**E3. Makefile 构建脆弱点**（严重度：低，已于 Day 2 修复）
 - `src/Makefile:230-238`：`ext2.img` 未依赖 `kernel/param.h`，修改 `EXT2SIZE` 会遗留旧镜像导致布局错位（当前 FSSIZE+EXT2SIZE=6096=FAT32START 一致，无现存错位）；`mkfs.ext2`/`debugfs` 等宿主工具无存在性检查，失败信息不透明。
 - 本机 LoongArch 交叉工具链为 `loongarch64-linux-gnu-gcc-14`（带版本后缀），需在干净环境确认 Makefile 前缀解析正常，保证评审环境可复现。
 - 修复方法：补充依赖关系与工具检查；提供工具链检查脚本。
 
-**E4. 锁安全工程未文档化**（严重度：低）
+**E4. 锁安全工程未文档化**（严重度：低，已文档化：docs/contest/lock-order.md）
 - 现状：锁规则与 B1/B2 等缺陷修复仅存在于代码与计划中，未沉淀为工程文档。
-- 修复方法：新增 `docs/LOCK-ORDER.md`，定义锁层级与持有规则（如 itable.lock → ip->lock → bcache.lock → b->lock 的获取顺序、持 spinlock 不得睡眠等）；将 B1/B2 修复按"失败—分析—修复—复测"格式记录，形成"规则—案例—文档"闭环，同步转化为创新性分析素材。
+- 修复方法：新增 `docs/LOCK-ORDER.md`，定义锁层级与持有规则（如 itable.lock → ip->lock → bcache.lock → b->lock 的获取顺序、持 spinlock 不得睡眠等）；将 B1/B2 修复按“失败—分析—修复—复测”格式记录，形成“规则—案例—文档”闭环，同步转化为创新性分析素材。
 
 ### 3.6 F 类：文档问题（优先级 P2，对应文档质量）
 
 | # | 问题 | 位置 |
 |---|------|------|
-| F1 | "目前包括"一节仅列 2 个测试点，与上方 7 套件表矛盾 | `README.md:90-93` 对比 `:72-78` |
-| F2 | 仓库结构清单遗漏 `xv6-riscv-src/`（diff 基线） | `README.md:31-39` |
-| F3 | mount 用法不统一（`mount ext2 /mnt 2` 与省略 dev 两种写法），未说明 dev 可省略 | `README.md:122` 对比 `docs/test_report.md:165,210,323` |
-| F4 | 文件名缺少 `.md` 后缀 | `submit/README.md:13-14`、`README.md:62-63` |
-| F5 | 许可证仍为"拟采用"表述，仓库根无 LICENSE（`src/LICENSE` 仅为 xv6 原版 MIT） | `README.md:129`、`docs/compliance.md:17` |
-| F6 | test_report 未声明 test1/test2 为重写版，未引用上游仓库 | `docs/test_report.md:45,150,179-180` |
-| F7 | "后续提交方向"事项已完成但未清理 | `docs/commit_history.md` 结尾 |
-| F8 | design.md 需同步：HAL 对称化、双重间接、LFN 读、B1/B2 修复所体现的语义对齐 | `docs/design.md` |
-| F9 | 缺基线锚定文档：记录 rev5 基线版本、commit hash 与 diff 生成命令 | 新增 `docs/BASELINE.md` |
+| F1 | “目前包括”一节仅列 2 个测试点，与上方 7 套件表矛盾（已修复：测试点列表已补齐为 8 项） | `README.md:90-93` 对比 `:72-78` |
+| F2 | 仓库结构清单遗漏 `xv6-riscv-src/`（diff 基线）（已修复：仓库结构已含完整描述） | `README.md:31-39` |
+| F3 | mount 用法不统一，未说明 dev 可省略（已修复：统一为 `mount ext2 /mnt` 并注明 dev 可省略） | `README.md:122` 对比 `docs/contest/test_report.md:165,210,323` |
+| F4 | 文件名缺少 `.md` 后缀（已修复：已补后缀，commit_history 更名 progress.md） | `submit/README.md:13-14`、`README.md:62-63` |
+| F5 | 许可证仍为“拟采用”表述，仓库根无 LICENSE（已修复：BSD-2-Clause LICENSE 于 Day 6 落地） | `README.md:129`、`docs/contest/compliance.md:17` |
+| F6 | test_report 未声明 test1/test2 为重写版，未引用上游仓库（情况已变：Day 1 起 test1/test2 已为官方原版，test_report.md 列入 Day 8 重写同步） | `docs/contest/test_report.md:45,150,179-180` |
+| F7 | “后续提交方向”事项已完成但未清理（已修复：progress.md 已更新为收尾事项） | `docs/progress.md` 结尾 |
+| F8 | design.md 需同步（部分完成：HAL 对称化与阶段 H–J 已同步，K–O 对应内容列入 Day 8 最终同步） | `docs/design.md` |
+| F9 | 缺基线锚定文档（已修复：docs/contest/baseline.md 已落地） | 新增 `docs/BASELINE.md` |
 
 ### 3.7 G 类：经复核排除的问题
 
@@ -204,16 +204,16 @@
 | 要求项 | 对应物 | 缺口与动作 |
 |---|---|---|
 | 设计思路、实现描述、代码说明 | `docs/design.md`（三层架构、mermaid 图、文件责任表、阶段 A–G） | 同步 E1/E2/D1/D4 变更（F8） |
-| 研发过程中遇到的问题和解决方法 | 分散于 commit_history | 增设专题章节并以 E4（LOCK-ORDER）承接：B1/B2 缺陷的"失败—分析—修复—复测"记录、LoongArch TLB-refill 调试（阶段 G），形成完整的研发叙事 |
-| 非本队来源说明 | `docs/compliance.md` | 更新：官方测例原样引入及版本锚定说明、xv6-loongarch-exp 引用范围、许可证表述定稿 |
+| 研发过程中遇到的问题和解决方法 | 分散于 progress.md | 增设专题章节并以 E4（LOCK-ORDER）承接：B1/B2 缺陷的“失败—分析—修复—复测”记录、LoongArch TLB-refill 调试（阶段 G），形成完整的研发叙事 |
+| 非本队来源说明 | `docs/contest/compliance.md` | 更新：官方测例原样引入及版本锚定说明、xv6-loongarch-exp 引用范围、许可证表述定稿 |
 | 基线锚定 | 新增 `docs/BASELINE.md`（F9） | 记录 rev5 基线 commit hash、diff 生成命令与复现方法 |
 
 ### 4.2 测试结果分析（需重点扩充）
 
 - 功能分析：7 测试点 × 2 架构矩阵、官方测例映射表、完整 usertests 结果；
-- **需求跟踪矩阵**：需求编号—需求描述—设计文档—实现文件—测试状态五列追溯，覆盖赛题功能需求与派生设计需求，使评审可按行抽查"需求—设计—实现—测试"一致性；
-- 性能分析：ext2/fat32 顺序读写吞吐（大文件拷贝计时）、fat32 簇分配优化前后对比、**VFS 开销量化**（同一文件操作在原生 xv6 路径与 VFS 分发路径的对比计时，预先回答"VFS 引入多少开销"）、双架构编译与启动时间、内核镜像大小；
-- 创新性分析：提炼编号创新点，按"创新内容/实现手段/创新价值"三段展开。候选：逻辑设备号偏移复用单一 virtio 盘、薄 VFS ops 分发表、HAL 双平台对称中断抽象、B1/B2 缺陷的根因分析与修复工程、双平台一致性验证方法；
+- **需求跟踪矩阵**：需求编号—需求描述—设计文档—实现文件—测试状态五列追溯，覆盖赛题功能需求与派生设计需求，使评审可按行抽查“需求—设计—实现—测试”一致性；
+- 性能分析：ext2/fat32 顺序读写吞吐（大文件拷贝计时）、fat32 簇分配优化前后对比、**VFS 开销量化**（同一文件操作在原生 xv6 路径与 VFS 分发路径的对比计时，预先回答“VFS 引入多少开销”）、双架构编译与启动时间、内核镜像大小；
+- 创新性分析：提炼编号创新点，按“创新内容/实现手段/创新价值”三段展开。候选：逻辑设备号偏移复用单一 virtio 盘、薄 VFS ops 分发表、HAL 双平台对称中断抽象、B1/B2 缺陷的根因分析与修复工程、双平台一致性验证方法；
 - 与类似项目的对比分析：参照系为静春山、RuOK、Linux、原版 xv6，从功能、架构设计、代码规模、性能、文档质量、创新性六个维度对比。须实际浏览参照仓库取证，对比结论须有依据。
 
 ### 4.3 作品进展汇报幻灯片
@@ -221,7 +221,7 @@
 在现有 final_slides 基础上补充：
 
 - 参赛队员分工页（当前缺失，为硬性要求）；
-- 开发时间进度页：阶段 0/A–G 时间线及各任务推进与完成情况（由 commit_history 提炼，含决赛冲刺阶段计划）；
+- 开发时间进度页：阶段 0/A–G 时间线及各任务推进与完成情况（由 progress.md 提炼，含决赛冲刺阶段计划）；
 - 三个合规叙事专页：**参照版本**（基线与第三方来源）、**增量贡献**（diff 规模与新增内容）、**AI 工具使用声明**；
 - 保留并更新：架构图、测试矩阵、演示截图。
 
@@ -233,17 +233,17 @@
 ### 4.5 现场答辩 PPT
 
 - 建议结构（12–15 页）：题目与核心亮点 → 架构总览（VFS/HAL 各一图）→ 三项关键设计决策（ops 表薄分发、逻辑设备号偏移、HAL 双平台对称）→ 三文件系统并存演示截图 → 双平台运行证据 → 测试矩阵与参考项目对比 → 研发难点（B1/B2/TLB-refill）→ 局限与取舍（如实列出 non-goals）→ 总结；
-- 同步准备质询应答库：崩溃一致性取舍的说明（C2）、fat32 LFN 仅支持读的理由、HAL "薄"设计的定位、真实磁盘持久化路线（virtio 块设备）与内存嵌入式镜像路线的差异。
+- 同步准备质询应答库：崩溃一致性取舍的说明（C2）、fat32 LFN 仅支持读的理由、HAL “薄”设计的定位、真实磁盘持久化路线（virtio 块设备）与内存嵌入式镜像路线的差异。
 
 ---
 
 ## 5. 逐日任务安排（8.4 – 8.12）
 
-安排原则：**前期（Day 1–5）集中完成赛题工程性任务与代码实现优化，后期（Day 6–8）集中进行文档体系建设与展示材料制作**，构建"得分点—承接物"的完整映射。
+安排原则：**前期（Day 1–5）集中完成赛题工程性任务与代码实现优化，后期（Day 6–8）集中进行文档体系建设与展示材料制作**，构建“得分点—承接物”的完整映射。
 
 每日回归基线：当天结束时双架构 7 测试点必须全部通过；不达标当晚修复，不积压。
 
-### 进度速览（8.6 更新）
+### 进度速览（8.9 更新）
 
 | 日 | 状态 | 门禁结果 |
 |---|---|---|
@@ -251,9 +251,11 @@
 | Day 2 HAL 对称化与批量修复 | 已完成 | 14/14 回归 PASS，已推送（4 笔提交） |
 | Day 3 ext2 双重间接 + 大文件测试 | 已完成 | 14/14 回归 PASS；完整 usertests（不带 -q）双架构 PASS；e2fsck 离线校验零错误；已推送（5 笔提交） |
 | Day 4 fat32 LFN 读支持 | 已完成 | 14/14 回归 PASS；完整 usertests 双架构 PASS；已推送（3 笔提交） |
-| Day 5 稳定性证据与一键复现 | 已完成 | 16/16 回归 PASS（新增 smp 双架构）；完整 usertests 双架构 PASS；SMP 压测后 e2fsck 零错误；证据入库 tests/evidence/；待推送 |
+| Day 5 稳定性证据与一键复现 | 已完成 | 16/16 回归 PASS（新增 smp 双架构）；完整 usertests 双架构 PASS；SMP 压测后 e2fsck 零错误；证据入库 tests/evidence/；已推送（3 笔提交） |
+| Day 6 合规落地与性能测量 | 已完成 | LICENSE/SPDX 落地；基线副本补齐并与官方 rev5 逐文件校验一致；vfsbench 全量测量与证据归档；参照项目取证完成；16/16 回归 + 完整 usertests 双架构全绿；已推送（3 笔提交） |
+| Day 7 文档体系建设 | 进行中 | tests/ 体系规范化（1 笔）与 docs/notes 八篇（1 笔）已提交；contest/ 六篇、baseline/lock-order、docs 三层索引、progress.md 改写、三文档重写完成（工作区，待提交）；演示视频与双 PPT 顺延至 Day 8 |
 
-推送前门禁（自 Day 3 起强制执行）：`tests/run_all.sh` 14/14 + `tests/full_usertests.sh` 双架构全绿，缺一不推。
+推送前门禁（自 Day 3 起强制执行）：`tests/run_all.sh` 16/16 + `tests/full_usertests.sh` 双架构全绿，缺一不推。
 
 ### 第一阶段：代码实现优化（Day 1–5）
 
@@ -266,7 +268,7 @@
 
 **Day 2（8.5，周三）：HAL 对称化与低严重度缺陷批量修复**
 - [✔] 上午：E1 HAL 对称修复（LoongArch trap.c 改经 hal_irq_* 分发，电平/边沿路由知识收敛进 `arch/loongarch/hal.c`）；E2 删除 ramdisk 死代码（文件、Makefile 规则、defs.h 声明）；E3 提供 `tests/check_env.sh` 环境检查脚本（本机 gcc-14 后缀回退路径实测可用）。
-- [✔] 下午：修复 B4（位图钳位）、D3（ext2 长文件名，采用"截断显示 + 唯一前缀别名查找"方案，长名文件可列/可 stat/可读）、E3（Makefile 补 `param.h` 依赖与宿主工具检查）；可选项 fat32 簇分配 next-free 提示已实施（含回绕扫描与释放端下调）。
+- [✔] 下午：修复 B4（位图钳位）、D3（ext2 长文件名，采用“截断显示 + 唯一前缀别名查找”方案，长名文件可列/可 stat/可读）、E3（Makefile 补 `param.h` 依赖与宿主工具检查）；可选项 fat32 簇分配 next-free 提示已实施（含回绕扫描与释放端下调）。
 - [✔] 晚上：双架构回归 14/14；design.md 同步（当日变更当日记录）。
 - 产出：diff 更为整洁，设计精巧度无硬伤。
 
@@ -276,7 +278,7 @@
 - [✔] 晚上：双架构回归 14/14；新用例并入 `tests/ext2/`、`tests/fat32/`、`tests/persist/`；`e2fsck -fn` 离线校验 ext2 分区五阶段零错误。
 - 回退预案：未触发（实现一次调通）。
 - **计划外增补**：
-  - 回归抓获 `file.h` 扩展 `addrs` 后 `iupdate/ilock` 拷贝越界（覆写相邻 dinode 的 type，`fourfiles` panic），已修复并确立"以 `sizeof(dip->addrs)` 为拷贝上界"的约束，写入 design.md；
+  - 回归抓获 `file.h` 扩展 `addrs` 后 `iupdate/ilock` 拷贝越界（覆写相邻 dinode 的 type，`fourfiles` panic），已修复并确立“以 `sizeof(dip->addrs)` 为拷贝上界”的约束，写入 design.md；
   - 完整版 usertests 首次在 LoongArch 暴露**磁盘完成中断丢失**（初始移植遗留，gdb 取证：设备已投递完成而客户机未处理）；修复为 devintr 处理循环 + 定时器看门狗 `virtio_disk_watchdog()` 双层防护，双架构完整 usertests（不带 -q，含 6 项慢测试）全部通过；
   - 测试 runner 增加 `--final-wait`（C3 最小落地），`test_baseline` 增加 timeout 兜底（guest panic 不再挂死回归）；
   - 新增 `tests/full_usertests.sh` 并确立推送前门禁（run_all + 完整 usertests 双绿才允许推送）。
@@ -295,19 +297,26 @@
 
 ### 第二阶段：文档体系建设与展示材料（Day 6–8）
 
-**Day 6（8.9，周日）：文档体系建设**
-- [ ] 上午：F1–F7 全部修复；BSD-2-Clause LICENSE 文件落地，新增源文件加 SPDX 头；新增 `docs/BASELINE.md`（F9）。
-- [ ] 下午：test_report 扩充（§4.2）：**需求跟踪矩阵**、官方测例映射表、完整 usertests/SMP/压力结果、性能数据与 **VFS 开销量化**；撰写**创新性分析**（编号创新点三段式）。
-- [ ] 晚上：浏览静春山、RuOK 仓库取证，撰写**类似项目对比分析**（六维对比表）；E4 `docs/LOCK-ORDER.md` 定稿；design.md 同步（F8）；compliance.md 更新。
-- 产出：文档评审材料齐套，每个得分点均有承接物。
+**Day 6（8.9，周日）：合规落地与性能测量**
+- [✔] 许可证与来源合规：BSD-2-Clause `LICENSE` 落地仓库根；12 个自有源文件加单行 SPDX 注释头；`compliance.md` 定稿逐文件来源清单；README 许可证表述定稿。
+- [✔] 基线完整性修复（新增发现并解决的问题）：基线副本 `xv6-riscv-src/` 缺失 `mkfs/mkfs.c`（初赛导入时被 `.gitignore` 规则误伤漏交），已补回并与官方 rev5 tag（commit 7d7adbb）全量递归比对逐文件一致；`baseline.md` 落地（F9 修复）。
+- [✔] 性能测量：新增 `vfsbench` 基准程序，完成 VFS 开销量化（写路径约 +18%、读无差异）、三后端双架构吞吐、fat32 两项优化前后三点对比（写 273→57、读 86→4 ticks）、构建/启动/内核体积测量；原始日志归档 `tests/evidence/bench-*.txt`。
+- [✔] 参照项目取证：克隆分析两个 2025 参照项目仓库，提取基线/规模/VFS-HAL 形态/功能/测试证据，形成对比分析数据底稿。
+- [✔] tests/ 体系规范化：9 套测试点 README 双语四段式重写、覆盖矩阵、占位目录移除、runner/门禁脚本入库。
+- 产出：门禁双项全绿（16/16 + 完整 usertests 双架构）；3 笔提交推送。
+- 说明：原计划的 test_report 扩充与创新性分析顺延（文档体量大于预期），拆分为 Day 7 的 contest/ 六篇文档与 Day 8 的 test_report 重写。
 
-**Day 7（8.10，周一）：演示视频与汇报、答辩 PPT**
-- [ ] 上午：撰写《演示视频脚本和关键帧》文档，按分镜录制演示视频（§4.4 三要素）。
-- [ ] 下午：更新进展汇报幻灯片（补充分工页、进度时间线页、参照版本/增量贡献/AI 使用声明三个专页，§4.3）；制作现场答辩 PPT（§4.5 结构）与质询应答库。
-- [ ] 晚上：组内试讲答辩并计时。
-- 产出：Demo 评审材料齐套。
+**Day 7（8.10，周一）：文档体系建设（实际执行）与演示材料（顺延）**
+- [✔] tests/ 体系规范化（9 套双语四段式 README、覆盖矩阵、占位移除）并提交（f9f9dd3）。
+- [✔] docs/notes 学习笔记 8 篇（赛题分析至调试案例，编号成序）并提交（8aa9440）。
+- [✔] docs/contest/ 六篇（problems/innovation/comparison/performance/video-script/README 映射）、baseline.md、lock-order.md、docs 三层索引完成。
+- [✔] progress.md 改写（更名自 commit_history.md，续写阶段 K–O、总览与收尾事项更新）；ai_usage/compliance/references 统一重写。
+- [✔] performance.md 数据真实性复核：修正启动时间测量错误（原 0.40s/2.77s 为 make 开销污染，直接启动实测双架构均约 0.2s）并删除错误归因。
+- [ ] 演示视频录制与双 PPT 制作：顺延至 Day 8（素材已备：video-script.md、comparison.md、progress.md）。
 
 **Day 8（8.11，周二）：交付态收敛与最终打包（预留缓冲）**
+- [ ] test_report.md 重写（F6：与官方原版测例及当前测试体系同步）；design.md 最终同步（F8 余项）。
+- [ ] 演示视频按 `video-script.md` 分镜录制；汇报幻灯片与答辩 PPT 定稿（分工页待团队提供）。
 - [ ] 仓库交付态清理：移除临时文件、过程性 TODO、调试残留，评审所见即最终叙事。
 - [ ] `make clean` 后重新生成 `xv6-vfs-hal-final.diff` 与 `.diff.stat`，复核无调试残留、行数与文档声明一致（任务 5）。
 - [ ] 在干净 clone 上全流程复现（模拟评审环境）：构建 → `verify-all` → 官方流程 `cd /tests; cat cmds.sh | sh`。
@@ -323,7 +332,7 @@
 **代码与 diff**
 - [ ] `xv6-vfs-hal-final.diff` 与 `.diff.stat`（干净源码树重新生成）
 - [ ] B1–B5、E1–E3、D1–D4 修复全部合入并回归通过
-- [ ] 官方测例逐字节入库 + `VFS_TESTS_PIN.txt` 填写完整 + `/tests` 布局 + init 自动挂载
+- [x] 官方测例逐字节入库 + `VFS_TESTS_PIN.txt` 填写完整 + `/tests` 布局（手动挂载，与官方流程一致；自动挂载项经实证放弃）
 - [ ] 无调试残留、无死代码（ramdisk.c）、无 TODO/FIXME；仓库交付态收敛
 
 **测试证据**
@@ -332,7 +341,7 @@
 - [ ] 7 测试点 × 2 架构共 14 份日志入库 + 双架构全量启动测试输出
 - [ ] `make verify-all` 可用且 14/14 通过
 - [ ] SMP（CPUS=2/4）与 stressfs 压力测试记录
-- [ ] 冲刺期缺陷的"失败—分析—修复—复测"记录入库
+- [ ] 冲刺期缺陷的“失败—分析—修复—复测”记录入库
 
 **文档包**
 - [ ] design.md 定稿（HAL 对称、双重间接、LFN 读、研发问题与解决专题）
@@ -353,7 +362,7 @@
 
 | 风险 | 预案 |
 |---|---|
-| D1 双重间接超期 | Day 3 16:00 收缩为"读路径 + 解除拒读"，写路径维持现状并文档说明 |
+| D1 双重间接超期 | Day 3 16:00 收缩为“读路径 + 解除拒读”，写路径维持现状并文档说明 |
 | D4 LFN 读超期 | Day 4 晚间未调通则降级为 non-goal 说明；不影响 Day 5 及以后日程 |
 | D5 可插拔根文件系统 | 严格限定为选做冲刺项，前提为 Day 1–4 全部达标；任何犹豫即放弃 |
 | SMP 压力暴露深层竞争（C1） | 预案为后端 sleeplock（改动约 50 行以内）；若仍不稳定，文档声明 CPUS=1 基线并如实报告 SMP 现状 |
