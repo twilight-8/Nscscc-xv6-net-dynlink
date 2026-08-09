@@ -10,8 +10,8 @@
 - `README.md`：提交材料目录说明。
 - `final_slides.pdf`：最终设计文档的pdf版本
 - `final_slides.pptx`：团队分工和赛题推进ppt
-- `commit_history`：迭代历史
-- `test_report`：测试报告
+- `progress.md`：比赛过程中的重要进展（迭代记录）
+- `test_report.md`：测试报告
 - `演示视频.mp4`：队伍演示视频
 
 主要文档保存在仓库根目录 `README.md` 和 `docs/` 目录中，包括设计说明、测试报告、迭代记录、参考资料、合规说明和 AI 使用说明。

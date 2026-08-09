@@ -9,7 +9,7 @@
 ```text
 tests/
 |-- README.md / README.en.md     本文件（双语）
-|-- MATRIX.md / MATRIX.en.md     测试覆盖矩阵
+|-- MATRIX.md                    测试覆盖矩阵
 |-- VFS_TESTS_PIN.txt            官方测例版本锚定
 |-- check_env.sh                 环境自检
 |-- run_all.sh                   16 项一键双架构回归
@@ -27,14 +27,11 @@ tests/
 `-- smp/                         CPUS=3 并发压测
 ```
 
-每个测试点目录为统一三件套：`README.md`（双语四段式说明）+
-`*.cmds.sh`（喂给 xv6 shell 的命令）+ `run.sh`（expect/reject 断言）+
-`logs/`（运行产物，不入库）。
+每个测试点目录为统一三件套：`README.md + `*.cmds.sh`（喂给 xv6 shell 的命令）+ `run.sh`（expect/reject 断言）+ `logs/`（运行产物，不入库）。
 
 ## 测试点
 
-- `test_baseline`：官方自带测例（赛题任务 3），`usertests -q`；
-  完整版由 `full_usertests.sh` 承担。
+- `test_baseline`：官方自带测例（赛题任务 3），`usertests -q`；完整版由 `full_usertests.sh` 承担。
 - `public_vfs`：官方 VFS 评测流程逐字节复刻（赛题任务 4）。
 - `ext2`：挂载/读写/删除/嵌套目录/长名别名/1MiB 双间接大文件/外部大文件。
 - `fat32`：挂载/8.3 增删改/嵌套目录/LFN 长名三条访问路径。
@@ -73,12 +70,7 @@ bash tests/full_usertests.sh loongarch
 
 ## 规范约定
 
-1. 命令文件：单会话测试点用 `cmds.sh`；多会话用 `<阶段>.cmds.sh`
-   （如 `write.cmds.sh`/`read.cmds.sh`）。
-2. 断言模式：`--expect` 只写"成功才出现的串"；`--reject` 只写
-   "失败/异常串"；每个测试点必须含 `panic:`/`kerneltrap` 负断言。
+1. 命令文件：单会话测试点用 `cmds.sh`；多会话用 `<阶段>.cmds.sh`（如 `write.cmds.sh`/`read.cmds.sh`）。
+2. 断言模式：`--expect` 只写“成功才出现的串”；`--reject` 只写“失败/异常串”；每个测试点必须含 `panic:`/`kerneltrap` 负断言。
 3. `logs/` 为本地运行产物，不入库；最终通过证据归 `evidence/`。
-4. README 双语四段式：目的 / 覆盖点 / 关键断言 / 关联；`README.md`
-   为中文主版，`README.en.md` 为英文镜像，**改一处必同步另一处**。
-5. 新增测试点 = 新建同名目录（三件套）+ 根 Makefile 目标 +
-   `run_all.sh` 登记 + `MATRIX.md` 增行。
+4. 新增测试点 = 新建同名目录（三件套）+ 根 Makefile 目标 + `run_all.sh` 登记 + `MATRIX.md` 增行。

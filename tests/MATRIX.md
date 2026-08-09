@@ -1,7 +1,5 @@
 # 测试覆盖矩阵
 
-[中文](MATRIX.md) | [English](MATRIX.en.md)
-
 8 个测试点 × 双架构的覆盖总览。每项均可在 `tests/evidence/` 找到最终通过证据；执行入口见 `tests/README.md`。
 
 | 测试点 | 覆盖功能面 | 关联需求/缺陷 | RISC-V | LoongArch |
@@ -19,5 +17,4 @@
 补充验证（非测试点）：
 
 - `e2fsck -fn` 对 ext2 镜像五阶段离线校验：零错误（含 SMP 压测后状态）。
-- vfsbench 基准：VFS 开销、三后端吞吐、fat32 优化前后对比，数据见
-  `tests/evidence/bench-*.txt`。
+- vfsbench 基准：VFS 开销、三后端吞吐、fat32 优化前后对比，数据见`tests/evidence/bench-*.txt`。

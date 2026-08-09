@@ -9,19 +9,15 @@ Byte-for-byte reproduction of the official VFS evaluation flow: boot from the xv
 ## Coverage
 
 - Explicit `mount ext2 /mnt` (no auto-mount).
-- The image's `/tests` layout matches the official reference (cmds.sh,
-  hello.c, test1, test2, hello).
+- The image's `/tests` layout matches the official reference (cmds.sh, hello.c, test1, test2, hello).
 - test1: four-direction regular-file copies between ext2 and xv6.
 - test2: xv6→ext2 copy with read-back content verification.
 - exec root fallback for bare command names (running `/cat` etc. from /tests).
 
 ## Key assertions
 
-- expect: `mount: ext2 on /mnt dev 2`; the four
-  `test_copy_file(...): succeed` lines; `test_cross_fs_copy(): succeed`;
-  `PUBLIC_VFS_DONE`.
-- reject: `panic:`, `kerneltrap`, `mount: failed`, `exec cat failed`,
-  `exec test1 failed`, `exec test2 failed`, `: error`.
+- expect: `mount: ext2 on /mnt dev 2`; the four `test_copy_file(...): succeed` lines; `test_cross_fs_copy(): succeed`; `PUBLIC_VFS_DONE`.
+- reject: `panic:`, `kerneltrap`, `mount: failed`, `exec cat failed`, `exec test1 failed`, `exec test2 failed`, `: error`.
 
 ## Links
 

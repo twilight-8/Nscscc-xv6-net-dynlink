@@ -16,10 +16,8 @@
 
 ## 关键断言
 
-- expect：`mount: ext2 on /mnt dev 2`；四条 `test_copy_file(...): succeed`；
-  `test_cross_fs_copy(): succeed`；`PUBLIC_VFS_DONE`。
-- reject：`panic:`、`kerneltrap`、`mount: failed`、`exec cat failed`、
-  `exec test1 failed`、`exec test2 failed`、`: error`。
+- expect：`mount: ext2 on /mnt dev 2`；四条 `test_copy_file(...): succeed`；`test_cross_fs_copy(): succeed`；`PUBLIC_VFS_DONE`。
+- reject：`panic:`、`kerneltrap`、`mount: failed`、`exec cat failed`、`exec test1 failed`、`exec test2 failed`、`: error`。
 
 ## 关联
 

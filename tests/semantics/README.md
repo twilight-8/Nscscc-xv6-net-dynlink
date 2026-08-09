@@ -8,18 +8,14 @@
 
 ## 覆盖点
 
-- 挂载根目录的 `..`：`/mnt/../parent.txt` 与 `/fat/../parent.txt` 必须
-  解析回 xv6 根文件系统。
+- 挂载根目录的 `..`：`/mnt/../parent.txt` 与 `/fat/../parent.txt` 必须解析回 xv6 根文件系统。
 - ext2 同文件系统硬链接成功且内容一致；fat32 硬链接显式拒绝。
-- `unlinkopen /mnt/uop.txt` 与 `unlinkopen /fat/uop.txt`：打开中的文件
-  被 unlink 后仍可读写，最后一次 close 才释放（B2 回归守护，双后端）。
+- `unlinkopen /mnt/uop.txt` 与 `unlinkopen /fat/uop.txt`：打开中的文件被 unlink 后仍可读写，最后一次 close 才释放（B2 回归守护，双后端）。
 
 ## 关键断言
 
-- expect：`VFS_PARENT_OK`；硬链接文件内容；`link ... /fat/... failed`；
-  `unlinkopen: ok`（×2）；`SEMANTICS_DONE`。
-- reject：`panic:`、`kerneltrap`、`mount: failed`、`unlinkopen: FAIL`、
-  ext2 链接失败串。
+- expect：`VFS_PARENT_OK`；硬链接文件内容；`link ... /fat/... failed`；`unlinkopen: ok`（×2）；`SEMANTICS_DONE`。
+- reject：`panic:`、`kerneltrap`、`mount: failed`、`unlinkopen: FAIL`、ext2 链接失败串。
 
 ## 关联
 

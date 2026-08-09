@@ -30,24 +30,29 @@ RISC-V 平台继续使用 virtio-mmio 块设备读写 `fs.img`；LoongArch64 平
 
 ```text
 .
-├── README.md
-├── .gitignore
-├── docs/                     # 仓库的文档说明，对整体设计、测试结果、迭代记录等进行了简要说明
-├── tests/                    # 测试样例、脚本和日志说明
-├── submit/                   # 竞赛提交材料
-└── src/                      # 源码
+├── README.md                  # 项目说明（本文件）
+├── LICENSE                    # BSD-2-Clause（团队新增代码）
+├── Makefile                   # 测试编排：16 个测试点目标与 verify-all 一键复现
+├── Dockerfile                 # 容器化构建与测试环境
+├── src/                       # 作品源码（xv6 rev5 + 全部改动）
+│   ├── kernel/                # 内核（含自研 vfs/ext2/fat32/block/hal 与 arch/loongarch 移植层）
+│   ├── mkfs/                  # 镜像打包工具（mkfs 修改版 + 自研 mkfat32）
+│   ├── user/                  # 用户程序（含官方测例 test1/test2 与团队测试程序）
+│   └── tests/                 # 装入镜像 /tests 目录的数据文件（官方 cmds.sh、hello.c）
+├── xv6-riscv-src/             # xv6-riscv rev5 原始基线副本（diff 的"旧"侧，与官方 tag 逐文件一致）
+├── tests/                     # 宿主机测试编排（8 测试点、驱动、门禁脚本、通过证据）
+├── docs/                      # 项目文档（生命周期文档 + notes/ 学习笔记 + contest/ 赛事文档集）
+└── submit/                    # 竞赛提交材料（最终 diff、报告、幻灯片、演示视频）
 ```
 
 ## 文档 `docs/`
 
-> 对 `docs/` 的目录结构进行介绍
- 
-- `docs/design.md`：整体设计说明。
-- `docs/commit_history.md`：版本迭代记录与说明
-- `docs/test_report.md`：测试记录的简要说明说明。
-- `docs/compliance.md`：合规与来源说明。
-- `docs/references.md`：参考资料。
-- `docs/ai_usage.md`：AI 使用说明。
+> `docs/` 的分层结构，详细索引见 `docs/README.md`
+
+- `docs/design.md`：系统框架设计（三层架构与各阶段设计决策）。
+- `docs/plan.md`：开发计划与进度勾选。
+- `docs/notes/`：学习笔记（赛题分析、源码精读、规范精读、设计推导、调试案例）。
+- `docs/contest/`：赛事文档集（迭代记录、测试报告、问题与解决、创新性/对比/性能分析、视频脚本、合规与来源、基线锚定、锁规则、AI 使用声明）。
 
 ## 提交材料 `submit/`
 
@@ -59,8 +64,8 @@ RISC-V 平台继续使用 virtio-mmio 块设备读写 `fs.img`；LoongArch64 平
 - `README.md`：提交材料目录说明。
 - `final_slides.pdf`：最终设计文档的pdf版本
 - `final_slides.pptx`：团队分工和赛题推进ppt
-- `commit_history`：迭代历史
-- `test_report`：测试报告
+- `progress.md`：比赛过程中的重要进展（迭代记录）
+- `test_report.md`：测试报告
 - `演示视频.mp4`：队伍演示视频
 
 ## 详细测试材料 `tests/`
@@ -69,13 +74,14 @@ RISC-V 平台继续使用 virtio-mmio 块设备读写 `fs.img`；LoongArch64 平
 
 ##### 内容介绍
 
-- `test_baseline/`：xv6官方测试集测试
-- `public_vfs/`：赛题公开测试集测试
-- `ext2/`：ext2文件系统支持测试
-- `fat32/`：fat32文件系统支持测试
-- `error/`：输入错指令时的稳定性测试
-- `persist/`：镜像写入测试
-- `semantics/`：硬链接指令测试
+- `test_baseline/`：xv6 官方测试集（含不带 -q 的完整版入口）
+- `public_vfs/`：赛题公开 VFS 测试流程复刻
+- `ext2/`：ext2 文件系统功能面（含双间接大文件、长名）
+- `fat32/`：fat32 文件系统功能面（含 LFN 长名）
+- `error/`：非法指令的稳定性测试
+- `semantics/`：挂载/链接/unlink 语义测试
+- `persist/`：镜像持久化双会话测试
+- `smp/`：CPUS=3 并发压测
 
 详细执行指令见`tests/`目录内的 `README.md`
 
@@ -91,6 +97,7 @@ RISC-V 平台继续使用 virtio-mmio 块设备读写 `fs.img`；LoongArch64 平
 
 - `test_baseline/`：对基础功能进行测试
 - `public_vfs/`：对公开 VFS 风格的 `test1/test2` 进行测试
+- 其余 6 个测试点见上方“内容介绍”与 `tests/README.md`
 
 ##### 快速开始：
 
@@ -119,33 +126,32 @@ LoongArch64 当前使用 virtio-pci 块设备访问 `fs.img`。在 shell 中可�
 ```sh
 usertests -q
 mkdir /mnt
-mount ext2 /mnt 2
+mount ext2 /mnt
 cd tests
 cat cmds.sh | sh
 ```
 
+（`mount` 命令的第三个参数 dev 可省略，系统按文件系统类型选择默认设备。）
+
 ## Docker 环境
 
-仓库根目录提供 `Dockerfile`，镜像内预装 RISC-V / LoongArch64 交叉工具链、QEMU
-及全部测试依赖，并已预构建好两个架构的内核与 `fs.img`，开箱即用：
+仓库根目录提供 `Dockerfile`，镜像内预装 RISC-V / LoongArch64 交叉工具链、QEMU及全部测试依赖，并已预构建好两个架构的内核与 `fs.img`，开箱即用：
 
 ```sh
 docker build -t xv6-vfs-hal .
 docker run --rm -it xv6-vfs-hal          # 进入容器，工作目录 /xv6
 ```
 
-容器内可直接运行上述测试与 QEMU 命令（如 `make test_baseline && make run`，
-或 `cd src && make qemu` / `make ARCH=loongarch CPUS=1 qemu`）。
+容器内可直接运行上述测试与 QEMU 命令（如 `make test_baseline && make run`，或 `cd src && make qemu` / `make ARCH=loongarch CPUS=1 qemu`）。
 
-注：若拉取 `ubuntu:24.04` 基础镜像超时，可先在 `/etc/docker/daemon.json` 配置
-`registry-mirrors` 镜像加速后重启 Docker。
+注：若拉取 `ubuntu:24.04` 基础镜像超时，可先在 `/etc/docker/daemon.json` 配置`registry-mirrors` 镜像加速后重启 Docker。
 
 ## 许可证与合规性说明
 
-原始 xv6 代码保留 MIT License（见 `src/LICENSE`）。团队新增代码采用 BSD-2-Clause License（全文见仓库根目录 `LICENSE`），自有新增源文件以单行 SPDX 注释标注。第三方来源（xv6-loongarch-exp 移植参考、官方测例文件）的逐文件说明见 `docs/compliance.md`。技术文档、PPT 和演示视频说明采用 CC-BY-SA 4.0。
+原始 xv6 代码保留 MIT License（见 `src/LICENSE`）。团队新增代码采用 BSD-2-Clause License（全文见仓库根目录 `LICENSE`），自有新增源文件以单行 SPDX 注释标注。第三方来源（xv6-loongarch-exp 移植参考、官方测例文件）的逐文件说明见 `docs/contest/compliance.md`。技术文档、PPT 和演示视频说明采用 CC-BY-SA 4.0。
 
 ## AI 使用声明
 
 本项目在确保原创性的基础上使用 AI 工具进行了简单的需求分析和代码审查等工作，所有 AI 建议均由队员人工理解、修改、验证和测试后才予以采用。
 
-AI 使用说明详见：`docs/ai_usage.md`
+AI 使用说明详见：`docs/contest/ai_usage.md`
