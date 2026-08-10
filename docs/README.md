@@ -41,6 +41,7 @@
 | `contest/performance.md` | 性能测试与分析 |
 | `contest/video_script.md` | 演示视频脚本与关键帧 |
 | `contest/collaboration.md` | 分工和协作 |
+| `contest/summary.md` | 比赛收获 |
 | `contest/compliance.md` | 非本队来源说明 |
 | `contest/ai_usage.md` | AI 使用声明 |
 | `contest/baseline.md` | 基线锚定与 diff 生成 |

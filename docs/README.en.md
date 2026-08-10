@@ -41,6 +41,7 @@ Each document maps to a submission requirement; the mapping table is in `contest
 | `contest/performance.md` | Performance measurement and analysis |
 | `contest/video_script.md` | Demo video script and key frames |
 | `contest/collaboration.md` | Division of labor and collaboration |
+| `contest/summary.md` | Contest takeaways |
 | `contest/compliance.md` | Third-party source disclosure |
 | `contest/ai_usage.md` | AI tooling disclosure |
 | `contest/baseline.md` | Baseline anchor and diff generation |

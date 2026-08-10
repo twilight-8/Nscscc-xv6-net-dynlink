@@ -14,7 +14,8 @@ This directory collects the documents written to the contest's submission requir
 | Comparison with similar projects | `comparison.md` |
 | Performance analysis | `performance.md` (data in `../../tests/evidence/bench-*.txt`) |
 | Demo video (script and storyboard) | `video_script.md` |
-| Division of labor and collaboration | `collaboration.md` (material pending) |
+| Division of labor and collaboration | `collaboration.md` |
+| Contest takeaways | `summary.md` |
 | Third-party source disclosure | `compliance.md` |
 | AI tooling disclosure | `ai_usage.md` |
 | Version Anchoring Information of the Project Baseline | `baseline.md` |

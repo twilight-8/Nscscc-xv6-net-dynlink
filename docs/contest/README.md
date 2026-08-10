@@ -14,7 +14,8 @@
 | 与类似项目的对比分析 | `comparison.md` |
 | 性能分析 | `performance.md`（数据见 `../../tests/evidence/bench-*.txt`） |
 | 演示视频脚本与分镜设计 | `video_script.md` |
-| 分工和协作 | `collaboration.md`（素材待定） |
+| 分工和协作 | `collaboration.md` |
+| 比赛收获 | `summary.md` |
 | 非本队来源说明 | `compliance.md` |
 | AI 工具使用声明 | `ai_usage.md` |
 | 项目基线的版本锚定信息 | `baseline.md` |

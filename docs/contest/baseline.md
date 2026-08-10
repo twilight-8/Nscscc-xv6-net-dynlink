@@ -24,17 +24,19 @@ diff -r -q -x '.git*' xv6-riscv-src rev5-check     # 输出为空 = 逐文件一
 
 ## diff 生成命令
 
+生成前先在 `src/` 执行 `make clean`，清除全部构建产物（目标文件、符号文件、镜像、编译期生成的汇编与用户态二进制），使 diff 只含源文件差异：
+
 ```sh
-diff -ruN \
-  -x '*.o' -x '*.d' -x '*.sym' -x '*.asm' -x '*.img' \
-  -x 'usys.S' -x '_*' -x 'test1' -x 'test2' -x 'hello' \
-  -x '.arch-*' -x '.gdbinit' -x 'TAGS' \
-  xv6-riscv-src src > submit/xv6-vfs-hal-final.diff
+make -C src clean
+diff -ruN -d xv6-riscv-src src > submit/xv6-vfs-hal-final.diff
+# 去除 ---/+++ 行的时间戳，保证重复生成结果逐字节一致、可复核
+sed -i -E 's/^(---|\+\+\+) ([^\t]+)\t.*$/\1 \2/' submit/xv6-vfs-hal-final.diff
+git apply --stat -p0 submit/xv6-vfs-hal-final.diff > submit/xv6-vfs-hal-final.diff.stat
 ```
 
-排除项均为构建产物或构建期生成的符号链接。统计口径可用`grep -c '^+' / '^-'` 或 `diffstat` 获得。
+`-d`（`--minimal`）输出最小变更集。正确性验证：在基线副本上以 `patch -p0` 套用该 diff，所得源码树与 `src/` 逐文件一致。行数拆分与分类统计见 `submit/diff.md`。
 
 ## 当前增量规模
 
-- 约 +6.4k 行 / −0.2k 行，约 60 个文件（含新增文件整体计入）。
-- 对 rev5 原有文件的修改高度集中（约 130 行净增），其余为新增文件。
+- 60 个文件，+6242/−113（diff 文件总行数 7307，含文件头与 hunk 头）。
+- 对 rev5 原有文件的修改高度集中，增量主体是新增文件（ext2.c、fat32.c、vfs.c、`kernel/arch/loongarch/` 移植层等整文件计入）。
