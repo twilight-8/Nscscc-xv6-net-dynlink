@@ -1,150 +1,151 @@
-# xv6 VFS and HAL
+<div align="center">
+
+<p><img src="docs/assets/buaa-logo.png" alt="北京航空航天大学" height="70" /></p>
+
+
+<p>xv6虚拟文件系统和硬件抽象层的设计与实现</p>
+
+<p><strong>2026 计算机系统能力大赛功能挑战赛道 · 颜值爆表队</strong></p>
+
+<p>
+  <img src="https://img.shields.io/badge/文件系统-xv6%20%7C%20ext2%20%7C%20FAT32-0053A5" alt="fs" />
+  <img src="https://img.shields.io/badge/平台-RISC--V%20%7C%20LoongArch-E8912D" alt="platform" />
+  <a href="https://gitlab.eduxiji.net/T2026100069911110/project3136859-388873"><img src="https://img.shields.io/badge/License-BSD--2--Clause-7C5CFC" alt="license" /></a>
+</p>
+
+</div>
+
+---
+
+[中文](README.md) | [English](README.en.md)
+
+## 项目简介
 
 本项目参加 2026 年全国大学生计算机系统能力大赛操作系统设计赛 OS 功能挑战赛道，赛题为 `proj34 xv6 虚拟文件系统和硬件抽象层的设计与实现`。
 
-我们基于 MIT xv6-riscv rev5，在保持 xv6 小型教学操作的基础上，增加 VFS 和 HAL 功能，使系统支持 xv6、ext2、fat32 文件系统，并支持 RISC-V 与 LoongArch 平台。
+项目基于 MIT xv6-riscv rev5，在保持 xv6 小型教学系统风格的前提下，为其增加虚拟文件系统（VFS）与硬件抽象层（HAL）：系统同时支持 xv6、ext2、fat32 三种文件系统，并运行于 RISC-V 与 LoongArch64 两个平台。两个平台均通过 xv6-riscv rev5 自带测例与赛题指定的 VFS 测例，相对原始基线的全部改动以 diff 文件形式交付。
 
-## 当前阶段
+## 项目亮点
 
-当前已经完成 VFS、ext2、fat32 和轻量 HAL 的阶段性实现。
+- **薄 VFS 分发层**：336 行实现三种文件系统共存与统一挂载，对 xv6 原生文件系统路径零侵入。
+- **单盘三文件系统镜像布局**：一块 virtio 磁盘同时承载 xv6、ext2、fat32 三个文件系统镜像，启动后可按需挂载。
+- **双平台对称薄 HAL**：两个平台共用同一套内核代码，平台差异收敛于独立的移植层，中断路由知识单点收敛。
+- **机制级稳定性兜底**：针对外部中断链无法保证不丢中断的现实，设计 virtio 看门狗在机制层兜底，SMP 并发压测通过。
+- **缺陷驱动的测试体系**：8 个测试点 × 2 个架构共 16 项回归全部通过，`make verify-all` 一行命令完整复现，全部结论有原始日志归档。
+- **最小化 diff 纪律**：相对基线 60 个文件、+6242/−113 行，每一处改动均可在 `docs/progress.md` 中溯源到对应阶段与验证记录。
 
-RISC-V 平台继续使用 virtio-mmio 块设备读写 `fs.img`；LoongArch64 平台已接入 virtio-pci 块设备，同样可以在 QEMU 中读写 `fs.img`。两个平台均已通过 xv6-riscv rev5 自带 `usertests -q`，并在显式挂载 ext2 后通过 `test1`、`test2`。
+## 快速开始
 
-## 目标
-
-- 支持 xv6、ext2、fat32 文件系统。
-- 支持 RISC-V、LoongArch 平台。
-- 通过 xv6-riscv rev5 自带测试。
-- 完成赛题指定 VFS 测试。
-- 提交最终版本相对 xv6-riscv rev5 的 diff 文件。
-
-## 基础版本
-
-- Base project: MIT xv6-riscv
-- Base version: xv6-riscv rev5
-- Source: https://github.com/mit-pdos/xv6-riscv/releases/tag/xv6-riscv-rev5
-- Original license: MIT License
-- Local source: `src/`
-
-## 仓库结构
-
-```text
-.
-├── README.md                  # 项目说明（本文件）
-├── LICENSE                    # BSD-2-Clause（团队新增代码）
-├── Makefile                   # 测试编排：16 个测试点目标与 verify-all 一键复现
-├── Dockerfile                 # 容器化构建与测试环境
-├── src/                       # 作品源码（xv6 rev5 + 全部改动）
-│   ├── kernel/                # 内核（含自研 vfs/ext2/fat32/block/hal 与 arch/loongarch 移植层）
-│   ├── mkfs/                  # 镜像打包工具（mkfs 修改版 + 自研 mkfat32）
-│   ├── user/                  # 用户程序（含官方测例 test1/test2 与团队测试程序）
-│   └── tests/                 # 装入镜像 /tests 目录的数据文件（官方 cmds.sh、hello.c）
-├── xv6-riscv-src/             # xv6-riscv rev5 原始基线副本（diff 的"旧"侧，与官方 tag 逐文件一致）
-├── tests/                     # 宿主机测试编排（8 测试点、驱动、门禁脚本、通过证据）
-├── docs/                      # 项目文档（生命周期文档 + notes/ 学习笔记 + contest/ 赛事文档集）
-└── submit/                    # 竞赛提交材料（最终 diff、报告、幻灯片、演示视频）
-```
-
-## 文档 `docs/`
-
-> `docs/` 的分层结构，详细索引见 `docs/README.md`
-
-- `docs/design.md`：系统框架设计（三层架构与各阶段设计决策）。
-- `docs/plan.md`：开发计划与进度勾选。
-- `docs/notes/`：学习笔记（赛题分析、源码精读、规范精读、设计推导、调试案例）。
-- `docs/contest/`：赛事文档集（迭代记录、测试报告、问题与解决、创新性/对比/性能分析、视频脚本、合规与来源、基线锚定、锁规则、AI 使用声明）。
-
-## 提交材料 `submit/`
-
-> 对 `submit` 目录结构进行介绍
-
-- `xv6-vfs-hal-final.diff`：最终版本代码与初始 `xv6-riscv rev5` 源码之间的完整 diff。
-- `xv6-vfs-hal-final.diff.stat`：上述 diff 的统计摘要。
-- `diff.md`：diff 生成方式、总行数和 HAL/VFS 分类统计说明。
-- `README.md`：提交材料目录说明。
-- `final_slides.pdf`：最终设计文档的pdf版本
-- `final_slides.pptx`：团队分工和赛题推进ppt
-- `progress.md`：比赛过程中的重要进展（迭代记录）
-- `test_report.md`：测试报告
-- `演示视频.mp4`：队伍演示视频
-
-## 详细测试材料 `tests/`
-
-> 对 `tests/` 目录结构进行介绍，该目录的详细结构见该目录内的 `README.md`
-
-##### 内容介绍
-
-- `test_baseline/`：xv6 官方测试集（含不带 -q 的完整版入口）
-- `public_vfs/`：赛题公开 VFS 测试流程复刻
-- `ext2/`：ext2 文件系统功能面（含双间接大文件、长名）
-- `fat32/`：fat32 文件系统功能面（含 LFN 长名）
-- `error/`：非法指令的稳定性测试
-- `semantics/`：挂载/链接/unlink 语义测试
-- `persist/`：镜像持久化双会话测试
-- `smp/`：CPUS=3 并发压测
-
-详细执行指令见`tests/`目录内的 `README.md`
-
-##### 测试环境：
-
-- Host OS: WSL2 Ubuntu 24.04 LTS
-- Shell: Bash
-- Build tools: `make`, `gcc`, `python3`, `perl`, `bc`
-- Debug tool: `gdb-multiarch`
-- Version control: `git`
-
-##### 目前包括：
-
-- `test_baseline/`：对基础功能进行测试
-- `public_vfs/`：对公开 VFS 风格的 `test1/test2` 进行测试
-- 其余 6 个测试点见上方“内容介绍”与 `tests/README.md`
-
-##### 快速开始：
-
-```sh
-make test_baseline && make run
-```
-
-该命令在 RISC-V QEMU 环境中运行 xv6-riscv rev5 自带 `usertests -q` 回归测试。
-
-手动启动 RISC-V：
-
-```sh
-cd src
-make qemu
-```
-
-手动启动 LoongArch64：
-
-```sh
-cd src
-make ARCH=loongarch CPUS=1 qemu
-```
-
-LoongArch64 当前使用 virtio-pci 块设备访问 `fs.img`。在 shell 中可以执行：
-
-```sh
-usertests -q
-mkdir /mnt
-mount ext2 /mnt
-cd tests
-cat cmds.sh | sh
-```
-
-（`mount` 命令的第三个参数 dev 可省略，系统按文件系统类型选择默认设备。）
-
-## Docker 环境
-
-仓库根目录提供 `Dockerfile`，镜像内预装 RISC-V / LoongArch64 交叉工具链、QEMU及全部测试依赖，并已预构建好两个架构的内核与 `fs.img`，开箱即用：
+仓库根目录提供 `Dockerfile`，镜像内预装 RISC-V / LoongArch64 交叉工具链、QEMU 及全部测试依赖，并已预构建两个架构的内核与 `fs.img`，开箱即用：
 
 ```sh
 docker build -t xv6-vfs-hal .
 docker run --rm -it xv6-vfs-hal          # 进入容器，工作目录 /xv6
 ```
 
-容器内可直接运行上述测试与 QEMU 命令（如 `make test_baseline && make run`，或 `cd src && make qemu` / `make ARCH=loongarch CPUS=1 qemu`）。
+容器内或本地环境（依赖见 `tests/README.md`）均可执行：
 
-注：若拉取 `ubuntu:24.04` 基础镜像超时，可先在 `/etc/docker/daemon.json` 配置`registry-mirrors` 镜像加速后重启 Docker。
+```sh
+make verify-all        # 环境检查 + 16 项双架构回归 + 双架构完整 usertests
+make test_baseline && make run    # 官方入口执行 usertests -q
+```
+
+手动启动系统：
+
+```sh
+cd src
+make qemu                           # RISC-V
+make ARCH=loongarch CPUS=1 qemu     # LoongArch64
+```
+
+进入 shell 后可按官方参考流程挂载 ext2 并执行 VFS 测例：
+
+```sh
+mkdir /mnt
+mount ext2 /mnt        # mount 的 dev 参数可省略，系统按文件系统类型选择默认设备
+cd tests
+cat cmds.sh | sh
+```
+
+注：若拉取 `ubuntu:24.04` 基础镜像超时，可先在 `/etc/docker/daemon.json` 配置 `registry-mirrors` 镜像加速后重启 Docker。
+
+## 赛题文档大纲对照
+
+| 赛题大纲条目 | 位置 |
+|---|---|
+| 目标描述 | 上文“项目简介” |
+| 比赛题目分析和相关资料调研 | [notes](docs/notes) |
+| 系统框架设计 | [design.md](docs/design.md)|
+| 开发计划 | [plan.md](docs/plan.md) |
+| 比赛过程中的重要进展 | [progress.md](docs/progress.md) |
+| 系统测试情况 | [test_report.md](docs/contest/test_report.md) |
+| 遇到的主要问题和解决方法 | [problems.md](docs/contest/problems.md) |
+| 分工和协作 | [collaboration.md](docs/contest/collaboration.md) |
+| 提交仓库目录和文件描述 | 下文“仓库结构” |
+| 比赛收获 | [summary.md](docs/contest/summary.md) |
+
+## 比赛题目分析与相关资料调研
+
+赛题要求在 xv6-riscv rev5 上同时扩展三类文件系统与两个硬件平台，且以“增加的代码尽量少、系统运行稳定”为约束，因此团队首先对赛题任务、评分要点与基线源码做了系统拆解，再动笔写代码。调研与精读过程沉淀为九篇学习笔记：赛题分析、xv6 rev5 源码结构与启动链路、文件系统调用链、路径解析机制、ext2/fat32 规范要点、VFS 与 HAL 设计推导、调试案例集与资料清单。详见 `docs/notes/`，其中 VFS 与 HAL 两篇设计推导完整记录了从源码事实到设计决策的过程。
+
+## 系统框架设计
+
+系统采用三层结构：上层为薄 VFS 分发层，维护挂载表并把文件操作按挂载点分发到具体后端；中间为三个文件系统实现——xv6 原生文件系统保持原状，ext2 与 fat32 作为新增后端接入同一接口；下层为轻量 HAL，将平台相关代码（启动、中断、块设备）收敛到独立的 arch 移植层，使两个平台共享全部文件系统代码。设计的关键取舍、核心数据结构、并发锁规则与镜像布局均在文档中展开。详见 `docs/design.md`，锁规则专项说明见 `docs/contest/lock_order.md`。
+
+## 开发计划
+
+开发按“基线先行、逐阶段推进、每阶段可验证”的原则组织：先建立基线锚定与测试环境，再依次实现 VFS、ext2、fat32、HAL 与 LoongArch 移植，最后做稳定性加固、合规落地与交付整理。决赛阶段的任务分解、日程安排与完成情况逐日记录在计划文档中。详见 `docs/plan.md`。
+
+## 比赛过程中的重要进展
+
+项目从基线建立到交付共经历十六个阶段（阶段 0 至阶段 O），每阶段按“主要目标、主要改动、验证结果”记录：薄 VFS 分发层、挂载表与块设备接口、ext2 与 fat32 支持、LoongArch64 启动与 virtio-pci 块设备、官方 VFS 测例对接、ext2 双重间接大文件、fat32 长文件名、并发稳定性修复、合规与性能测量等。每阶段均可与提交历史及 `tests/evidence/` 的测试日志互相印证。详见 `docs/progress.md`。
+
+## 系统测试情况
+
+测试体系由三层组成：xv6 自带测例（`usertests`，双架构均执行快速版与完整版，完整版各 60 项 OK、判定行均为 `ALL TESTS PASSED`）、赛题指定 VFS 测例（test1/test2 按官方参考流程执行通过，镜像布局与官方一致）、团队自拟的 8 个测试点（官方测例回归、公开 VFS 流程复刻、ext2 与 fat32 功能面、异常与语义、持久化、SMP 并发压测）。8 测试点 × 2 架构共 16 项全部通过，ext2 镜像经 e2fsck 校验零错误，全部原始日志归档于 `tests/evidence/`。详见 `docs/contest/test_report.md` 与 `tests/README.md`，性能数据见 `docs/contest/performance.md`。
+
+## 遇到的主要问题和解决方法
+
+研发过程中的关键问题均已按“现象、定位、根因、修复、验证”记录，共九项，覆盖评测流程对接、文件系统语义、并发稳定性与测试工程四个方向。代表性案例：LoongArch 平台磁盘完成中断丢失导致系统挂死，最终以 virtio 看门狗在机制层兜底；fat32 大文件写入存在 O(n²) 链漫游导致的分钟级耗时，通过簇链缓存优化到正常水平；打开中的文件被 unlink 后的语义错误通过 inode 缓存一致性与延迟释放修复。完整清单见 `docs/contest/problems.md`，调试细节另见 `docs/notes/07-debug-cases.md`。
+
+## 分工和协作
+
+团队三人按子系统划分责任、交叉评审：顾文达（队长）负责整体技术把控与双平台 HAL 移植，苗含旭负责 VFS 与 ext2/fat32 三个文件系统，李孟希负责决赛阶段的测试体系、稳定性优化与文档建设。协作以托管平台的迭代提交为主线，每阶段完成后进行交叉评审与全量回归。详见 `docs/contest/collaboration.md`。
+
+## 比赛收获
+
+通过本项目，团队在文件系统实现、并发正确性、跨平台移植三个方向获得了完整的工程实践，并形成了一套可复用的工作方法：基线锚定与 diff 克制的纪律、缺陷驱动的测试建设、阶段化进展记录。具体总结见 `docs/contest/summary.md`。
+
+## 仓库结构
+
+```text
+.
+├── README.md                  # 项目说明
+├── LICENSE                    # BSD-2-Clause
+├── Makefile                   # 测试编排：16 个测试点目标与 verify-all 一键复现
+├── Dockerfile                 # 容器化构建与测试环境
+├── src/                       # 作品源码
+│   ├── kernel/                # 内核
+│   ├── mkfs/                  # 镜像打包工具
+│   ├── user/                  # 用户程序（含官方测例 test1/test2 与团队测试程序）
+│   └── tests/                 # 装入镜像 /tests 目录的数据文件
+├── xv6-riscv-src/             # xv6-riscv rev5 原始基线副本
+├── tests/                     # 宿主机测试编排
+├── docs/                      # 项目文档
+│   ├── contest/               # 赛事资料
+│   ├── notes/                 # 学习笔记 
+└── submit/                    # 竞赛提交材料
+```
+
+各目录的详细说明见对应的 README：`docs/README.md`、`tests/README.md`、`submit/README.md`。
+
+## 提交材料 `submit/`
+
+- `xv6-vfs-hal-final.diff`：最终版本与 xv6-riscv rev5 基线之间的完整 diff（生成方式见 `docs/contest/baseline.md`）。
+- `xv6-vfs-hal-final.diff.stat`：上述 diff 的统计摘要。
+- `final_slides.pdf` / `final_slides.pptx`：汇报幻灯片。
+- `演示视频.mp4`：演示视频（脚本与分镜见 `docs/contest/video_script.md`）。
+- `test_report.md`、`diff.md`、`commit_history.md`：测试报告、diff 说明与提交历史快照。
 
 ## 许可证与合规性说明
 
@@ -152,6 +153,4 @@ docker run --rm -it xv6-vfs-hal          # 进入容器，工作目录 /xv6
 
 ## AI 使用声明
 
-本项目在确保原创性的基础上使用 AI 工具进行了简单的需求分析和代码审查等工作，所有 AI 建议均由队员人工理解、修改、验证和测试后才予以采用。
-
-AI 使用说明详见：`docs/contest/ai_usage.md`
+本项目在确保原创性的基础上使用 AI 工具进行了需求分析和代码审查等辅助工作，所有 AI 建议均由队员人工理解、修改、验证和测试后才予以采用。AI 使用说明详见 `docs/contest/ai_usage.md`。
