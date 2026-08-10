@@ -8,8 +8,8 @@
 <p><strong>2026 计算机系统能力大赛功能挑战赛道 · 颜值爆表队</strong></p>
 
 <p>
-  <img src="https://img.shields.io/badge/文件系统-xv6%20%7C%20ext2%20%7C%20FAT32-0053A5" alt="fs" />
-  <img src="https://img.shields.io/badge/平台-RISC--V%20%7C%20LoongArch-E8912D" alt="platform" />
+  <a href="docs/design.md"><img src="https://img.shields.io/badge/文件系统-xv6%20%7C%20ext2%20%7C%20FAT32-0053A5" alt="fs" /></a>
+  <a href="docs/design.md"><img src="https://img.shields.io/badge/平台-RISC--V%20%7C%20LoongArch-E8912D" alt="platform" /></a>
   <a href="https://gitlab.eduxiji.net/T2026100069911110/project3136859-388873"><img src="https://img.shields.io/badge/License-BSD--2--Clause-7C5CFC" alt="license" /></a>
 </p>
 
@@ -32,7 +32,6 @@
 - **双平台对称薄 HAL**：两个平台共用同一套内核代码，平台差异收敛于独立的移植层，中断路由知识单点收敛。
 - **机制级稳定性兜底**：针对外部中断链无法保证不丢中断的现实，设计 virtio 看门狗在机制层兜底，SMP 并发压测通过。
 - **缺陷驱动的测试体系**：8 个测试点 × 2 个架构共 16 项回归全部通过，`make verify-all` 一行命令完整复现，全部结论有原始日志归档。
-- **最小化 diff 纪律**：相对基线 60 个文件、+6242/−113 行，每一处改动均可在 `docs/progress.md` 中溯源到对应阶段与验证记录。
 
 ## 快速开始
 

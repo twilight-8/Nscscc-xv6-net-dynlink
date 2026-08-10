@@ -8,8 +8,8 @@
 <p><strong>2026 National Undergraduate Computer System Ability Competition · HandsoMeOS Team</strong></p>
 
 <p>
-  <img src="https://img.shields.io/badge/Filesystems-xv6%20%7C%20ext2%20%7C%20FAT32-0053A5" alt="fs" />
-  <img src="https://img.shields.io/badge/Platforms-RISC--V%20%7C%20LoongArch-E8912D" alt="platform" />
+  <a href="docs/design.md"><img src="https://img.shields.io/badge/Filesystems-xv6%20%7C%20ext2%20%7C%20FAT32-0053A5" alt="fs" /></a>
+  <a href="docs/design.md"><img src="https://img.shields.io/badge/Platforms-RISC--V%20%7C%20LoongArch-E8912D" alt="platform" /></a>
   <a href="https://gitlab.eduxiji.net/T2026100069911110/project3136859-388873"><img src="https://img.shields.io/badge/License-BSD--2--Clause-7C5CFC" alt="license" /></a>
 </p>
 
@@ -32,7 +32,6 @@ Based on MIT xv6-riscv rev5, the project adds a virtual file system (VFS) and a 
 - **Symmetric thin HAL for two platforms**: both platforms share the same kernel code; platform differences are confined to a separate porting layer, with interrupt-routing knowledge centralized at a single point.
 - **Mechanism-level stability fallback**: since the external interrupt chain cannot be guaranteed lossless, a virtio watchdog provides a mechanism-level fallback; SMP stress tests pass.
 - **Defect-driven testing**: 8 test points across 2 architectures, 16 regression items all passing, fully reproducible with a single `make verify-all`, with all raw logs archived.
-- **Minimal-diff discipline**: 60 files changed, +6242/−113 lines relative to the baseline; every change is traceable to a stage and its verification record in `docs/progress.md`.
 
 ## Quick Start
 
