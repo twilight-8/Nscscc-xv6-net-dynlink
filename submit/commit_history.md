@@ -1,6 +1,6 @@
-# 版本迭代记录
+# 比赛过程中的重要进展
 
-本文档记录项目中有代表性的阶段提交，方便后续整理最终 diff、答辩材料和开发回顾。
+本文档按阶段记录项目从基线建立到当前的主要进展。每阶段按“主要目标、主要改动、验证结果”组织，对应内容可在提交历史与 `tests/evidence/` 的测试日志中复核。
 
 ## 阶段 0：项目基线与测试环境
 
@@ -139,7 +139,7 @@ cat hello.c > /mnt/hello.c
 
 - fat32 手动功能测试：通过。
 - ext2 `test1/test2` 回归：通过。
-- `python3 test-xv6.py -q usertests`：`ALL TESTS PASSED`。
+- `python3 test-xv6.py usertests -q`：`ALL TESTS PASSED`。
 - `make test_baseline && make run`：PASS。
 - `e2fsck -fn` 检查 ext2 镜像：无错误。
 
@@ -148,6 +148,8 @@ cat hello.c > /mnt/hello.c
 主要目标：
 
 在进入 HAL/LoongArch 之前，对 fat32 当前实现做一次收口，确认代码没有明显冗余，测试覆盖了最容易出问题的边界。
+
+> 编号说明：本阶段是阶段 D（fat32 支持）的收口审查，不重开新功能线，故编号为 D4 而非 E。
 
 主要改动：
 
@@ -168,7 +170,7 @@ cat hello.c > /mnt/hello.c
 
 - D4 fat32 边界测试：通过。
 - ext2 `test1/test2` 回归：通过。
-- `python3 test-xv6.py -q usertests`：`ALL TESTS PASSED`。
+- `python3 test-xv6.py usertests -q`：`ALL TESTS PASSED`。
 
 ## 阶段 E：轻量 HAL 与 LoongArch64 启动
 
@@ -239,6 +241,149 @@ cat hello.c > /mnt/hello.c
 - RISC-V `usertests -q`：`ALL TESTS PASSED`。
 - RISC-V 显式 `mount ext2 /mnt 2` 后，`test1/test2`：通过。
 
+## 阶段 H：对接官方 VFS 测例与评测流程
+
+主要目标：
+
+使镜像内容、目录布局与评测流程逐字节对齐官方公开测例。
+
+主要改动：
+
+- 以官方原版替换 `test1.c/test2.c`，新增 `tests/cmds.sh`，`tests/hello.c` 与上游逐字节一致；上游版本锚定信息记录于 `tests/VFS_TESTS_PIN.txt`。
+- mkfs 将 `test1/test2/hello/cmds.sh/hello.c` 置入根文件系统 `/tests` 目录，复现官方参考流程布局；新增 `user/hello.c`。
+- 修复 exec 路径解析：不含 `/` 的裸命令名在当前目录查找失败时回退根目录查找。修复前在 `/tests` 下执行 `cat`/`ls`/`test1` 均 `exec failed`，官方流程 `cd tests; cat cmds.sh | sh` 无法运行。
+- `tests/public_vfs` 改为复刻官方评测流程并断言官方输出串；`test_baseline` 结果日志增加架构后缀。
+
+验证结果：
+
+- RISC-V/LoongArch64 `usertests -q`：`ALL TESTS PASSED`。
+- 官方流程双架构输出与上游参考输出逐字节一致。
+
+## 阶段 I：挂载点保护
+
+主要目标：
+
+消除挂载语义上的两个稳定性缺陷。
+
+主要改动：
+
+- `sys_unlink` 及 `ext2_unlink`/`fat32_unlink` 增加挂载点检查：删除正被用作挂载点的目录返回失败。修复前 `rm /mnt` 可成功，挂载关系即刻失效，已挂载文件系统中的数据不可达（双架构实证）。
+- `vfs_mount` 拒绝 fstype 为 xv6 的挂载请求：根文件系统启动时已挂载，再次挂载呈现损坏的目录视图。修复前 `mount xv6 /xv` 静默成功（双架构实证）。
+
+验证结果：
+
+- 双架构 error/ext2/fat32/semantics 测试点通过，无 panic。
+
+## 阶段 J：inode 缓存一致性与 unlink 延迟释放
+
+主要目标：
+
+将 ext2/fat32 的 inode 生命周期语义对齐 xv6/POSIX。
+
+主要改动：
+
+- `ext2_iget`/`fat32_iget` 仅在缓存未命中（`valid==0`）时读盘填充。修复前每次 iget 无条件用磁盘数据重填内存 inode，会将未同步的内存状态（size/nlink/addrs）回退为磁盘旧值。
+- unlink 只减 nlink，资源释放延迟至 `iput()` 的 `ref==1 && nlink==0` 分支，经 `itrunc` 钩子实现（ext2 释放数据块与 inode，fat32 释放整条簇链）。修复前 unlink 打开中的文件立即释放 inode，仍打开的 fd 读到已释放数据；修复后符合“unlink 后仍可读写、最后一次 close 时释放”的语义。
+- ext2 块/inode 位图分配扫描上界钳位到 `s_blocks_count`/`s_inodes_count`，防止越界分配。
+- 新增 `unlinkopen` 回归测试（ext2/fat32 双后端），并入 semantics 测试点。
+
+验证结果：
+
+- RISC-V/LoongArch64 `usertests -q`：`ALL TESTS PASSED`。
+- 双架构 7 个测试点全部通过，`unlinkopen: ok`（ext2/fat32 各一）。
+
+## 阶段 K：HAL 对称化与文件名完善
+
+主要目标：
+
+消除两平台中断路径的不对称，清理遗留死代码，并补齐 ext2 长文件名与 fat32 分配性能两个短板。
+
+主要改动：
+
+- LoongArch `trap.c` 改经 `hal_irq_claim`/`hal_irq_complete` 分发，中断控制器的电平/边沿与路由差异收敛进 `arch/loongarch/hal.c`，两端结构对称。
+- 删除 LoongArch ramdisk 死代码（源文件、Makefile 规则与残留声明），`git grep` 全库零引用。
+- ext2 目录列举对超过 14 字符的名字截断显示，查找时增加唯一前缀别名匹配（精确短名优先）；镜像注入长名夹具文件作为常驻回归。
+- fat32 簇分配增加 next-free 提示（含回绕扫描与释放端下调），消除每次分配从簇 2 全表扫描。
+
+验证结果：
+
+- 双架构全量回归通过；LoongArch 冒烟（UART 输入、ext2 挂载读）正常。
+- 长名文件可列、可 stat、可读取，修复前后对照实证。
+
+## 阶段 L：ext2 双重间接块与大文件支持
+
+主要目标：
+
+解除 ext2 单文件 268KB 上限与对外部大文件镜像的拒读限制。
+
+主要改动：
+
+- `ext2_bmap` 增加两级查找分支（`ext2_bmap_double`），按需分配外层表/内层表/数据块；`ext2_itrunc` 对称释放；`ext2_sync_inode` 回写 `i_block[13]` 并将间接表计入 `i_blocks`。
+- 内存 inode 地址槽位扩为 `NDIRECT+2`；`ext2_iget` 拒读条件收紧为仅三重间接。
+- 修复 `ilock`/`iupdate` 与磁盘 dinode 拷贝的上界：以 `sizeof(dip->addrs)` 为准。修复前多拷 4 字节会覆写相邻 dinode 的 `type`，`fourfiles` 测试 panic。
+- 新增 `bigfile` 用户程序（写入 1MiB 确定性模式并逐字节读回校验，含 keep/verify 模式）；镜像常驻注入 1MiB 外部文件以校验可读性。
+- 测试 runner 增加 `--final-wait`，`test_baseline` 增加超时兜底（guest panic 时官方脚本阻塞读死等）。
+
+验证结果：
+
+- 双架构全量回归通过；完整版 `usertests`（不带 `-q`）双架构首次通过。
+- `e2fsck -fn` 对含双间接文件的 ext2 镜像五阶段校验零错误。
+
+## 阶段 M：fat32 长文件名（LFN）读支持
+
+主要目标：
+
+使宿主机写入 fat32 镜像的长名文件在系统内可见、可列、可读，写路径维持 8.3。
+
+主要改动：
+
+- 实现 LFN 链装配：解析 attr 0x0F 长名目录项，按序位重组倒序片段，UTF-16 窄化，校验和验证与断链保护。
+- `fat32_lookup` 在 8.3 未命中时回退 LFN 扫描；匹配规则与 ext2 别名一致（14 字符内大小写不敏感精确匹配，更长名字走截断别名）。
+- `fat32_readi` 目录列举显示装配长名（截断到 DIRSIZ），不再显示 8.3 残名。
+- `mkfat32` 注入两个 LFN 夹具文件（16 字符双片段链与 13 字符混合大小写），并入 fat32 测试点三条访问路径（全名/小写/残名）。
+
+验证结果：
+
+- 双架构探针：长名显示、全名 cat、小写 cat、8.3 残名 cat 全部通过；fat32 套件含负断言（残名不得出现在 ls）。
+- 完整 usertests 双架构保持通过，并固化为 `tests/full_usertests.sh` 推送门禁。
+
+## 阶段 N：并发稳定性修复与压力测试
+
+主要目标：
+
+把多核并发下的后端正确性从静态推断变成实测证据，并修复暴露出的缺陷。
+
+主要改动：
+
+- 新增 `tests/smp` 测试点（CPUS=3，三路并发 `bigfile` + 写后校验 + 挂载点内 `stressfs`），runner 增加 `--cpus` 与提示符等待（输出静默+行尾 `$ ` 双判定）。
+- 修复后端分配器 SMP 竞争（C1）：两个后端各加一把 sleeplock 包裹分配/释放路径。修复前 fat32 并发写确定性挂死，ext2 对照正常。
+- 修复 fat32 链漫游 O(n²)：inode 空槽位缓存最近漫游位置，顺序访问降为 O(1)/块；同负载写 273→57 ticks、读 86→4 ticks。
+- 修复 LoongArch 磁盘完成中断丢失：devintr 确认后循环重查 used 环，并在定时器路径挂 `virtio_disk_watchdog()` 看门狗兜底。该缺陷由完整版 usertests 的 `manywrites` 暴露，gdb 取证确认设备已投递完成而客户机未处理。
+- 新增 `make verify-all` 一键复现；最终通过证据归档 `tests/evidence/`。
+
+验证结果：
+
+- 修复后 SMP 测试点双架构通过；压测后 `e2fsck` 零错误。
+- 推送门禁双项（16/16 回归 + 完整 usertests 双架构）全绿。
+
+## 阶段 O：合规落地与性能测量
+
+主要目标：
+
+完成许可证与来源合规、基线完整性修复，并用可复现的测量数据支撑性能声明。
+
+主要改动：
+
+- 仓库根落地 BSD-2-Clause `LICENSE`；12 个自有源文件加单行 SPDX 注释头；`compliance.md` 定稿逐文件来源清单。
+- 修复基线副本缺失 `mkfs/mkfs.c` 的问题（初赛导入时被 `.gitignore` 规则误伤漏交），与官方 rev5 tag（commit 7d7adbb）全量递归比对逐文件一致。
+- 新增 `vfsbench` 基准程序：量化 VFS 分发开销（写路径约 +18%，读路径无差异）、三后端双架构吞吐、fat32 两项优化前后对比。
+- 完成两个参照项目仓库取证，形成对比分析数据底稿。
+- tests/ 目录规范化（双语四段式 README、覆盖矩阵、命名约定），docs/ 文档体系分层建设。
+
+验证结果：
+
+- 门禁双项全绿；基准原始日志归档 `tests/evidence/bench-*.txt`。
+
 ## 当前阶段总览
 
 ```mermaid
@@ -251,8 +396,16 @@ flowchart LR
     SE["阶段 E：轻量 HAL 与 LoongArch64 启动"]
     SF["阶段 F：LoongArch64 virtio-pci 块设备"]
     SG["阶段 G：LoongArch64 回归测试修复"]
+    SH["阶段 H：对接官方 VFS 测例"]
+    SI["阶段 I：挂载点保护"]
+    SJ["阶段 J：inode 缓存一致性与延迟释放"]
+    SK["阶段 K：HAL 对称化与文件名完善"]
+    SL["阶段 L：ext2 双重间接与大文件"]
+    SM["阶段 M：fat32 LFN 读支持"]
+    SN["阶段 N：并发稳定性与压力测试"]
+    SO["阶段 O：合规落地与性能测量"]
 
-    S0 --> SA --> SB --> SC --> SD --> SE --> SF --> SG
+    S0 --> SA --> SB --> SC --> SD --> SE --> SF --> SG --> SH --> SI --> SJ --> SK --> SL --> SM --> SN --> SO
 ```
 
 - 阶段 0：建立项目基线，保留原 xv6 测试能力。
@@ -263,8 +416,18 @@ flowchart LR
 - 阶段 E：引入轻量 HAL，RISC-V 继续使用 PLIC/virtio，LoongArch64 使用 APIC/EXTIOI 与 ramdisk 启动到 shell。
 - 阶段 F：LoongArch64 接入 virtio-pci，复用公共 virtio 磁盘路径并支持写回 `fs.img`。
 - 阶段 G：修复 LoongArch64 虚拟内存和 TLB refill 问题，两架构均通过 `usertests -q` 和 `test1/test2`。
+- 阶段 H：对接官方 VFS 测例，`/tests` 布局与官方评测流程逐字节对齐，修复 exec 裸命令名根目录回退。
+- 阶段 I：挂载点删除保护与 xv6 根文件系统重复挂载拒绝。
+- 阶段 J：ext2/fat32 inode 缓存一致性修复与 unlink 延迟释放，位图分配钳位，新增 unlinkopen 回归测试。
+- 阶段 K：HAL 中断分发双平台对称，清理 ramdisk 死代码；ext2 长名截断显示与别名查找；fat32 簇分配 next-free 提示。
+- 阶段 L：ext2 双重间接块支持（读/写/截断释放），修复 dinode 拷贝上界，新增 bigfile 大文件回归，完整 usertests 双架构首次通过。
+- 阶段 M：fat32 LFN 读支持（链装配、别名匹配、目录列举），夹具注入与三条访问路径回归。
+- 阶段 N：后端分配器 SMP 锁修复、fat32 链漫游缓存、LoongArch 中断看门狗；新增 smp 测试点与 verify-all、证据归档。
+- 阶段 O：BSD-2-Clause 许可证与 SPDX 标注落地，基线副本补齐校验，vfsbench 性能测量，参照项目取证，tests/ 与 docs/ 体系规范化。
 
-## 后续提交方向
+## 收尾事项
 
-- `docs: finalize design demo and test report`
-- `submit: generate final diff against xv6-riscv rev5`
+- 演示视频录制（按 `docs/contest/video_script.md` 分镜）。
+- 汇报幻灯片与现场答辩 PPT 定稿（分工页待团队提供）。
+- 重新生成最终 diff 并复核 diff 统计（命令见 `docs/contest/baseline.md`）。
+- 提交材料聚合至 `submit/` 并完成提交。
