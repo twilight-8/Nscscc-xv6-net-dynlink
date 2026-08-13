@@ -57,6 +57,16 @@ make qemu                           # RISC-V
 make ARCH=loongarch CPUS=1 qemu     # LoongArch64
 ```
 
+配套的交互式教学控制台位于 `web/`，可在浏览器中运行 xv6 风格终端，并随命令同步展示用户态、系统调用、VFS、具体文件系统和 HAL 的源码执行链：
+
+```powershell
+cd web
+npm.cmd install
+npm.cmd run dev
+```
+
+开发页面默认访问 `http://localhost:4180`。生产运行、真实 QEMU 探测和推荐演示流程见 [web/README.md](web/README.md)。
+
 进入 shell 后可按官方参考流程挂载 ext2 并执行 VFS 测例：
 
 ```sh
@@ -133,6 +143,7 @@ cat cmds.sh | sh
 ├── docs/                      # 项目文档
 │   ├── contest/               # 赛事资料
 │   ├── notes/                 # 学习笔记 
+├── web/                       # xv6 终端、执行链与源码联动教学网站
 └── submit/                    # 竞赛提交材料
 ```
 
