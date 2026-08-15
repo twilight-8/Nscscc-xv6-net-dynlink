@@ -36,9 +36,9 @@ Each test-point directory follows a uniform kit: `README.md` (bilingual four-sec
 - `ext2`: mount/read/write/unlink/nested dirs/long-name alias/1 MiB double-indirect files/external big files.
 - `fat32`: mount/8.3 operations/nested dirs/three LFN access paths.
 - `error`: invalid mounts, cross-filesystem links, removing missing files — no panic allowed.
-- `semantics`: mount-root `..`, ext2 hard links, FAT32 link rejection, unlinkopen on both backends.
+- `semantics`: mount-root `..`, ext2 hard links, FAT32 link rejection, unlinkopen, and umount busy/success/underlay/remount semantics.
 - `persist`: write → reboot → remount → byte-exact read-back (incl. a 1 MiB double-indirect file).
-- `smp`: CPUS=3 three-way concurrent bigfile + stressfs inside mount points (C1 regression).
+- `smp`: CPUS=3 three-way concurrent bigfile + stressfs inside mount points + lookup/mount/umount races (C1 and unmount-lifecycle regression).
 
 ## Running
 

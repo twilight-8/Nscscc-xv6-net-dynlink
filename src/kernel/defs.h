@@ -75,11 +75,13 @@ void            stati(struct inode*, struct stat*);
 int             writei(struct inode*, int, uint64, uint, uint);
 void            itrunc(struct inode*);
 void            ireclaim(int);
+int             vfs_mount_busy(struct mount*);
 
 // vfs.c
 void            vfsinit(void);
 void            vfs_init_inode(struct inode*);
 int             vfs_mount(char*, char*, int);
+int             vfs_umount(char*);
 struct mount*   vfs_mountpoint(struct inode*);
 struct inode*   vfs_mounted_root(struct inode*);
 struct inode*   vfs_lookup(struct inode*, char*);

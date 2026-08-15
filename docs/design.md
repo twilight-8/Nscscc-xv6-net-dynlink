@@ -67,7 +67,7 @@ inode 操作表是 VFS 的分发点，`ip->ops` 决定该 inode 的全部文件�
 
 ### 3.2 `struct mount` 与后端实例
 
-`mount` 描述一次挂载实例，关键字段：`state`、`fstype`、`dev`、`mountpoint`（被覆盖的目录 inode）、`root`（被挂载文件系统的根 inode）、`fsops`、`fs_private`。`state` 采用三态：`MOUNT_FREE` 表示空槽，`MOUNTING` 表示表项已预留但后端仍在初始化，`MOUNTED` 表示初始化完成且可参与路径跳转。
+`mount` 描述一次挂载实例，关键字段：`state`、`fstype`、`dev`、`mountpoint`（被覆盖的目录 inode）、`parent`（挂载点父目录）、`root`（被挂载文件系统的根 inode）、`fsops`、`fs_private`。`state` 采用四态：`MOUNT_FREE` 表示空槽，`MOUNTING` 表示后端正在初始化，`MOUNTED` 表示可参与路径跳转，`MOUNT_UNMOUNTING` 表示已禁止新路径进入、正在检查和回收引用。
 
 文件系统级状态（ext2 的超级块/组描述符、fat32 的 BPB 解析结果与 `next_free` 提示）集中存放在各后端的单例结构 `ext2_fs`/`fat32_fs` 中，通过 `mnt->fs_private` 访问。每个后端实例另持有一把 sleeplock，用于分配/释放路径的串行化（见第 8 节）。
 
@@ -86,13 +86,15 @@ inode 操作表是 VFS 的分发点，`ip->ops` 决定该 inode 的全部文件�
 
 VFS 只有两张操作表（`inode_ops`、`fs_ops`）和一个挂载表（`NMOUNT` 槽）。xv6 原生文件系统注册为默认后端（`xv6_inode_ops` 指向原有函数），根挂载在 `vfsinit()` 建立。所有路径解析统一经过 VFS，但原生路径的函数一个不改——“行为不变”是结构性事实，而非测试巧合。
 
-### 4.2 挂载语义
+### 4.2 挂载与卸载语义
 
-- `mtable.oplock` 是可睡眠操作锁，覆盖一次 `vfs_mount()` 的路径解析、冲突检查、后端初始化和最终发布/清理，使两个挂载调用按完整操作串行。它可以跨磁盘 I/O 持有；`mtable.lock` 仍是只保护挂载表字段的短持有 spinlock。
+- `mtable.oplock` 是可睡眠操作锁，覆盖一次 `vfs_mount()` 或 `vfs_umount()` 的路径解析、状态转换和最终发布/清理，使挂载拓扑修改按完整操作串行。它可以跨磁盘 I/O 持有；`mtable.lock` 仍是只保护挂载表字段的短持有 spinlock。
 - `vfs_mount()` 锁定目标 inode，确认它仍是已链接目录；随后在 `mtable.lock` 内检查冲突并把空槽预留为 `MOUNTING`。目标 inode 一直锁到预留完成，关闭了“目录检查完成、挂载表尚未登记”期间被并发 unlink 的窗口。
-- `MOUNTING` 与 `MOUNTED` 都占用挂载点，并阻止三条 unlink 路径（xv6/ext2/fat32）；相同 `fstype` 的非空表项也互斥，因为当前 ext2/fat32 后端各自使用一份静态实例状态。冲突扫描拒绝同一挂载点以及目标恰为已有挂载根的请求；xv6 根已由 `vfsinit()` 建立，用户请求不能再次挂载。
+- `MOUNTING`、`MOUNTED` 与 `MOUNT_UNMOUNTING` 都占用挂载点，并阻止三条 unlink 路径（xv6/ext2/fat32）；相同 `fstype` 的非空表项也互斥，因为当前 ext2/fat32 后端各自使用一份静态实例状态。冲突扫描拒绝同一挂载点以及目标恰为已有挂载根的请求；xv6 根已由 `vfsinit()` 建立，用户请求不能再次挂载或卸载根。
 - `ops->mount()` 可能读取超级块和创建根 inode，因此必须在 `mtable.lock` 之外执行。成功后在锁内把状态发布为 `MOUNTED`；失败则在锁内清回 `MOUNT_FREE` 并释放引用。
-- 路径解析只通过 `vfs_mounted_root()` 进入 `MOUNTED` 表项，绝不会看见尚未初始化完的根 inode；挂载根的 `..` 也只匹配 `MOUNTED` 表项，再经挂载表回到挂载点的父目录。
+- 路径解析只通过 `vfs_mounted_root()` 进入 `MOUNTED` 表项，绝不会看见初始化中或卸载中的根 inode；它在 `mtable.lock` 内增加表项的短期 `readers` pin，锁外执行 `idup()` 后再撤销 pin，关闭“查到 root 后、`idup()` 前被卸载”的悬空窗口而不嵌套 inode 表锁。已经位于挂载根的 `..` 使用同一 pin 协议取得父目录引用。
+- `vfs_umount()` 在 `mtable.lock` 内确认没有短期 reader pin，并原子发布 `MOUNT_UNMOUNTING`，阻止新的路径进入；随后在 `itable.lock` 下检查该挂载实例的 inode 引用。根 inode 的 1 个引用属于挂载表自身；除此之外，打开文件、cwd、在途路径或子挂载留下的任何引用都使卸载立即失败并恢复 `MOUNTED`。无外部引用时，释放 root、清理后端单例状态、清空表项，最后释放挂载点与父目录引用；下层 xv6 目录重新可见。
+- 当前只提供安全的非强制卸载：没有 force/lazy 模式。ext2/FAT32 块写是同步 `bwrite()` 路径，后端卸载钩子只回收内存状态，不宣称提供额外日志提交或断电事务语义。
 - `mkdir` 与 `mount` 职责分离：前者只建目录，后者才建立挂载关系。
 
 ### 4.3 exec 路径与 VFS 读取
@@ -160,9 +162,9 @@ LoongArch 的外部中断是位掩码语义（EXTIOI 一次报多个挂起位）
 锁层级与持有规则的完整定义见 `contest/lock_order.md`，要点如下：
 
 - 主 I/O 路径的获取方向为：`ip->lock` → 后端 fs 锁（`ext2fs.lock`/`fat32fs.lock`）→ buffer cache/块锁 → `disk.vdisk_lock`；
-- `mtable.oplock` 是 mount 专用的最外层 sleeplock，串行化整次挂载操作并可跨后端 I/O 持有；非 mount 路径不获取它；
-- `mtable.lock` 是只保护挂载表状态的叶级短持有 spinlock。允许在持有 `ip->lock` 时获取它，但持有它时不得再获取 inode/itable、后端或 buffer 锁，也不得调用可能睡眠或进行磁盘 I/O 的函数；
-- 挂载后端初始化在 `mtable.lock` 外执行，锁只负责 `MOUNTING` 预留、`MOUNTED` 发布、失败回收及短查询；
+- `mtable.oplock` 是拓扑修改专用的最外层 sleeplock，串行化整次 `mount/umount` 并可跨后端 I/O 持有；普通路径不获取它；
+- `mtable.lock` 是只保护挂载表状态和短期 `readers` pin 的叶级 spinlock。持有它时不得获取 inode/itable、后端或 buffer 锁，也不得执行 I/O；路径先在锁内增加 pin，再于锁外 `idup()`，因此挂载表锁不嵌套 inode 表锁；
+- 挂载后端初始化和卸载清理均在 `mtable.lock` 外执行；锁只负责四态转换、短查询以及上述引用获取；
 - 两个后端各一把 sleeplock，仅在分配/释放路径获取，仅允许在 inode 锁之后、缓冲锁之前取得；
 - ext2 位图操作因持有缓冲块睡眠锁而天然串行；fat32 按字节接口绕开了缓冲锁，其 FAT 分配读改写必须显式加锁（否则 SMP 下双分配同一簇，已由 SMP 压测实证并修复）；
 - `iput()` 的延迟释放分支在 `itable.lock` 释放后进行磁盘操作，不持 spinlock 睡眠。
@@ -211,7 +213,7 @@ sequenceDiagram
 
 | 文件/目录 | 职责 |
 |---|---|
-| `kernel/vfs.c`、`vfs.h` | VFS 类型、操作表、三态挂载表与 wrapper 分发（406 + 54 行） |
+| `kernel/vfs.c`、`vfs.h` | VFS 类型、操作表、四态挂载表、`mount/umount` 生命周期与 wrapper 分发 |
 | `kernel/ext2.c` | ext2 后端：dinode、目录、位图、直接与双重间接寻址 |
 | `kernel/fat32.c` | fat32 后端：BPB/FAT/簇链、8.3 与 LFN 目录项 |
 | `kernel/block.c`、`block.h` | 字节偏移块读写辅助层（ext2/fat32 共用） |
@@ -219,7 +221,7 @@ sequenceDiagram
 | `kernel/arch/loongarch/` | LoongArch 移植层：启动、页表/TLB refill、trap、APIC/EXTIOI、virtio-pci |
 | `kernel/virtio_disk.c` | 共享 virtio 磁盘驱动与中断看门狗 |
 | `kernel/fs.c` | xv6 原生文件系统；`iput()` 含非 xv6 后端的延迟释放分支 |
-| `kernel/sysfile.c` | 系统调用入口；挂载点删除保护 |
+| `kernel/sysfile.c` | 系统调用入口；挂载/卸载与挂载点删除保护 |
 | `kernel/exec.c` | `kexec`、裸命令名根目录回退与 ELF 内容的 VFS 读取 |
 | `kernel/file.h` | 内存 inode 结构（VFS 字段与扩展地址槽位） |
 | `kernel/param.h` | 设备号与镜像区段常量 |
@@ -231,8 +233,8 @@ sequenceDiagram
 
 以下各项是有意不做的范围，理由是超出赛题硬性要求，或在教学规模下风险大于收益：
 
-- fat32 LFN **写**、rename、symlink、umount；
-- 完整挂载拓扑与祖先覆盖检测：`oplock` 只串行挂载调用，顺序执行“先挂 `/a/b`、再挂 `/a`”仍会遮蔽前一挂载，该反向祖先覆盖是当前 P1 限制；
+- fat32 LFN **写**、rename、symlink、强制/延迟卸载；
+- 完整挂载拓扑与祖先覆盖检测：`oplock` 只串行拓扑修改，顺序执行“先挂 `/a/b`、再挂 `/a`”仍会遮蔽前一挂载，该反向祖先覆盖是当前 P1 限制；
 - ext2 三重间接（`i_block[14]` 维持拒读）、多 block group；
 - ext2/fat32 的日志与崩溃一致性（写直达换取简单性，取舍已在本文件说明）；
 - procfs/tmpfs 等额外后端，VFS 对象模型与错误码体系的重构；

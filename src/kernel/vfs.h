@@ -19,6 +19,7 @@ enum mount_state {
   MOUNT_FREE = 0,
   MOUNTING,
   MOUNTED,
+  MOUNT_UNMOUNTING,
 };
 
 #define NMOUNT 8
@@ -38,10 +39,12 @@ struct inode_ops {
 // Per-filesystem operations. Each backend validates and initializes a mount.
 struct fs_ops {
   int (*mount)(struct mount *mnt);
+  void (*unmount)(struct mount *mnt);
 };
 
 struct mount {
   enum mount_state state;
+  int readers;            // pins pointers until idup() completes
   enum fs_type fstype;
   uint dev;
   struct inode *mountpoint;

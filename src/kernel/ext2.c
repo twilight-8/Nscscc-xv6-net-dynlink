@@ -1186,6 +1186,13 @@ ext2_mount(struct mount *mnt)
   return 0;
 }
 
+static void
+ext2_unmount(struct mount *mnt)
+{
+  memset(&ext2fs, 0, sizeof(ext2fs));
+  mnt->fs_private = 0;
+}
+
 static struct inode_ops ext2_inode_ops = {
   .read = ext2_readi,
   .write = ext2_writei,
@@ -1199,6 +1206,7 @@ static struct inode_ops ext2_inode_ops = {
 
 static struct fs_ops ext2_fs_ops = {
   .mount = ext2_mount,
+  .unmount = ext2_unmount,
 };
 
 struct fs_ops*

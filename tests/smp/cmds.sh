@@ -24,4 +24,5 @@ cd /
 cd /fat
 stressfs
 cd /
+umountstress
 echo SMP_DONE

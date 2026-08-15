@@ -85,4 +85,11 @@
 - **根因**：表项占用、后端 I/O 和路径可见性缺少分阶段发布协议，两次挂载的路径解析与发布也没有统一顺序。把 `mtable.lock` 跨磁盘 I/O 持有会违反 spinlock 不可睡眠规则。
 - **修复**：新增可睡眠的 `mtable.oplock` 串行化整次 `vfs_mount()`；`mtable.lock` 仍只短持有。挂载点在 `ip->lock → mtable.lock` 顺序下预留为 `MOUNTING`，后端 I/O 在 spinlock 外执行，成功后发布 `MOUNTED`，失败则回收为 `MOUNT_FREE` 后再释放引用。三态负责让 unlink 看见正在初始化的挂载点，并保证路径只跳转到完整发布的根 inode。
 - **验证**：双架构 error 在 CPUS=3 下向每个挂载点发起后台/前台请求，精确得到每组 1 次成功、1 次失败；semantics 验证正常路径跳转，SMP 验证挂载后的并发 I/O。该回归验证最终串行互斥语义，不宣称确定性命中 `MOUNTING` 窗口；发布、失败回滚及 mount/unlink 可见性由锁序与状态转换审查闭环。
-- **保留边界**：`oplock` 不维护祖先/后代拓扑。顺序执行“先挂 `/a/b`、再挂 `/a`”仍会使前一挂载不可达；当前又无 `umount`，因此反向祖先覆盖列为 P1 限制。
+- **保留边界**：`oplock` 不维护祖先/后代拓扑。顺序执行“先挂 `/a/b`、再挂 `/a`”仍会使前一挂载不可达；后续安全 `umount` 可解除可达挂载，但不自动修复已经被祖先挂载遮蔽的拓扑，因此反向祖先覆盖仍列为 P1 限制。
+
+## P13. 卸载与路径取引用之间存在悬空窗口
+
+- **现象与取证**：实现 `umount` 时静态审查发现，若路径先从挂载表读取 root/parent 指针，解锁后再 `idup()`，并发卸载可在两步之间回收该 inode；若直接在 `mtable.lock` 内 `idup()`，又会破坏挂载表锁不嵌套 inode 表锁的既有规则。
+- **根因**：长期占用由 inode 引用计数表达，但“读出挂载表指针到取得 inode 引用”是更短的过渡窗口，二者不能用同一种无锁读法安全覆盖。
+- **修复**：挂载项增加受 `mtable.lock` 保护的短期 `readers` pin，路径在锁内加 pin、锁外 `idup()`、再回锁减 pin；卸载仅在 pin 为 0 时原子发布 `MOUNT_UNMOUNTING`。随后用既有 `inode.ref` 检测打开文件、cwd、在途路径和子挂载，busy 则恢复 `MOUNTED`，否则清理后端并回收表项。
+- **验证**：双架构 semantics 覆盖 cwd busy、下层目录恢复与重挂载；双架构 CPUS=3 `umountstress` 交错 lookup 与反复 `mount/umount`，均到达成功终态且无 panic/kerneltrap。

@@ -9,9 +9,9 @@
 - `run_all.txt` — 全量回归汇总（8 个测试点 × 2 个架构 = 16 项执行）
 - `usertests-full-riscv.txt` — RISC-V 完整 usertests 原始输出（不带 -q，含 6 项慢测试）
 - `usertests-full-loongarch.txt` — LoongArch64 完整 usertests 原始输出
-- `smp-riscv.txt` / `smp-loongarch.txt` — CPUS=3 并发压测原始输出（ext2/fat32 三路并发大文件写入 + 校验 + 挂载点内 stressfs）
+- `smp-riscv.txt` / `smp-loongarch.txt` — CPUS=3 并发压测原始输出（ext2/fat32 三路并发大文件写入 + 校验 + stressfs + lookup/mount/umount 竞态）
 - `error-riscv.txt` / `error-loongarch.txt` — 本轮挂载冲突与错误路径原始 QEMU 输出
-- `semantics-riscv.txt` / `semantics-loongarch.txt` — 本轮跨后端 ELF 执行、挂载点 `..`、链接与 unlink-open 原始 QEMU 输出
+- `semantics-riscv.txt` / `semantics-loongarch.txt` — 本轮跨后端 ELF 执行、挂载点 `..`、链接、unlink-open、安全卸载与重挂载原始 QEMU 输出
 - `e2fsck-final.txt` — 最终 ext2 测试镜像的 `e2fsck -fn` 五阶段只读检查
 - `bench-riscv.txt` — 本轮 P0 修复前采集的 RISC-V vfsbench 三后端历史基准，不代表最终源码性能
 - `bench-loongarch.txt` — 文件名保留用于审计，但内容实际为误采集的 RISC-V 记录，不得作为 LoongArch 性能证据；需重新采集

@@ -402,6 +402,26 @@ cat hello.c > /mnt/hello.c
 
 - 双架构构建与完整回归；ext2/fat32 中 ELF 的复制后执行；error、semantics、SMP 套件中的挂载与并发路径。error 验证串行后的最终互斥语义；冷 inode 首访和 `MOUNTING` 发布窗口没有确定性屏障测试，其协议由锁序/内存序审查保证。
 
+## 阶段 Q：安全卸载生命周期
+
+主要目标：
+
+以最小接口增量实现可解释、可并发验证的非强制 `umount`，避免卸载与路径遍历、打开文件和进程 cwd 之间的悬空引用。
+
+主要改动：
+
+- 新增 `SYS_umount`、用户态 `umount()` 包装与 `umount` 命令；`fs_ops` 增加后端清理钩子。
+- 挂载表扩展 `MOUNT_UNMOUNTING`：`mtable.oplock` 串行化 `mount/umount`，卸载先阻止新路径进入，再检查 busy，失败恢复 `MOUNTED`，成功清理后发布 `MOUNT_FREE`。
+- 复用 `inode.ref` 判断打开文件、cwd、在途路径和子挂载，不再维护重复的 open 计数；挂载 root 的表内引用从 busy 计数中扣除。
+- 每挂载项增加短期 `readers` pin，在 `mtable.lock` 内保护指针、锁外执行 `idup()`，同时避免 `mtable.lock → itable.lock` 嵌套。
+- ext2/FAT32 卸载只清理内存后端状态；不提供 force/lazy 语义，也不扩大为崩溃一致性日志方案。
+
+验证范围：
+
+- 双架构 semantics：cwd busy、成功卸载、下层 xv6 目录恢复、两后端重挂载及数据/ELF 再访问。
+- 双架构 CPUS=3 SMP：打开文件 busy，以及 4 子进程交错 lookup 与反复 `mount/umount`，均到达 `UMOUNT_STRESS_OK`，无 panic/kerneltrap。
+- 双架构 16 项矩阵与完整 usertests 回归。
+
 ## 当前阶段总览
 
 ```mermaid
@@ -423,8 +443,9 @@ flowchart LR
     SN["阶段 N：并发稳定性与压力测试"]
     SO["阶段 O：合规落地与性能测量"]
     SP["阶段 P：VFS 并发发布与跨后端 exec"]
+    SQ["阶段 Q：安全卸载生命周期"]
 
-    S0 --> SA --> SB --> SC --> SD --> SE --> SF --> SG --> SH --> SI --> SJ --> SK --> SL --> SM --> SN --> SO --> SP
+    S0 --> SA --> SB --> SC --> SD --> SE --> SF --> SG --> SH --> SI --> SJ --> SK --> SL --> SM --> SN --> SO --> SP --> SQ
 ```
 
 - 阶段 0：建立项目基线，保留原 xv6 测试能力。
@@ -444,6 +465,7 @@ flowchart LR
 - 阶段 N：后端分配器 SMP 锁修复、fat32 链漫游缓存、LoongArch 中断看门狗；新增 smp 测试点与 verify-all、证据归档。
 - 阶段 O：BSD-2-Clause 许可证与 SPDX 标注落地，基线副本补齐校验，vfsbench 性能测量，参照项目取证，tests/ 与 docs/ 体系规范化。
 - 阶段 P：冷 inode 有序发布、mount 操作锁、挂载三态及锁外 spinlock 初始化、同类型后端互斥，并补齐 ext2/fat32 ELF 的 VFS 读取路径。
+- 阶段 Q：实现非强制安全 `umount`，以四态、短期 reader pin 与 inode 引用 busy 检查闭合卸载并发生命周期。
 
 ## 收尾事项
 

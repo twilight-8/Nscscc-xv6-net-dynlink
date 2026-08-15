@@ -663,6 +663,13 @@ fat32_mount(struct mount *mnt)
   return 0;
 }
 
+static void
+fat32_unmount(struct mount *mnt)
+{
+  memset(&fat32fs, 0, sizeof(fat32fs));
+  mnt->fs_private = 0;
+}
+
 // ---- FAT32 long file name (LFN) read support ----
 // Only lookup and directory listing understand LFN chains; create and
 // unlink stay on 8.3 short names.  The xv6 namespace truncates path
@@ -1166,6 +1173,7 @@ static struct inode_ops fat32_inode_ops = {
 
 static struct fs_ops fat32_fs_ops = {
   .mount = fat32_mount,
+  .unmount = fat32_unmount,
 };
 
 struct fs_ops*

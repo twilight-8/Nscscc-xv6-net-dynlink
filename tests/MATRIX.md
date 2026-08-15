@@ -8,10 +8,10 @@
 | public_vfs | 官方评测流程、/tests 布局、四向跨盘复制 | 赛题任务 4 | PASS | PASS |
 | ext2 | 挂载/读写/覆盖/删除/嵌套目录/长名别名/1MiB 双间接/外部大文件 | 任务 1；D1、D2、D3 | PASS | PASS |
 | fat32 | 挂载/8.3 增删改/空文件/嵌套目录/LFN 三路径 | 任务 1；D4 | PASS | PASS |
-| error | 非法挂载/CPUS=3 mount 操作锁最终互斥/跨盘硬链接/删不存在文件 | 稳定性；B5；三态发布边界 | PASS | PASS |
-| semantics | 跨后端 ELF 执行、挂载点 `..`、ext2 硬链接、fat32 拒链、unlinkopen×2 | exec VFS 分发；B2、B3 | PASS | PASS |
+| error | 非法挂载/CPUS=3 mount 操作锁最终互斥/跨盘硬链接/删不存在文件 | 稳定性；B5；挂载发布边界 | PASS | PASS |
+| semantics | 跨后端 ELF、挂载点 `..`、硬链接、unlinkopen、umount busy/成功/重挂载 | exec VFS 分发；B2、B3；卸载生命周期 | PASS | PASS |
 | persist | 写→重启→读回（含 1MiB 双间接跨启动校验） | 持久性；D1 | PASS | PASS |
-| smp | CPUS=3 三路并发写 + 校验 + stressfs | 稳定性；C1 | PASS | PASS |
+| smp | CPUS=3 三路并发写 + 校验 + stressfs + lookup/mount/umount 竞态 | 稳定性；C1；卸载并发 | PASS | PASS |
 
 补充验证（非测试点）：
 

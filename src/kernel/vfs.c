@@ -72,6 +72,7 @@ xv6_mount(struct mount *mnt)
 
 static struct fs_ops xv6_fs_ops = {
   .mount = xv6_mount,
+  .unmount = 0,
 };
 
 static enum fs_type
@@ -264,6 +265,93 @@ vfs_mount(char *fstype, char *path, int dev)
   return 0;
 }
 
+int
+vfs_umount(char *path)
+{
+  struct inode *mp = 0, *parent = 0;
+  struct inode *root, *mountpoint, *mntparent;
+  struct fs_ops *ops;
+  struct mount *mnt = 0;
+  char name[DIRSIZ];
+  int i;
+
+  if(path == 0 || (path[0] == '/' && path[1] == '\0'))
+    return -1;
+
+  acquiresleep(&mtable.oplock);
+  begin_op();
+
+  if((parent = nameiparent(path, name)) == 0)
+    goto bad;
+  if(namecmp(name, ".") == 0 || namecmp(name, "..") == 0)
+    goto bad;
+
+  ilock(parent);
+  mp = vfs_lookup(parent, name);
+  iunlock(parent);
+  if(mp == 0)
+    goto bad;
+
+  ilock(mp);
+  acquire(&mtable.lock);
+  for(i = 1; i < NMOUNT; i++){
+    if(mtable.mount[i].state == MOUNTED &&
+       mtable.mount[i].mountpoint == mp){
+      mnt = &mtable.mount[i];
+      break;
+    }
+  }
+  if(mnt == 0 || mnt->readers != 0 || mnt->root == 0 || mnt->fsops == 0 ||
+     mnt->fsops->unmount == 0){
+    release(&mtable.lock);
+    iunlock(mp);
+    goto bad;
+  }
+  mnt->state = MOUNT_UNMOUNTING;
+  release(&mtable.lock);
+
+  // Once UNMOUNTING is visible, no new path can enter this mount.
+  // Existing open files, cwd references and path walks make it busy.
+  if(vfs_mount_busy(mnt)){
+    acquire(&mtable.lock);
+    mnt->state = MOUNTED;
+    release(&mtable.lock);
+    iunlock(mp);
+    goto bad;
+  }
+
+  root = mnt->root;
+  mountpoint = mnt->mountpoint;
+  mntparent = mnt->parent;
+  ops = mnt->fsops;
+
+  iput(root);
+  ops->unmount(mnt);
+
+  acquire(&mtable.lock);
+  memset(mnt, 0, sizeof(*mnt));
+  release(&mtable.lock);
+  iunlock(mp);
+
+  // Drop the path walk's references and the mount table's references.
+  iput(mp);
+  iput(mountpoint);
+  iput(parent);
+  iput(mntparent);
+  end_op();
+  releasesleep(&mtable.oplock);
+  return 0;
+
+bad:
+  if(mp != 0)
+    iput(mp);
+  if(parent != 0)
+    iput(parent);
+  end_op();
+  releasesleep(&mtable.oplock);
+  return -1;
+}
+
 // A MOUNTING entry is already busy: unlink must not invalidate its
 // mount point while the backend is initialized. Mount calls are
 // serialized separately by mtable.oplock.
@@ -312,12 +400,19 @@ vfs_mounted_root(struct inode *ip)
        mnt->mountpoint->dev == ip->dev &&
        mnt->mountpoint->inum == ip->inum){
       root = mnt->root;
+      mnt->readers++;
       break;
     }
   }
   release(&mtable.lock);
 
-  return root == 0 ? 0 : idup(root);
+  if(root != 0){
+    root = idup(root);
+    acquire(&mtable.lock);
+    mnt->readers--;
+    release(&mtable.lock);
+  }
+  return root;
 }
 
 struct inode*
@@ -334,11 +429,17 @@ vfs_lookup(struct inode *dp, char *name)
     acquire(&mtable.lock);
     for(i = 1; i < NMOUNT; i++){
       mnt = &mtable.mount[i];
-      if(mnt->state == MOUNTED && mnt->root != 0 && mnt->parent != 0 &&
+      if((mnt->state == MOUNTED || mnt->state == MOUNT_UNMOUNTING) &&
+         mnt->root != 0 && mnt->parent != 0 &&
          mnt->root->dev == dp->dev && mnt->root->inum == dp->inum){
         parent = mnt->parent;
+        mnt->readers++;
         release(&mtable.lock);
-        return idup(parent);
+        parent = idup(parent);
+        acquire(&mtable.lock);
+        mnt->readers--;
+        release(&mtable.lock);
+        return parent;
       }
     }
     release(&mtable.lock);

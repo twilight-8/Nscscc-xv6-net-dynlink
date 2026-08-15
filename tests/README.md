@@ -36,9 +36,9 @@ tests/
 - `ext2`：挂载/读写/删除/嵌套目录/长名别名/1MiB 双间接大文件/外部大文件。
 - `fat32`：挂载/8.3 增删改/嵌套目录/LFN 长名三条访问路径。
 - `error`：非法挂载、跨盘硬链接、删除不存在文件等错误路径不 panic。
-- `semantics`：挂载点 `..`、ext2 硬链接、fat32 拒链、unlinkopen 双后端。
+- `semantics`：挂载点 `..`、ext2 硬链接、fat32 拒链、unlinkopen，以及 umount busy/成功/底层目录恢复/重挂载。
 - `persist`：写入→重启→重挂载→逐字节读回（含 1MiB 双间接文件）。
-- `smp`：CPUS=3 三路并发 bigfile + 挂载点内 stressfs（C1 回归）。
+- `smp`：CPUS=3 三路并发 bigfile + 挂载点内 stressfs + lookup/mount/umount 竞态（C1 与卸载生命周期回归）。
 
 ## 运行
 

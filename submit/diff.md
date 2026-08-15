@@ -12,9 +12,10 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src src > submit/xv6-vfs-hal-final.di
 # 去除 ---/+++ 行的时间戳，保证重复生成结果逐字节一致、可复核
 sed -i -E 's/^(---|\+\+\+) ([^\t]+)\t.*$/\1 \2/' submit/xv6-vfs-hal-final.diff
 git apply --stat -p0 submit/xv6-vfs-hal-final.diff > submit/xv6-vfs-hal-final.diff.stat
+sed -i -E 's/[[:space:]]+$//' submit/xv6-vfs-hal-final.diff.stat
 ```
 
-其中 `-d`（`--minimal`）让 diff 输出最小变更集，`--strip-trailing-cr` 消除 Windows CRLF 与基线 LF 造成的伪差异。生成后已在一次性基线副本中做套用验证：先将 Windows 检出中带 CRLF 的 `mkfs/mkfs.c` 规范为 LF，再从目录名前缀后以 `patch -p1` 套用该 diff，60 个文件全部应用成功，所得源码树与 `src/` 在忽略行尾格式后逐文件一致：
+其中 `-d`（`--minimal`）让 diff 输出最小变更集，`--strip-trailing-cr` 消除 Windows CRLF 与基线 LF 造成的伪差异。生成后已在一次性基线副本中做套用验证：先将 Windows 检出中带 CRLF 的 `mkfs/mkfs.c` 规范为 LF，再从目录名前缀后以 `patch -p1` 套用该 diff，62 个文件全部应用成功，所得源码树与 `src/` 在忽略行尾格式后逐文件一致：
 
 ```sh
 replay=$(mktemp -d)
@@ -29,19 +30,19 @@ diff -ruN -d --strip-trailing-cr "$replay" src
 ## 当前规模
 
 ```text
-60 files changed, 6345 insertions(+), 119 deletions(-)
+62 files changed, 6612 insertions(+), 119 deletions(-)
 ```
 
-diff 文件总行数 7436 行（含文件头与 hunk 头），SHA-256 为 `b069f046cc36bddf7a20702902e2ffdfec90c178ee5a4c0f47196509a5341a9b`。对 rev5 原有文件的修改高度集中，增量主体是新增文件（ext2.c、fat32.c、vfs.c、`kernel/arch/loongarch/` 移植层等整文件计入）。
+diff 文件总行数 7718 行（含文件头与 hunk 头），SHA-256 为 `741dfcdd3ff7e25bfe078ba4800302cfb3499a41a3432e6408690aef42c1fec3`。对 rev5 原有文件的修改高度集中，增量主体是新增文件（ext2.c、fat32.c、vfs.c、`kernel/arch/loongarch/` 移植层等整文件计入）。
 
 ## 分类统计
 
-按职责把 60 个文件拆成三类统计，仅用于分析，不改变最终完整 diff 文件：
+按职责把 62 个文件拆成三类统计，仅用于分析，不改变最终完整 diff 文件：
 
 | 分类 | 文件数 | 插入 | 删除 | diff 行数 | 说明 |
 | --- | ---: | ---: | ---: | ---: | --- |
 | HAL / 平台支持 | 28 | 2340 | 37 | 2763 | `kernel/arch/loongarch/` 移植层、HAL 入口、virtio-pci 磁盘、看门狗与架构相关内存/中断改动 |
-| VFS / 文件系统支持 | 29 | 3847 | 56 | 4359 | VFS 层、ext2、fat32、块设备抽象、mkfs/mkfat32 与用户态 mount/测试程序 |
-| 公共构建/配置 | 3 | 158 | 26 | 314 | `src/Makefile`、`src/.gitignore`、`src/test-xv6.py` 中同时服务 HAL 与 VFS 的公共调整 |
+| VFS / 文件系统支持 | 31 | 4112 | 56 | 4639 | VFS 层、ext2、fat32、块设备抽象、mkfs/mkfat32 与用户态 mount/umount/测试程序 |
+| 公共构建/配置 | 3 | 160 | 26 | 316 | `src/Makefile`、`src/.gitignore`、`src/test-xv6.py` 中同时服务 HAL 与 VFS 的公共调整 |
 
-合计：60 个文件，+6345/−119，7436 行。
+合计：62 个文件，+6612/−119，7718 行。

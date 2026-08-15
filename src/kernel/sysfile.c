@@ -30,6 +30,16 @@ sys_mount(void)
   return vfs_mount(fstype, path, dev);
 }
 
+uint64
+sys_umount(void)
+{
+  char path[MAXPATH];
+
+  if(argstr(0, path, MAXPATH) < 0)
+    return -1;
+  return vfs_umount(path);
+}
+
 // Fetch the nth word-sized system call argument as a file descriptor
 // and return both the descriptor and the corresponding struct file.
 static int

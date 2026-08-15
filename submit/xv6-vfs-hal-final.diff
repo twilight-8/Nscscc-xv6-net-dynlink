@@ -203,11 +203,13 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/Makefile src/Makefile
  # Prevent deletion of intermediate files, e.g. cat.o, after first build, so
  # that disk image changes after first build are persistent until clean.  More
  # details:
-@@ -132,9 +205,16 @@
+@@ -132,9 +205,18 @@
  	$U/_ln\
  	$U/_ls\
  	$U/_mkdir\
 +	$U/_mount\
++	$U/_umount\
++	$U/_umountstress\
  	$U/_rm\
  	$U/_sh\
  	$U/_stressfs\
@@ -220,7 +222,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/Makefile src/Makefile
  	$U/_usertests\
  	$U/_grind\
  	$U/_wc\
-@@ -143,16 +223,57 @@
+@@ -143,16 +225,57 @@
  	$U/_forphan\
  	$U/_dorphan\
  
@@ -283,7 +285,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/Makefile src/Makefile
          $U/usys.S \
  	$(UPROGS)
  
-@@ -166,10 +287,16 @@
+@@ -166,10 +289,16 @@
  CPUS := 3
  endif
  
@@ -2469,14 +2471,17 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/defs.h src/kernel/defs.h
  struct inode*   idup(struct inode*);
  void            iinit();
  void            ilock(struct inode*);
-@@ -55,6 +76,27 @@
+@@ -54,6 +75,29 @@
+ int             writei(struct inode*, int, uint64, uint, uint);
  void            itrunc(struct inode*);
  void            ireclaim(int);
- 
++int             vfs_mount_busy(struct mount*);
++
 +// vfs.c
 +void            vfsinit(void);
 +void            vfs_init_inode(struct inode*);
 +int             vfs_mount(char*, char*, int);
++int             vfs_umount(char*);
 +struct mount*   vfs_mountpoint(struct inode*);
 +struct inode*   vfs_mounted_root(struct inode*);
 +struct inode*   vfs_lookup(struct inode*, char*);
@@ -2493,11 +2498,10 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/defs.h src/kernel/defs.h
 +
 +// fat32.c
 +struct fs_ops*  fat32_get_fs_ops(void);
-+
+ 
  // kalloc.c
  void*           kalloc(void);
- void            kfree(void *);
-@@ -180,6 +222,8 @@
+@@ -180,6 +224,8 @@
  void            virtio_disk_init(void);
  void            virtio_disk_rw(struct buf *, int);
  void            virtio_disk_intr(void);
@@ -2579,7 +2583,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/exec.c src/kernel/exec.c
 diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/ext2.c src/kernel/ext2.c
 --- xv6-riscv-src/kernel/ext2.c
 +++ src/kernel/ext2.c
-@@ -0,0 +1,1208 @@
+@@ -0,0 +1,1216 @@
 +// SPDX-License-Identifier: BSD-2-Clause
 +#include "types.h"
 +#include "riscv.h"
@@ -3768,6 +3772,13 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/ext2.c src/kernel/ext2.c
 +  return 0;
 +}
 +
++static void
++ext2_unmount(struct mount *mnt)
++{
++  memset(&ext2fs, 0, sizeof(ext2fs));
++  mnt->fs_private = 0;
++}
++
 +static struct inode_ops ext2_inode_ops = {
 +  .read = ext2_readi,
 +  .write = ext2_writei,
@@ -3781,6 +3792,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/ext2.c src/kernel/ext2.c
 +
 +static struct fs_ops ext2_fs_ops = {
 +  .mount = ext2_mount,
++  .unmount = ext2_unmount,
 +};
 +
 +struct fs_ops*
@@ -3791,7 +3803,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/ext2.c src/kernel/ext2.c
 diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/fat32.c src/kernel/fat32.c
 --- xv6-riscv-src/kernel/fat32.c
 +++ src/kernel/fat32.c
-@@ -0,0 +1,1175 @@
+@@ -0,0 +1,1183 @@
 +// SPDX-License-Identifier: BSD-2-Clause
 +#include "types.h"
 +#include "riscv.h"
@@ -4457,6 +4469,13 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/fat32.c src/kernel/fat32.c
 +  return 0;
 +}
 +
++static void
++fat32_unmount(struct mount *mnt)
++{
++  memset(&fat32fs, 0, sizeof(fat32fs));
++  mnt->fs_private = 0;
++}
++
 +// ---- FAT32 long file name (LFN) read support ----
 +// Only lookup and directory listing understand LFN chains; create and
 +// unlink stay on 8.3 short names.  The xv6 namespace truncates path
@@ -4960,6 +4979,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/fat32.c src/kernel/fat32.c
 +
 +static struct fs_ops fat32_fs_ops = {
 +  .mount = fat32_mount,
++  .unmount = fat32_unmount,
 +};
 +
 +struct fs_ops*
@@ -5083,7 +5103,35 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/fs.c src/kernel/fs.c
    release(&itable.lock);
  
    return ip;
-@@ -301,6 +305,9 @@
+@@ -288,6 +292,27 @@
+   return ip;
+ }
+ 
++// Return non-zero if mnt has references other than its mount-table root.
++int
++vfs_mount_busy(struct mount *mnt)
++{
++  struct inode *ip;
++  int refs;
++
++  acquire(&itable.lock);
++  for(ip = &itable.inode[0]; ip < &itable.inode[NINODE]; ip++){
++    if(ip->ref == 0 || ip->mnt != mnt)
++      continue;
++    refs = ip->ref - (ip == mnt->root);
++    if(refs > 0){
++      release(&itable.lock);
++      return 1;
++    }
++  }
++  release(&itable.lock);
++  return 0;
++}
++
+ // Lock the given inode.
+ // Reads the inode from disk if necessary.
+ void
+@@ -301,6 +326,9 @@
  
    acquiresleep(&ip->lock);
  
@@ -5093,7 +5141,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/fs.c src/kernel/fs.c
    if(ip->valid == 0){
      bp = bread(ip->dev, IBLOCK(ip->inum, sb));
      dip = (struct dinode*)bp->data + ip->inum%IPB;
-@@ -309,7 +316,8 @@
+@@ -309,7 +337,8 @@
      ip->minor = dip->minor;
      ip->nlink = dip->nlink;
      ip->size = dip->size;
@@ -5103,7 +5151,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/fs.c src/kernel/fs.c
      brelse(bp);
      ip->valid = 1;
      if(ip->type == 0)
-@@ -339,6 +347,38 @@
+@@ -339,6 +368,38 @@
  {
    acquire(&itable.lock);
  
@@ -5142,7 +5190,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/fs.c src/kernel/fs.c
    if(ip->ref == 1 && ip->valid && ip->nlink == 0){
      // inode has no links and no other references: truncate and free.
  
-@@ -674,7 +714,7 @@
+@@ -674,7 +735,7 @@
  static struct inode*
  namex(char *path, int nameiparent, char *name)
  {
@@ -5151,7 +5199,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/fs.c src/kernel/fs.c
  
    if(*path == '/')
      ip = iget(ROOTDEV, ROOTINO);
-@@ -692,11 +732,15 @@
+@@ -692,11 +753,15 @@
        iunlock(ip);
        return ip;
      }
@@ -5517,34 +5565,37 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/riscv.h src/kernel/riscv.h
 diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/syscall.c src/kernel/syscall.c
 --- xv6-riscv-src/kernel/syscall.c
 +++ src/kernel/syscall.c
-@@ -101,6 +101,7 @@
+@@ -101,6 +101,8 @@
  extern uint64 sys_link(void);
  extern uint64 sys_mkdir(void);
  extern uint64 sys_close(void);
 +extern uint64 sys_mount(void);
++extern uint64 sys_umount(void);
  
  // An array mapping syscall numbers from syscall.h
  // to the function that handles the system call.
-@@ -126,6 +127,7 @@
+@@ -126,6 +128,8 @@
  [SYS_link]    sys_link,
  [SYS_mkdir]   sys_mkdir,
  [SYS_close]   sys_close,
 +[SYS_mount]   sys_mount,
++[SYS_umount]  sys_umount,
  };
  
  void
 diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/syscall.h src/kernel/syscall.h
 --- xv6-riscv-src/kernel/syscall.h
 +++ src/kernel/syscall.h
-@@ -20,3 +20,4 @@
+@@ -20,3 +20,5 @@
  #define SYS_link   19
  #define SYS_mkdir  20
  #define SYS_close  21
 +#define SYS_mount  22
++#define SYS_umount 23
 diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/sysfile.c src/kernel/sysfile.c
 --- xv6-riscv-src/kernel/sysfile.c
 +++ src/kernel/sysfile.c
-@@ -16,6 +16,20 @@
+@@ -16,6 +16,30 @@
  #include "file.h"
  #include "fcntl.h"
  
@@ -5562,10 +5613,20 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/sysfile.c src/kernel/sysfi
 +  return vfs_mount(fstype, path, dev);
 +}
 +
++uint64
++sys_umount(void)
++{
++  char path[MAXPATH];
++
++  if(argstr(0, path, MAXPATH) < 0)
++    return -1;
++  return vfs_umount(path);
++}
++
  // Fetch the nth word-sized system call argument as a file descriptor
  // and return both the descriptor and the corresponding struct file.
  static int
-@@ -125,6 +139,7 @@
+@@ -125,6 +149,7 @@
  {
    char name[DIRSIZ], new[MAXPATH], old[MAXPATH];
    struct inode *dp, *ip;
@@ -5573,7 +5634,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/sysfile.c src/kernel/sysfi
  
    if(argstr(0, old, MAXPATH) < 0 || argstr(1, new, MAXPATH) < 0)
      return -1;
-@@ -135,38 +150,17 @@
+@@ -135,38 +160,17 @@
      return -1;
    }
  
@@ -5617,7 +5678,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/sysfile.c src/kernel/sysfi
  }
  
  // Is the directory dp empty except for "." and ".." ?
-@@ -208,10 +202,24 @@
+@@ -208,10 +212,24 @@
    if(namecmp(name, ".") == 0 || namecmp(name, "..") == 0)
      goto bad;
  
@@ -5642,7 +5703,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/sysfile.c src/kernel/sysfi
    if(ip->nlink < 1)
      panic("unlink: nlink < 1");
    if(ip->type == T_DIR && !isdirempty(ip)){
-@@ -253,7 +261,7 @@
+@@ -253,7 +271,7 @@
  
    ilock(dp);
  
@@ -5651,7 +5712,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/sysfile.c src/kernel/sysfi
      iunlockput(dp);
      ilock(ip);
      if(type == T_FILE && (ip->type == T_FILE || ip->type == T_DEVICE))
-@@ -262,6 +270,14 @@
+@@ -262,6 +280,14 @@
      return 0;
    }
  
@@ -5666,7 +5727,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/sysfile.c src/kernel/sysfi
    if((ip = ialloc(dp->dev, type)) == 0){
      iunlockput(dp);
      return 0;
-@@ -361,7 +377,7 @@
+@@ -361,7 +387,7 @@
    f->writable = (omode & O_WRONLY) || (omode & O_RDWR);
  
    if((omode & O_TRUNC) && ip->type == T_FILE){
@@ -5675,7 +5736,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/sysfile.c src/kernel/sysfi
    }
  
    iunlock(ip);
-@@ -377,7 +393,11 @@
+@@ -377,7 +403,11 @@
    struct inode *ip;
  
    begin_op();
@@ -5717,7 +5778,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/trap.c src/kernel/trap.c
 diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/vfs.c src/kernel/vfs.c
 --- xv6-riscv-src/kernel/vfs.c
 +++ src/kernel/vfs.c
-@@ -0,0 +1,406 @@
+@@ -0,0 +1,507 @@
 +// SPDX-License-Identifier: BSD-2-Clause
 +#include "types.h"
 +#include "riscv.h"
@@ -5792,6 +5853,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/vfs.c src/kernel/vfs.c
 +
 +static struct fs_ops xv6_fs_ops = {
 +  .mount = xv6_mount,
++  .unmount = 0,
 +};
 +
 +static enum fs_type
@@ -5984,6 +6046,93 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/vfs.c src/kernel/vfs.c
 +  return 0;
 +}
 +
++int
++vfs_umount(char *path)
++{
++  struct inode *mp = 0, *parent = 0;
++  struct inode *root, *mountpoint, *mntparent;
++  struct fs_ops *ops;
++  struct mount *mnt = 0;
++  char name[DIRSIZ];
++  int i;
++
++  if(path == 0 || (path[0] == '/' && path[1] == '\0'))
++    return -1;
++
++  acquiresleep(&mtable.oplock);
++  begin_op();
++
++  if((parent = nameiparent(path, name)) == 0)
++    goto bad;
++  if(namecmp(name, ".") == 0 || namecmp(name, "..") == 0)
++    goto bad;
++
++  ilock(parent);
++  mp = vfs_lookup(parent, name);
++  iunlock(parent);
++  if(mp == 0)
++    goto bad;
++
++  ilock(mp);
++  acquire(&mtable.lock);
++  for(i = 1; i < NMOUNT; i++){
++    if(mtable.mount[i].state == MOUNTED &&
++       mtable.mount[i].mountpoint == mp){
++      mnt = &mtable.mount[i];
++      break;
++    }
++  }
++  if(mnt == 0 || mnt->readers != 0 || mnt->root == 0 || mnt->fsops == 0 ||
++     mnt->fsops->unmount == 0){
++    release(&mtable.lock);
++    iunlock(mp);
++    goto bad;
++  }
++  mnt->state = MOUNT_UNMOUNTING;
++  release(&mtable.lock);
++
++  // Once UNMOUNTING is visible, no new path can enter this mount.
++  // Existing open files, cwd references and path walks make it busy.
++  if(vfs_mount_busy(mnt)){
++    acquire(&mtable.lock);
++    mnt->state = MOUNTED;
++    release(&mtable.lock);
++    iunlock(mp);
++    goto bad;
++  }
++
++  root = mnt->root;
++  mountpoint = mnt->mountpoint;
++  mntparent = mnt->parent;
++  ops = mnt->fsops;
++
++  iput(root);
++  ops->unmount(mnt);
++
++  acquire(&mtable.lock);
++  memset(mnt, 0, sizeof(*mnt));
++  release(&mtable.lock);
++  iunlock(mp);
++
++  // Drop the path walk's references and the mount table's references.
++  iput(mp);
++  iput(mountpoint);
++  iput(parent);
++  iput(mntparent);
++  end_op();
++  releasesleep(&mtable.oplock);
++  return 0;
++
++bad:
++  if(mp != 0)
++    iput(mp);
++  if(parent != 0)
++    iput(parent);
++  end_op();
++  releasesleep(&mtable.oplock);
++  return -1;
++}
++
 +// A MOUNTING entry is already busy: unlink must not invalidate its
 +// mount point while the backend is initialized. Mount calls are
 +// serialized separately by mtable.oplock.
@@ -6032,12 +6181,19 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/vfs.c src/kernel/vfs.c
 +       mnt->mountpoint->dev == ip->dev &&
 +       mnt->mountpoint->inum == ip->inum){
 +      root = mnt->root;
++      mnt->readers++;
 +      break;
 +    }
 +  }
 +  release(&mtable.lock);
 +
-+  return root == 0 ? 0 : idup(root);
++  if(root != 0){
++    root = idup(root);
++    acquire(&mtable.lock);
++    mnt->readers--;
++    release(&mtable.lock);
++  }
++  return root;
 +}
 +
 +struct inode*
@@ -6054,11 +6210,17 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/vfs.c src/kernel/vfs.c
 +    acquire(&mtable.lock);
 +    for(i = 1; i < NMOUNT; i++){
 +      mnt = &mtable.mount[i];
-+      if(mnt->state == MOUNTED && mnt->root != 0 && mnt->parent != 0 &&
++      if((mnt->state == MOUNTED || mnt->state == MOUNT_UNMOUNTING) &&
++         mnt->root != 0 && mnt->parent != 0 &&
 +         mnt->root->dev == dp->dev && mnt->root->inum == dp->inum){
 +        parent = mnt->parent;
++        mnt->readers++;
 +        release(&mtable.lock);
-+        return idup(parent);
++        parent = idup(parent);
++        acquire(&mtable.lock);
++        mnt->readers--;
++        release(&mtable.lock);
++        return parent;
 +      }
 +    }
 +    release(&mtable.lock);
@@ -6127,7 +6289,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/vfs.c src/kernel/vfs.c
 diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/vfs.h src/kernel/vfs.h
 --- xv6-riscv-src/kernel/vfs.h
 +++ src/kernel/vfs.h
-@@ -0,0 +1,54 @@
+@@ -0,0 +1,57 @@
 +// SPDX-License-Identifier: BSD-2-Clause
 +#ifndef XV6_VFS_H
 +#define XV6_VFS_H
@@ -6149,6 +6311,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/vfs.h src/kernel/vfs.h
 +  MOUNT_FREE = 0,
 +  MOUNTING,
 +  MOUNTED,
++  MOUNT_UNMOUNTING,
 +};
 +
 +#define NMOUNT 8
@@ -6168,10 +6331,12 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/vfs.h src/kernel/vfs.h
 +// Per-filesystem operations. Each backend validates and initializes a mount.
 +struct fs_ops {
 +  int (*mount)(struct mount *mnt);
++  void (*unmount)(struct mount *mnt);
 +};
 +
 +struct mount {
 +  enum mount_state state;
++  int readers;            // pins pointers until idup() completes
 +  enum fs_type fstype;
 +  uint dev;
 +  struct inode *mountpoint;
@@ -7244,6 +7409,121 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/user/test2.c src/user/test2.c
 +  printf("--------- %s: finished -------------------}\n", argv[0]);
 +  return 0;
 +}
+diff -ruN -d --strip-trailing-cr xv6-riscv-src/user/umount.c src/user/umount.c
+--- xv6-riscv-src/user/umount.c
++++ src/user/umount.c
+@@ -0,0 +1,21 @@
++// SPDX-License-Identifier: BSD-2-Clause
++#include "kernel/types.h"
++#include "kernel/stat.h"
++#include "user/user.h"
++
++int
++main(int argc, char *argv[])
++{
++  if(argc != 2){
++    fprintf(2, "usage: umount path\n");
++    exit(1);
++  }
++
++  if(umount(argv[1]) < 0){
++    fprintf(2, "umount: busy or invalid\n");
++    exit(1);
++  }
++
++  printf("umount: %s\n", argv[1]);
++  exit(0);
++}
+diff -ruN -d --strip-trailing-cr xv6-riscv-src/user/umountstress.c src/user/umountstress.c
+--- xv6-riscv-src/user/umountstress.c
++++ src/user/umountstress.c
+@@ -0,0 +1,86 @@
++// SPDX-License-Identifier: BSD-2-Clause
++#include "kernel/types.h"
++#include "kernel/stat.h"
++#include "kernel/fcntl.h"
++#include "user/user.h"
++
++#define LOOPS 80
++
++static void
++lookup_worker(void)
++{
++  char buf[32];
++  int fd, i;
++
++  for(i = 0; i < LOOPS; i++){
++    fd = open("/mnt/hello.c", O_RDONLY);
++    if(fd >= 0){
++      if(read(fd, buf, sizeof(buf)) <= 0){
++        close(fd);
++        exit(1);
++      }
++      close(fd);
++    }
++  }
++  exit(0);
++}
++
++static void
++topology_worker(void)
++{
++  int i;
++
++  for(i = 0; i < LOOPS; i++){
++    if(umount("/mnt") == 0 && mount("ext2", "/mnt", 2) < 0)
++      exit(1);
++  }
++  exit(0);
++}
++
++int
++main(void)
++{
++  char buf[32];
++  int fd, i, status;
++
++  // An open inode must keep the mount busy.
++  fd = open("/mnt/hello.c", O_RDONLY);
++  if(fd < 0 || umount("/mnt") == 0){
++    printf("umountstress: FAIL open busy\n");
++    exit(1);
++  }
++  close(fd);
++
++  for(i = 0; i < 2; i++){
++    if(fork() == 0)
++      lookup_worker();
++    if(fork() == 0)
++      topology_worker();
++  }
++
++  for(i = 0; i < 4; i++){
++    if(wait(&status) < 0 || status != 0){
++      printf("umountstress: FAIL child\n");
++      exit(1);
++    }
++  }
++
++  fd = open("/mnt/hello.c", O_RDONLY);
++  if(fd < 0){
++    if(mount("ext2", "/mnt", 2) < 0)
++      goto fail;
++    fd = open("/mnt/hello.c", O_RDONLY);
++  }
++  if(fd < 0 || read(fd, buf, sizeof(buf)) <= 0)
++    goto fail;
++  close(fd);
++
++  printf("UMOUNT_STRESS_OK\n");
++  exit(0);
++
++fail:
++  if(fd >= 0)
++    close(fd);
++  printf("umountstress: FAIL final state\n");
++  exit(1);
++}
 diff -ruN -d --strip-trailing-cr xv6-riscv-src/user/unlinkopen.c src/user/unlinkopen.c
 --- xv6-riscv-src/user/unlinkopen.c
 +++ src/user/unlinkopen.c
@@ -7310,11 +7590,12 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/user/unlinkopen.c src/user/unlink
 diff -ruN -d --strip-trailing-cr xv6-riscv-src/user/user.h src/user/user.h
 --- xv6-riscv-src/user/user.h
 +++ src/user/user.h
-@@ -21,6 +21,7 @@
+@@ -21,6 +21,8 @@
  int chdir(const char*);
  int dup(int);
  int getpid(void);
 +int mount(const char*, const char*, int);
++int umount(const char*);
  char* sys_sbrk(int,int);
  int pause(int);
  int uptime(void);
@@ -7337,11 +7618,12 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/user/usys.pl src/user/usys.pl
  }
  	
  entry("fork");
-@@ -39,6 +45,7 @@
+@@ -39,6 +45,8 @@
  entry("chdir");
  entry("dup");
  entry("getpid");
 +entry("mount");
++entry("umount");
  entry("sbrk");
  entry("pause");
  entry("uptime");

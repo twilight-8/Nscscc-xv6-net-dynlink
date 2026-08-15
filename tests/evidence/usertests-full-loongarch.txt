@@ -2,8 +2,8 @@ qemu-system-loongarch64 -machine virt -kernel kernel/kernel -m 1G -smp 3 -nograp
 
 xv6 kernel is booting
 
-hart 1 starting
 hart 2 starting
+hart 1 starting
 init: starting sh
 $ usertests
 usertests starting
@@ -192,9 +192,9 @@ usertrap(): unexpected trapcause 20000 pid=6558
 OK
 test pgbug: OK
 test sbrkbugs: usertrap(): unexpected trapcause 30000 pid=6561
-            era=0x5c34 badv=0x5c34 badi=0x29c0a061 sp=0x12ec0 crmd=0xb0 prmd=0x7
+            era=0x5c40 badv=0x5c40 badi=0x29c0a061 sp=0x12ec0 crmd=0xb0 prmd=0x7
 usertrap(): unexpected trapcause 30000 pid=6562
-            era=0x5c34 badv=0x5c34 badi=0x29c0a061 sp=0x12ec0 crmd=0xb0 prmd=0x7
+            era=0x5c40 badv=0x5c40 badi=0x29c0a061 sp=0x12ec0 crmd=0xb0 prmd=0x7
 usertrap(): unexpected trapcause 10000 pid=6563
             era=0x5b10 badv=0x12ec8 badi=0x29c0a061 sp=0x12ec0 crmd=0xb0 prmd=0x7
 OK
@@ -343,4 +343,4 @@ OK
 test outofinodes: ialloc: no inodes
 OK
 ALL TESTS PASSED
-$ qemu-system-loongarch64: terminating on signal 15 from pid 62481 ()
+$ qemu-system-loongarch64: terminating on signal 15 from pid 1248 ()

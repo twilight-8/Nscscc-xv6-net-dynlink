@@ -1,5 +1,5 @@
 # Final regression summary, 2026-08-15.
-# Source: tests/run_all.sh, 17:38:55+08:00 through 18:01:14+08:00.
+# Source: tests/run_all.sh, 21:47:27+08:00 through 22:10:05+08:00.
 # Scope: 8 test points x 2 architectures = 16 executions.
 # Consolidated from the corresponding raw logs under tests/*/logs/.
 ===== test_baseline =====
@@ -41,11 +41,12 @@ error/riscv concurrent mounts      failed 7/7, ext2 success 1/1, fat32 success 1
 error/loongarch concurrent mounts  failed 7/7, ext2 success 1/1, fat32 success 1/1
 semantics/riscv ELF exec           EXT2_EXEC_OK 2/2, FAT32_EXEC_OK 2/2
 semantics/loongarch ELF exec       EXT2_EXEC_OK 2/2, FAT32_EXEC_OK 2/2
+semantics/riscv safe umount        busy 2/2, UMOUNT_SEMANTICS_OK 1/1
+semantics/loongarch safe umount    busy 2/2, UMOUNT_SEMANTICS_OK 1/1
+smp/riscv mount/umount race        UMOUNT_STRESS_OK 1/1, panic 0
+smp/loongarch mount/umount race    UMOUNT_STRESS_OK 1/1, panic 0
 
 Post-run gates on the same frozen source:
 full_usertests/riscv           69 named tests, ALL TESTS PASSED, panic 0
 full_usertests/loongarch       69 named tests, ALL TESTS PASSED, panic 0
 e2fsck after loongarch_smp     five passes completed, exit status 0
-
-The exact 2/2 ELF marker assertions were re-run after the summary run when
-the runner was strengthened to distinguish command echo from program output.

@@ -3,6 +3,8 @@
 echo VFS_PARENT_OK > /parent.txt
 mkdir /mnt
 mkdir /fat
+echo XV6_MNT_BASE > /mnt/base.txt
+echo XV6_FAT_BASE > /fat/base.txt
 mount ext2 /mnt
 mount fat32 /fat
 cat /echo > /mnt/echo
@@ -17,4 +19,19 @@ echo fat-link > /fat/a.txt
 ln /fat/a.txt /fat/b.txt
 unlinkopen /mnt/uop.txt
 unlinkopen /fat/uop.txt
+cd /mnt
+umount /mnt
+cd /
+umount /mnt
+cat /mnt/base.txt
+mount ext2 /mnt
+cat /mnt/hello.c
+cd /fat
+umount /fat
+cd /
+umount /fat
+cat /fat/base.txt
+mount fat32 /fat
+/fat/echo FAT32_REMOUNT_OK
+echo UMOUNT_SEMANTICS_OK
 echo SEMANTICS_DONE

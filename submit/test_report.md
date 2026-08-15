@@ -158,7 +158,7 @@ ERROR_PATH_DONE
 
 ### 3.4 semantics 测试点（tests/semantics）
 
-覆盖：将根文件系统的 `/echo` 分别复制到 ext2/fat32 并直接执行、挂载点 `..` 回父文件系统（ext2 与 fat32 两侧）、ext2 硬链接成功且内容一致、fat32 硬链接显式拒绝、`unlinkopen`（打开中的文件 unlink 后仍可读写，最后一次 close 才释放）双后端。真实输出片段：
+覆盖：将根文件系统的 `/echo` 分别复制到 ext2/fat32 并直接执行、挂载点 `..` 回父文件系统（ext2 与 fat32 两侧）、ext2 硬链接成功且内容一致、fat32 硬链接显式拒绝、`unlinkopen` 双后端，以及 `umount` 的 cwd busy、成功卸载、下层 xv6 目录恢复、ext2/FAT32 重挂载与数据/ELF 再访问。真实输出片段：
 
 ```text
 $ cat /echo > /mnt/echo
@@ -175,9 +175,27 @@ $ unlinkopen /mnt/uop.txt
 unlinkopen: ok
 $ unlinkopen /fat/uop.txt
 unlinkopen: ok
+$ cd /mnt
+$ umount /mnt
+umount: busy or invalid
+$ cd /
+$ umount /mnt
+umount: /mnt
+$ cat /mnt/base.txt
+XV6_MNT_BASE
+$ mount ext2 /mnt
+mount: ext2 on /mnt dev 2
+$ umount /fat
+umount: /fat
+$ mount fat32 /fat
+mount: fat32 on /fat dev 3
+$ /fat/echo FAT32_REMOUNT_OK
+FAT32_REMOUNT_OK
+$ echo UMOUNT_SEMANTICS_OK
+UMOUNT_SEMANTICS_OK
 ```
 
-结果：双架构 PASS。runner 对命令回显和程序真实输出分别计数，因此 RISC-V 与 LoongArch 的 `EXT2_EXEC_OK`、`FAT32_EXEC_OK` 均精确命中 2/2；这证明 `kexec()` 的 ELF 文件头、program header 和可装载段均能经 `vfs_readi()` 从 ext2/FAT32 后端读取。`unlinkopen` 同时是 unlink 延迟释放修复（B2）的防复发回归。
+结果：双架构 PASS。runner 对命令回显和程序真实输出分别计数，因此 RISC-V 与 LoongArch 的 `EXT2_EXEC_OK`、`FAT32_EXEC_OK` 均精确命中 2/2；这证明 `kexec()` 的 ELF 文件头、program header 和可装载段均能经 `vfs_readi()` 从 ext2/FAT32 后端读取。`unlinkopen` 是延迟释放修复（B2）的防复发回归；两次精确 busy 与 `UMOUNT_SEMANTICS_OK` 则验证卸载不会越过 cwd 引用，且重挂载后的后端仍可用。
 
 ### 3.5 persist 测试点（tests/persist）
 
@@ -194,7 +212,7 @@ $ wc /mnt/hostbig.bin
 
 ### 3.6 smp 测试点（tests/smp，CPUS=3）
 
-覆盖：ext2/fat32 各一组三路并发（两个后台 `bigfile` 加一个前台 `bigfile`），写后逐一 `verify`；`stressfs` 在每个挂载点内运行。真实输出片段：
+覆盖：ext2/fat32 各一组三路并发（两个后台 `bigfile` 加一个前台 `bigfile`），写后逐一 `verify`；`stressfs` 在每个挂载点内运行；`umountstress` 以 4 个子进程交错执行 lookup 与反复 `mount/umount`，并先验证打开文件必然使卸载 busy。真实输出片段：
 
 ```text
 $ bigfile /fat/a keep &
@@ -207,9 +225,11 @@ $ bigfile /fat/a verify
 bigfile: ok (1048576 bytes, verify)
 $ bigfile /fat/b verify
 bigfile: ok (1048576 bytes, verify)
+$ umountstress
+UMOUNT_STRESS_OK
 ```
 
-结果：双架构 PASS。修复前基线在同一场景下 fat32 段确定性挂死（后端分配器竞争，详见 `problems.md` P6），修复后作为防复发回归保留。
+结果：双架构 PASS。修复前基线在同一场景下 fat32 段确定性挂死（后端分配器竞争，详见 `problems.md` P6），修复后作为防复发回归保留；新增卸载压力段在 CPUS=3 下均到达 `UMOUNT_STRESS_OK`，无 panic/kerneltrap 或失败终态。
 
 ## 4. 覆盖矩阵与补充验证
 
@@ -217,7 +237,7 @@ bigfile: ok (1048576 bytes, verify)
 
 - `e2fsck -fn` 对最后一项 LoongArch SMP 压测完成后的 ext2 镜像做五阶段只读校验（inode/块/尺寸、目录结构、目录连通性、链接计数、组汇总），结果为**零错误**，原始输出见 `tests/evidence/e2fsck-final.txt`；
 - 官方测例版本锚定与镜像布局已核对（`tests/VFS_TESTS_PIN.txt`、`/tests` 五文件布局）；
-- `mtable.oplock` 串行化完整 mount 调用；`MOUNT_FREE/MOUNTING/MOUNTED` 三态负责发布、失败回滚及 unlink 可见性，正常路径只使用 `MOUNTED` 根。error 验证串行后的最终互斥与拒绝语义；`MOUNTING` 窗口没有确定性触发测试，其正确性由锁序和状态转换审查保证；
+- `mtable.oplock` 串行化完整 `mount/umount`；`MOUNT_FREE/MOUNTING/MOUNTED/MOUNT_UNMOUNTING` 四态负责发布、失败回滚、unlink 可见性与卸载隔离。短期 `readers` pin 保护表项指针到 `idup()` 的锁外窗口，长期 busy 复用 `inode.ref`。error 验证挂载互斥；semantics 与 SMP 验证卸载语义和并发终态；
 - ext2/fat32 冷 inode 使用 acquire 快路径、`ip->lock` 内二次检查和 release 发布；该协议已完成锁序/内存序审查，修复后的双架构 SMP 与完整 usertests 均通过，未出现功能回归。现有测试不宣称确定性命中“同一冷 inode 同时首访”；
 - 本轮归档的套件日志扫描无 `panic:`。
 
@@ -241,7 +261,7 @@ bigfile: ok (1048576 bytes, verify)
 
 以下为有意保留的边界，理由见 `design.md` 相应章节：
 
-- fat32 LFN 写、rename、symlink、umount；ext2 三重间接（`i_block[14]` 维持拒读）、多 block group；
+- fat32 LFN 写、rename、symlink、强制/延迟卸载；ext2 三重间接（`i_block[14]` 维持拒读）、多 block group；
 - 完整挂载拓扑与祖先覆盖检测：顺序执行“先挂 `/a/b`、再挂 `/a`”仍可能遮蔽前一挂载，列为 P1 限制；
 - 崩溃一致性日志（ext2/fat32 写直达换取简单性，取舍说明见 `design.md`）；
 - procfs/tmpfs 等额外后端、VFS 对象模型与错误码体系重构。

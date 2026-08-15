@@ -27,7 +27,7 @@ Based on MIT xv6-riscv rev5, the project adds a virtual file system (VFS) and a 
 
 ## Highlights
 
-- **Thin VFS dispatch layer**: operation tables unify three file systems; a sleep lock serializes `mount`, while a three-state mount table handles publication and rollback with minimal intrusion into the native xv6 file-system path.
+- **Thin VFS dispatch layer**: operation tables unify three file systems; a sleep lock serializes `mount/umount`, while a four-state mount table handles publication, rollback and safe unmount. Busy mounts are rejected immediately, with minimal intrusion into the native xv6 path.
 - **Three file systems on a single disk**: one virtio disk carries the xv6, ext2 and FAT32 images side by side, mountable on demand after boot.
 - **Symmetric thin HAL for two platforms**: both platforms share the same kernel code; platform differences are confined to a separate porting layer, with interrupt-routing knowledge centralized at a single point.
 - **Mechanism-level stability fallback**: since the external interrupt chain cannot be guaranteed lossless, a virtio watchdog provides a mechanism-level fallback; SMP stress tests pass.
@@ -64,6 +64,8 @@ mkdir /mnt
 mount ext2 /mnt        # the dev argument of mount may be omitted; a default device is chosen per fs type
 cd tests
 cat cmds.sh | sh
+cd /
+umount /mnt            # fails while files are open or a cwd is inside the mounted file system
 ```
 
 Note: if pulling the `ubuntu:24.04` base image times out, configure `registry-mirrors` in `/etc/docker/daemon.json` and restart Docker.
@@ -97,7 +99,7 @@ Development follows the principle of "baseline first, stage-by-stage progress, e
 
 ## Key Progress
 
-The project went through seventeen stages from baseline to delivery (Stage 0 through Stage P), each recorded as "objectives, changes, verification": the thin VFS dispatch layer, the mount table and block-device interface, ext2 and FAT32 support, LoongArch64 boot and the virtio-pci block device, integration with the official VFS tests, ext2 double-indirect large files, FAT32 long file names, concurrency stability fixes, compliance and performance measurement, and more. Every stage is cross-checkable against the commit history and the test logs in `tests/evidence/`. See `docs/progress.md`.
+The project went through eighteen stages from baseline to delivery (Stage 0 through Stage Q), each recorded as "objectives, changes, verification": the thin VFS dispatch layer, the mount table and block-device interface, ext2 and FAT32 support, LoongArch64 boot and the virtio-pci block device, integration with the official VFS tests, ext2 double-indirect large files, FAT32 long file names, concurrency stability fixes, safe unmount, compliance and performance measurement, and more. Every stage is cross-checkable against the commit history and the test logs in `tests/evidence/`. See `docs/progress.md`.
 
 ## System Testing
 

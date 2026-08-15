@@ -292,6 +292,27 @@ idup(struct inode *ip)
   return ip;
 }
 
+// Return non-zero if mnt has references other than its mount-table root.
+int
+vfs_mount_busy(struct mount *mnt)
+{
+  struct inode *ip;
+  int refs;
+
+  acquire(&itable.lock);
+  for(ip = &itable.inode[0]; ip < &itable.inode[NINODE]; ip++){
+    if(ip->ref == 0 || ip->mnt != mnt)
+      continue;
+    refs = ip->ref - (ip == mnt->root);
+    if(refs > 0){
+      release(&itable.lock);
+      return 1;
+    }
+  }
+  release(&itable.lock);
+  return 0;
+}
+
 // Lock the given inode.
 // Reads the inode from disk if necessary.
 void

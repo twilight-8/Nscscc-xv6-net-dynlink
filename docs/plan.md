@@ -17,7 +17,7 @@
 | 2 | 同时支持 RISC-V 和 LoongArch 平台 | 已实现（约 2000 行 arch 代码的完整移植） |
 | 3 | 两平台通过 xv6-riscv 第 5 版自带测例 | 双架构完整 `usertests` 均输出 `ALL TESTS PASSED`，证据已归档 |
 | 4 | 通过指定 VFS 测试用例（yanjun-wen/xv6-extend-vfs） | 官方测例已按锚定版本原样入库，双架构回归通过 |
-| 5 | 提交与原版 rev5 的 diff 文件 | 已在最终代码上重新生成：60 个文件，+6345/−119（见 `submit/diff.md`） |
+| 5 | 提交与原版 rev5 的 diff 文件 | 已在最终代码上重新生成：62 个文件，+6612/−119（见 `submit/diff.md`） |
 
 ### 1.2 评审维度（各占 20%）
 
@@ -144,7 +144,7 @@
 - 处置：仅在 Day 1–4 全部达标的前提下，于 Day 5 缓冲时间实施：Makefile 增加 `ROOT_FSTYPE` 开关，`vfsinit()` 按宏选择根后端，提供以 ext2 镜像启动的构建路径。未达标则放弃，不影响合规。
 
 **D6. 明确不做的功能**
-- FAT32 LFN **写**支持、rename、symlink、umount、ext2 多 block group、VFS 对象模型与错误码体系重构、procfs/tmpfs 等额外后端、编译期裁剪开关。
+- FAT32 LFN **写**支持、rename、symlink、强制/延迟卸载、ext2 多 block group、VFS 对象模型与错误码体系重构、procfs/tmpfs 等额外后端、编译期裁剪开关。
 - 理由：超出赛题硬性要求，或决赛阶段接口重构风险大于收益；现有 ops 表薄分发设计经复核无缺陷，不做架构性扰动。
 
 ### 3.5 E 类：设计与代码整洁（优先级 P1，对应设计精巧度）
@@ -318,7 +318,7 @@
 - [ ] test_report.md 重写（F6：与官方原版测例及当前测试体系同步）；design.md 最终同步（F8 余项）。
 - [ ] 演示视频按 `video-script.md` 分镜录制；汇报幻灯片与答辩 PPT 定稿（分工页待团队提供）。
 - [ ] 仓库交付态清理：移除临时文件、过程性 TODO、调试残留，评审所见即最终叙事。
-- [✔] `make clean` 后重新生成 `xv6-vfs-hal-final.diff` 与 `.diff.stat`，复核无调试残留、行数与文档声明一致（任务 5）（已完成：60 个文件，+6345/−119，套用回基线验证逐文件一致）。
+- [✔] `make clean` 后重新生成 `xv6-vfs-hal-final.diff` 与 `.diff.stat`，复核无调试残留、行数与文档声明一致（任务 5）（已完成：62 个文件，+6612/−119，套用回基线验证逐文件一致）。
 - [ ] 在干净 clone 上全流程复现（模拟评审环境）：构建 → `verify-all` → 官方流程 `cd /tests; cat cmds.sh | sh`。
 - [ ] 按 §6 清单更新核对 `submit/` 全部材料；预留半天缓冲；答辩 PPT 二次打磨。
 
@@ -330,7 +330,7 @@
 ## 6. 提交物核对清单
 
 **代码与 diff**
-- [✔] `xv6-vfs-hal-final.diff` 与 `.diff.stat`（干净源码树重新生成，60 个文件，+6345/−119）
+- [✔] `xv6-vfs-hal-final.diff` 与 `.diff.stat`（干净源码树重新生成，62 个文件，+6612/−119）
 - [✔] B1–B5、E1–E3、D1–D4 修复全部合入并回归通过
 - [✔] 官方测例逐字节入库 + `VFS_TESTS_PIN.txt` 填写完整 + `/tests` 布局（手动挂载，与官方流程一致；自动挂载项经实证放弃）
 - [ ] 无调试残留、无死代码（ramdisk.c）、无 TODO/FIXME；仓库交付态收敛

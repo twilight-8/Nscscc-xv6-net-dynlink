@@ -37,6 +37,13 @@ python3 "$ROOT_DIR/tests/runner/run_qemu_case.py" \
   --expect "Hello, world" \
   --expect "link /fat/a.txt /fat/b.txt: failed" \
   --expect "unlinkopen: ok" \
+  --expect-count "umount: busy or invalid" 2 \
+  --expect "umount: /mnt" \
+  --expect "umount: /fat" \
+  --expect "XV6_MNT_BASE" \
+  --expect "XV6_FAT_BASE" \
+  --expect "UMOUNT_SEMANTICS_OK" \
+  --expect "FAT32_REMOUNT_OK" \
   --expect "SEMANTICS_DONE" \
   --reject "panic:" \
   --reject "kerneltrap" \

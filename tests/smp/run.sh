@@ -39,11 +39,13 @@ python3 "$ROOT_DIR/tests/runner/run_qemu_case.py" \
   --expect "bigfile: ok (1048576 bytes, full)" \
   --expect "bigfile: ok (1048576 bytes, verify)" \
   --expect "stressfs starting" \
+  --expect "UMOUNT_STRESS_OK" \
   --expect "SMP_DONE" \
   --reject "panic:" \
   --reject "kerneltrap" \
   --reject "mount: failed" \
   --reject "bigfile: FAIL" \
+  --reject "umountstress: FAIL" \
   --reject "cannot"
 test_status=$?
 

@@ -210,9 +210,9 @@ usertrap(): unexpected scause 0xf pid=6567
 OK
 test pgbug: OK
 test sbrkbugs: usertrap(): unexpected scause 0xc pid=6570
-            sepc=0x4d1c stval=0x4d1c
+            sepc=0x4d24 stval=0x4d24
 usertrap(): unexpected scause 0xc pid=6571
-            sepc=0x4d1c stval=0x4d1c
+            sepc=0x4d24 stval=0x4d24
 usertrap(): unexpected scause 0xd pid=6572
             sepc=0x4c60 stval=0x10eb8
 OK
@@ -276,7 +276,7 @@ usertrap(): unexpected scause 0xf pid=6604
             sepc=0x4442 stval=0x1a012000
 usertrap(): unexpected scause 0xf pid=6605
             sepc=0x4442 stval=0x1b012000
-uertrap(): unexpected scause 0xf pid=6606
+usertrap(): unexpected scause 0xf pid=6606
             sepc=0x4442 stval=0x1c012000
 usertrap(): unexpected scause 0xf pid=6607
             sepc=0x4442 stval=0x1d012000
@@ -361,4 +361,4 @@ OK
 test outofinodes: ialloc: no inodes
 OK
 ALL TESTS PASSED
-$ qemu-system-riscv64: terminating on signal 15 from pid 60992 ()
+$ qemu-system-riscv64: terminating on signal 15 from pid 2240 ()

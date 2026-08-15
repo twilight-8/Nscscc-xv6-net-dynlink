@@ -206,6 +206,8 @@ UPROGS=\
 	$U/_ls\
 	$U/_mkdir\
 	$U/_mount\
+	$U/_umount\
+	$U/_umountstress\
 	$U/_rm\
 	$U/_sh\
 	$U/_stressfs\

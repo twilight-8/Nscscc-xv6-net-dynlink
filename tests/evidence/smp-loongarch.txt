@@ -3,8 +3,8 @@ qemu-system-loongarch64 -machine virt -kernel kernel/kernel -m 1G -smp 3 -nograp
 
 xv6 kernel is booting
 
-hart 2 starting
 hart 1 starting
+hart 2 starting
 init: starting sh
 $ mkdir /mnt
 $ mkdir /fat
@@ -60,6 +60,8 @@ read
 write 4
 read
 $ cd /
+$ umountstress
+UMOUNT_STRESS_OK
 $ echo SMP_DONE
 SMP_DONE
 $ 

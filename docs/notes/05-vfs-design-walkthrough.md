@@ -16,7 +16,7 @@
 
 **决策 3：xv6 原生后端如何处理？** 选择：把原生文件系统注册为默认后端（`xv6_inode_ops` 指向原有函数），根挂载在 `vfsinit` 建立。理由：所有路径解析统一走 VFS，但原生路径的函数一个不改——行为不变是可证明的（diff 评审可读）。
 
-**决策 4：挂载调用与生命周期如何协调？** 选择：mount 专用的 `mtable.oplock` + 三态挂载表（NMOUNT 槽位）+ 每后端一个静态 fs 实例。可睡眠 `oplock` 串行化整次 `vfs_mount()`；短持有 `mtable.lock` 只完成 `MOUNT_FREE/MOUNTING/MOUNTED` 的预留、发布与失败回滚。路径只进入 `MOUNTED` 根 inode，`MOUNTING/MOUNTED` 则让 unlink 看见挂载点正在使用。同类型后端只允许一个非空表项，与静态单实例设计一致。该组合不维护完整拓扑，“先挂 `/a/b`、再挂 `/a`”的反向祖先覆盖仍是 P1 限制。
+**决策 4：挂载调用与生命周期如何协调？** 选择：拓扑修改专用的 `mtable.oplock` + 四态挂载表（NMOUNT 槽位）+ 每后端一个静态 fs 实例。可睡眠 `oplock` 串行化整次 `vfs_mount()/vfs_umount()`；短持有 `mtable.lock` 完成 `MOUNT_FREE/MOUNTING/MOUNTED/MOUNT_UNMOUNTING` 转换和 reader pin。路径只进入 `MOUNTED` 根 inode，所有非空状态都让 unlink 看见挂载点正在使用；卸载复用 `inode.ref` 判断打开文件、cwd、在途路径和子挂载。同类型后端只允许一个非空表项，与静态单实例设计一致。该组合不维护完整拓扑，“先挂 `/a/b`、再挂 `/a`”的反向祖先覆盖仍是 P1 限制。
 
 ## 推导的验证
 
