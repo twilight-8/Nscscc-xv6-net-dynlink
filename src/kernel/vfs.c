@@ -12,6 +12,7 @@
 
 static struct {
   struct spinlock lock;
+  struct sleeplock oplock;
   struct mount mount[NMOUNT];
 } mtable;
 
@@ -106,17 +107,21 @@ vfsinit(void)
   struct mount *root;
 
   initlock(&mtable.lock, "mtable");
+  initsleeplock(&mtable.oplock, "mountop");
 
   root = &mtable.mount[0];
-  root->used = 1;
+  root->state = MOUNTING;
   root->fstype = FS_XV6;
   root->dev = ROOTDEV;
   root->mountpoint = 0;
   root->root = 0;
   root->fsops = &xv6_fs_ops;
   root->fs_private = 0;
+
   if(root->fsops->mount(root) < 0)
     panic("vfsinit: xv6 mount");
+
+  root->state = MOUNTED;
 }
 
 void
@@ -153,56 +158,81 @@ vfs_mount(char *fstype, char *path, int dev)
   if(path[0] == '/' && path[1] == '\0')
     return -1;
 
+  // Serialize the complete path-resolution and publication sequence.
+  // mtable.lock remains a short-held spinlock and never covers disk I/O.
+  acquiresleep(&mtable.oplock);
   begin_op();
 
   if((parent = nameiparent(path, name)) == 0){
     end_op();
+    releasesleep(&mtable.oplock);
     return -1;
   }
 
-  if((mp = namei(path)) == 0){
+  // nameiparent() cannot provide the real parent for these aliases.
+  if(namecmp(name, ".") == 0 || namecmp(name, "..") == 0){
     iput(parent);
     end_op();
+    releasesleep(&mtable.oplock);
     return -1;
   }
 
+  // Resolve the final component in the parent we just found. Besides
+  // avoiding a second path walk, this keeps parent and mp in one view.
+  ilock(parent);
+  mp = vfs_lookup(parent, name);
+  iunlock(parent);
+  if(mp == 0){
+    iput(parent);
+    end_op();
+    releasesleep(&mtable.oplock);
+    return -1;
+  }
+
+  // Keep mp locked until MOUNTING is visible. Unlink takes the same
+  // ip->lock then mtable.lock order and will observe either outcome.
   ilock(mp);
-  if(mp->type != T_DIR){
+  if((mp->dev == ROOTDEV && mp->inum == ROOTINO) ||
+     mp->type != T_DIR || mp->nlink < 1){
     iunlockput(mp);
     iput(parent);
     end_op();
+    releasesleep(&mtable.oplock);
     return -1;
   }
-  iunlock(mp);
 
   free = -1;
   acquire(&mtable.lock);
   for(i = 1; i < NMOUNT; i++){
-    if(mtable.mount[i].used &&
-       mtable.mount[i].mountpoint != 0 &&
-       mtable.mount[i].mountpoint->dev == mp->dev &&
-       mtable.mount[i].mountpoint->inum == mp->inum){
-      release(&mtable.lock);
-      iput(mp);
-      iput(parent);
-      end_op();
-      return -1;
+    mnt = &mtable.mount[i];
+    if(mnt->state == MOUNT_FREE){
+      if(free < 0)
+        free = i;
+      continue;
     }
-    if(!mtable.mount[i].used && free < 0)
-      free = i;
+    if(mnt->fstype == type ||
+       (mnt->mountpoint != 0 &&
+        mnt->mountpoint->dev == mp->dev &&
+        mnt->mountpoint->inum == mp->inum) ||
+       (mnt->state == MOUNTED && mnt->root != 0 &&
+        mnt->root->dev == mp->dev &&
+        mnt->root->inum == mp->inum)){
+      free = -1;
+      break;
+    }
   }
 
   if(free < 0){
     release(&mtable.lock);
-    iput(mp);
+    iunlockput(mp);
     iput(parent);
     end_op();
+    releasesleep(&mtable.oplock);
     return -1;
   }
 
   mnt = &mtable.mount[free];
   memset(mnt, 0, sizeof(*mnt));
-  mnt->used = 1;
   mnt->fstype = type;
   mnt->dev = dev;
   mnt->mountpoint = mp;
@@ -210,7 +240,9 @@ vfs_mount(char *fstype, char *path, int dev)
   mnt->root = 0;
   mnt->fsops = ops;
   mnt->fs_private = 0;
+  mnt->state = MOUNTING;
   release(&mtable.lock);
+  iunlock(mp);
 
   if(ops->mount(mnt) < 0){
     acquire(&mtable.lock);
@@ -219,13 +251,22 @@ vfs_mount(char *fstype, char *path, int dev)
     iput(mp);
     iput(parent);
     end_op();
+    releasesleep(&mtable.oplock);
     return -1;
   }
 
+  acquire(&mtable.lock);
+  mnt->state = MOUNTED;
+  release(&mtable.lock);
+
   end_op();
+  releasesleep(&mtable.oplock);
   return 0;
 }
 
+// A MOUNTING entry is already busy: unlink must not invalidate its
+// mount point while the backend is initialized. Mount calls are
+// serialized separately by mtable.oplock.
 struct mount*
 vfs_mountpoint(struct inode *ip)
 {
@@ -238,7 +279,7 @@ vfs_mountpoint(struct inode *ip)
   acquire(&mtable.lock);
   for(i = 1; i < NMOUNT; i++){
     mnt = &mtable.mount[i];
-    if(mnt->used &&
+    if(mnt->state != MOUNT_FREE &&
        mnt->mountpoint != 0 &&
        mnt->mountpoint->dev == ip->dev &&
        mnt->mountpoint->inum == ip->inum){
@@ -249,6 +290,34 @@ vfs_mountpoint(struct inode *ip)
   release(&mtable.lock);
 
   return 0;
+}
+
+// Return a referenced mounted root. MOUNTING entries remain hidden until
+// their backend initialization has completed and the mount is published.
+struct inode*
+vfs_mounted_root(struct inode *ip)
+{
+  struct inode *root = 0;
+  struct mount *mnt;
+  int i;
+
+  if(ip == 0)
+    return 0;
+
+  acquire(&mtable.lock);
+  for(i = 1; i < NMOUNT; i++){
+    mnt = &mtable.mount[i];
+    if(mnt->state == MOUNTED &&
+       mnt->mountpoint != 0 &&
+       mnt->mountpoint->dev == ip->dev &&
+       mnt->mountpoint->inum == ip->inum){
+      root = mnt->root;
+      break;
+    }
+  }
+  release(&mtable.lock);
+
+  return root == 0 ? 0 : idup(root);
 }
 
 struct inode*
@@ -265,7 +334,7 @@ vfs_lookup(struct inode *dp, char *name)
     acquire(&mtable.lock);
     for(i = 1; i < NMOUNT; i++){
       mnt = &mtable.mount[i];
-      if(mnt->used && mnt->root != 0 && mnt->parent != 0 &&
+      if(mnt->state == MOUNTED && mnt->root != 0 && mnt->parent != 0 &&
          mnt->root->dev == dp->dev && mnt->root->inum == dp->inum){
         parent = mnt->parent;
         release(&mtable.lock);

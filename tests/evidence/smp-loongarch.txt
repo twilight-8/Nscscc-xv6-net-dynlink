@@ -1,4 +1,4 @@
-make[1]: Entering directory '/home/laimanxi/xv6-vfs-hal/src'
+make[1]: Entering directory '/mnt/d/our_Os/project3136859-388873/src'
 qemu-system-loongarch64 -machine virt -kernel kernel/kernel -m 1G -smp 3 -nographic -no-reboot -net none -drive file=fs.img,if=none,format=raw,id=x0 -device virtio-blk-pci,drive=x0,disable-legacy=on,vectors=0
 
 xv6 kernel is booting

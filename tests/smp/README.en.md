@@ -16,7 +16,7 @@ Apply true multi-core (CPUS=3) concurrency pressure to both file-system backends
 
 - expect: both mount strings; the full `bigfile: ok` sequence (keep/full/verify); `stressfs starting` ×2; `SMP_DONE`.
 - reject: `panic:`, `kerneltrap`, `mount: failed`, `bigfile: FAIL`, `cannot`.
-- The runner uses `--cpus 3 --prompt-wait` (quiescence + prompt dual detection, preventing input overruns caused by early prompts from background commands).
+- The runner uses `--cpus 3 --prompt-wait --step-wait 0.01`: background writers are separated by only 10 ms to preserve overlap, while foreground commands use quiescence plus prompt detection to prevent premature input.
 
 ## Links
 

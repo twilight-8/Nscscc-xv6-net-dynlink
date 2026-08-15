@@ -5,6 +5,10 @@ mkdir /mnt
 mkdir /fat
 mount ext2 /mnt
 mount fat32 /fat
+cat /echo > /mnt/echo
+/mnt/echo EXT2_EXEC_OK
+cat /echo > /fat/echo
+/fat/echo FAT32_EXEC_OK
 cat /mnt/../parent.txt
 cat /fat/../parent.txt
 ln /mnt/hello.c /mnt/hlink.c

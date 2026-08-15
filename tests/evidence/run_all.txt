@@ -1,41 +1,51 @@
-===== test_baseline : 2026-08-07T09:57:28+08:00 =====
+# Final regression summary, 2026-08-15.
+# Source: tests/run_all.sh, 17:38:55+08:00 through 18:01:14+08:00.
+# Scope: 8 test points x 2 architectures = 16 executions.
+# Consolidated from the corresponding raw logs under tests/*/logs/.
+===== test_baseline =====
 test_baseline            PASS
-===== public_vfs : 2026-08-07T09:58:31+08:00 =====
+===== public_vfs =====
 public_vfs               PASS
-===== ext2 : 2026-08-07T09:58:47+08:00 =====
+===== ext2 =====
 ext2                     PASS
-===== fat32 : 2026-08-07T09:59:17+08:00 =====
+===== fat32 =====
 fat32                    PASS
-===== error : 2026-08-07T09:59:49+08:00 =====
+===== error =====
 error                    PASS
-===== semantics : 2026-08-07T10:00:08+08:00 =====
+===== semantics =====
 semantics                PASS
-===== persist : 2026-08-07T10:00:30+08:00 =====
+===== persist =====
 persist                  PASS
-===== smp : 2026-08-07T10:01:05+08:00 =====
+===== smp =====
 smp                      PASS
-===== loongarch_baseline : 2026-08-07T10:02:58+08:00 =====
+===== loongarch_baseline =====
 loongarch_baseline       PASS
-===== loongarch_public_vfs : 2026-08-07T10:04:43+08:00 =====
+===== loongarch_public_vfs =====
 loongarch_public_vfs     PASS
-===== loongarch_ext2 : 2026-08-07T10:04:58+08:00 =====
+===== loongarch_ext2 =====
 loongarch_ext2           PASS
-===== loongarch_fat32 : 2026-08-07T10:05:55+08:00 =====
+===== loongarch_fat32 =====
 loongarch_fat32          PASS
-===== loongarch_error : 2026-08-07T10:06:25+08:00 =====
+===== loongarch_error =====
 loongarch_error          PASS
-===== loongarch_semantics : 2026-08-07T10:06:44+08:00 =====
+===== loongarch_semantics =====
 loongarch_semantics      PASS
-===== loongarch_persist : 2026-08-07T10:07:06+08:00 =====
+===== loongarch_persist =====
 loongarch_persist        PASS
-===== loongarch_smp : 2026-08-07T10:08:06+08:00 =====
+===== loongarch_smp =====
 loongarch_smp            PASS
 run_all: PASS (16/16)
-[full_usertests] building riscv kernel and fs.img
-[full_usertests] running complete usertests on riscv (CPUS=3, no -q)
-[full_usertests] riscv: PASS
-[full_usertests] log: /home/laimanxi/xv6-vfs-hal/tests/test_baseline/logs/usertests-full.log
-[full_usertests] building loongarch kernel and fs.img
-[full_usertests] running complete usertests on loongarch (CPUS=3, no -q)
-[full_usertests] loongarch: PASS
-[full_usertests] log: /home/laimanxi/xv6-vfs-hal/tests/test_baseline/logs/usertests-full-loongarch.log
+
+Focused assertions from the same run:
+error/riscv concurrent mounts      failed 7/7, ext2 success 1/1, fat32 success 1/1
+error/loongarch concurrent mounts  failed 7/7, ext2 success 1/1, fat32 success 1/1
+semantics/riscv ELF exec           EXT2_EXEC_OK 2/2, FAT32_EXEC_OK 2/2
+semantics/loongarch ELF exec       EXT2_EXEC_OK 2/2, FAT32_EXEC_OK 2/2
+
+Post-run gates on the same frozen source:
+full_usertests/riscv           69 named tests, ALL TESTS PASSED, panic 0
+full_usertests/loongarch       69 named tests, ALL TESTS PASSED, panic 0
+e2fsck after loongarch_smp     five passes completed, exit status 0
+
+The exact 2/2 ELF marker assertions were re-run after the summary run when
+the runner was strengthened to distinguish command echo from program output.

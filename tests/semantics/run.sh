@@ -31,6 +31,8 @@ python3 "$ROOT_DIR/tests/runner/run_qemu_case.py" \
   --log "$RAW_LOG" \
   --expect "mount: ext2 on /mnt dev 2" \
   --expect "mount: fat32 on /fat dev 3" \
+  --expect-count "EXT2_EXEC_OK" 2 \
+  --expect-count "FAT32_EXEC_OK" 2 \
   --expect "VFS_PARENT_OK" \
   --expect "Hello, world" \
   --expect "link /fat/a.txt /fat/b.txt: failed" \
@@ -39,6 +41,8 @@ python3 "$ROOT_DIR/tests/runner/run_qemu_case.py" \
   --reject "panic:" \
   --reject "kerneltrap" \
   --reject "mount: failed" \
+  --reject "exec /mnt/echo failed" \
+  --reject "exec /fat/echo failed" \
   --reject "link /mnt/hello.c /mnt/hlink.c: failed" \
   --reject "open /mnt/hlink.c failed" \
   --reject "unlinkopen: FAIL"

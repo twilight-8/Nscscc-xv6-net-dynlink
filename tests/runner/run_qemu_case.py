@@ -25,6 +25,9 @@ def main():
     parser.add_argument("--commands", required=True)
     parser.add_argument("--log", required=True)
     parser.add_argument("--expect", action="append", default=[])
+    parser.add_argument("--expect-count", action="append", nargs=2,
+                        metavar=("PATTERN", "COUNT"), default=[],
+                        help="require PATTERN to occur exactly COUNT times")
     parser.add_argument("--reject", action="append", default=[])
     parser.add_argument("--boot-wait", type=float, default=5.0)
     parser.add_argument("--step-wait", type=float, default=1.0)
@@ -42,6 +45,16 @@ def main():
     parser.add_argument("--live", action="store_true",
                         help="mirror QEMU output to the terminal while saving the log")
     args = parser.parse_args()
+
+    expected_counts = []
+    for pattern, count_text in args.expect_count:
+        try:
+            count = int(count_text)
+        except ValueError:
+            parser.error(f"invalid --expect-count COUNT: {count_text}")
+        if count < 0:
+            parser.error("--expect-count COUNT must be non-negative")
+        expected_counts.append((pattern, count))
 
     commands = read_commands(args.commands)
     os.makedirs(os.path.dirname(args.log), exist_ok=True)
@@ -90,7 +103,13 @@ def main():
         for idx, command in enumerate(commands, 1):
             prefix = "\n" if args.live else ""
             print(f"{prefix}[{idx:02d}/{len(commands):02d}] {command}", flush=True)
-            if args.prompt_wait:
+            if args.prompt_wait and command.endswith("&"):
+                # Leave an intentional race window for the next foreground
+                # command; that command will wait for the shell to settle.
+                qemu.stdin.write((command + "\n").encode("utf-8"))
+                qemu.stdin.flush()
+                drain(args.step_wait)
+            elif args.prompt_wait:
                 # Wait until the guest is both idle (no new output for
                 # a short settle window) and sitting at a fresh shell
                 # prompt.  Counting prompts is not enough: with '&'
@@ -134,7 +153,10 @@ def main():
             end = time.time() + args.final_wait
             while time.time() < end:
                 current = text()
-                if all(pattern in current for pattern in args.expect):
+                counts_ok = all(current.count(pattern) == count
+                                for pattern, count in expected_counts)
+                if (all(pattern in current for pattern in args.expect)
+                        and counts_ok):
                     break
                 if any(pattern in current for pattern in args.reject):
                     break
@@ -145,6 +167,14 @@ def main():
             if missing:
                 result = "FAIL"
                 failed_reason = "Missing expected output: " + ", ".join(missing)
+            mismatched = [
+                f"{pattern!r}: expected {count}, got {current.count(pattern)}"
+                for pattern, count in expected_counts
+                if current.count(pattern) != count
+            ]
+            if mismatched:
+                result = "FAIL"
+                failed_reason = "Output count mismatch: " + "; ".join(mismatched)
     finally:
         try:
             if qemu.poll() is None and qemu.stdin:
@@ -166,6 +196,10 @@ def main():
     for pattern in args.expect:
         marker = "PASS" if pattern in text() else "MISS"
         print(f"[expect:{marker}] {pattern}")
+    for pattern, count in expected_counts:
+        actual = text().count(pattern)
+        marker = "PASS" if actual == count else "MISS"
+        print(f"[expect-count:{marker}] {pattern}: {actual}/{count}")
     for pattern in args.reject:
         marker = "OK" if pattern not in text() else "HIT"
         print(f"[reject:{marker}] {pattern}")

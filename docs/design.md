@@ -9,7 +9,7 @@
 1. **原行为不变**：xv6 原生文件系统及其测例是回归基准，任何改动不得破坏既有行为。
 2. **接口要薄**：VFS 与 HAL 只抽象当前真正需要的操作，不为假想需求预留框架。
 3. **后端集中**：每种文件系统集中在一个文件中实现，不污染原 xv6 代码路径。
-4. **可验证**：每个设计点都有对应的自动化测试与日志证据，运行状态可由第三方工具（e2fsck）复核。
+4. **可验证**：关键功能与主要稳定性路径有自动化回归和日志证据；难以确定触发的并发发布协议由锁序、内存序审查补充，磁盘状态可由第三方工具（e2fsck）复核。
 
 ## 2. 总体结构
 
@@ -21,7 +21,7 @@ flowchart TD
 
     S --> N[fs.c:namex<br/>路径解析]
     N -->|普通 xv6 路径| XDIR[xv6 dirlookup]
-    N -->|遇到 /mnt| MP[vfs_mountpoint<br/>切换到挂载文件系统 root]
+    N -->|遇到已发布挂载点| MP[vfs_mounted_root<br/>切换到挂载文件系统 root]
 
     S --> V[vfs.c<br/>VFS wrapper]
     N --> VL[vfs_lookup]
@@ -67,7 +67,7 @@ inode 操作表是 VFS 的分发点，`ip->ops` 决定该 inode 的全部文件�
 
 ### 3.2 `struct mount` 与后端实例
 
-`mount` 描述一次挂载实例，关键字段：`used`、`fstype`、`dev`、`mountpoint`（被覆盖的目录 inode）、`root`（被挂载文件系统的根 inode）、`fsops`、`fs_private`。
+`mount` 描述一次挂载实例，关键字段：`state`、`fstype`、`dev`、`mountpoint`（被覆盖的目录 inode）、`root`（被挂载文件系统的根 inode）、`fsops`、`fs_private`。`state` 采用三态：`MOUNT_FREE` 表示空槽，`MOUNTING` 表示表项已预留但后端仍在初始化，`MOUNTED` 表示初始化完成且可参与路径跳转。
 
 文件系统级状态（ext2 的超级块/组描述符、fat32 的 BPB 解析结果与 `next_free` 提示）集中存放在各后端的单例结构 `ext2_fs`/`fat32_fs` 中，通过 `mnt->fs_private` 访问。每个后端实例另持有一把 sleeplock，用于分配/释放路径的串行化（见第 8 节）。
 
@@ -88,18 +88,22 @@ VFS 只有两张操作表（`inode_ops`、`fs_ops`）和一个挂载表（`NMOUN
 
 ### 4.2 挂载语义
 
-- `vfs_mount()`：校验目标为目录、挂载点未被占用、fstype 合法；**拒绝 xv6 根文件系统的重复挂载**（根挂载已由 `vfsinit()` 建立）。
-- 路径解析遇到挂载点时切换到被挂载文件系统的根 inode；挂载根的 `..` 经挂载表回到挂载点的父目录，引用计数经复核平衡。
-- `vfs_mountpoint()` 同时服务保护逻辑：三条 unlink 路径（xv6/ext2/fat32）均拒绝删除正被用作挂载点的目录。
+- `mtable.oplock` 是可睡眠操作锁，覆盖一次 `vfs_mount()` 的路径解析、冲突检查、后端初始化和最终发布/清理，使两个挂载调用按完整操作串行。它可以跨磁盘 I/O 持有；`mtable.lock` 仍是只保护挂载表字段的短持有 spinlock。
+- `vfs_mount()` 锁定目标 inode，确认它仍是已链接目录；随后在 `mtable.lock` 内检查冲突并把空槽预留为 `MOUNTING`。目标 inode 一直锁到预留完成，关闭了“目录检查完成、挂载表尚未登记”期间被并发 unlink 的窗口。
+- `MOUNTING` 与 `MOUNTED` 都占用挂载点，并阻止三条 unlink 路径（xv6/ext2/fat32）；相同 `fstype` 的非空表项也互斥，因为当前 ext2/fat32 后端各自使用一份静态实例状态。冲突扫描拒绝同一挂载点以及目标恰为已有挂载根的请求；xv6 根已由 `vfsinit()` 建立，用户请求不能再次挂载。
+- `ops->mount()` 可能读取超级块和创建根 inode，因此必须在 `mtable.lock` 之外执行。成功后在锁内把状态发布为 `MOUNTED`；失败则在锁内清回 `MOUNT_FREE` 并释放引用。
+- 路径解析只通过 `vfs_mounted_root()` 进入 `MOUNTED` 表项，绝不会看见尚未初始化完的根 inode；挂载根的 `..` 也只匹配 `MOUNTED` 表项，再经挂载表回到挂载点的父目录。
 - `mkdir` 与 `mount` 职责分离：前者只建目录，后者才建立挂载关系。
 
-### 4.3 exec 路径解析的小修正
+### 4.3 exec 路径与 VFS 读取
 
 官方评测流程要求在 `/tests` 目录下运行安装在根目录的程序。为此 `kexec` 对不含 `/` 的裸命令名增加一次根目录回退查找（原路径失败后用 `/` 前缀重试），约 16 行，使 `cat`、`test1` 等在任意工作目录可用，且不改变绝对路径语义。
 
+ELF 加载也必须服从 inode 的 VFS 操作表：`kexec()` 读取 ELF 文件头、读取 program header，以及 `loadseg()` 读取可装载段的三处调用均使用 `vfs_readi()`。因此可执行文件位于 xv6、ext2 或 fat32 时都由 `ip->ops->read` 分发到正确后端，而不会误入只理解 xv6 磁盘布局的原生 `readi()`。
+
 ### 4.4 inode 生命周期语义对齐
 
-- **缓存一致性**：`ext2_iget`/`fat32_iget` 仅在缓存未命中（`valid==0`）时从磁盘填充，不再用磁盘旧值覆盖活动 inode 的内存状态（对齐 xv6 原生约定）。
+- **缓存一致性**：`ext2_iget`/`fat32_iget` 在 `iget()` 已持有 inode 引用后，以 acquire load 检查 `valid`；命中时直接返回，避免路径查找期间额外嵌套 inode 锁。缓存未命中时获取 `ip->lock` 并再次检查 `valid`，只有首个进入者从磁盘填充共享字段，最后以 release store 发布 `valid=1`；等待者只会看到完整状态。该双检既避免磁盘旧值覆盖活动 inode，也保持 `iget()` 返回“已引用但未锁定 inode”的上层约定。fat32 根 inode 的首次初始化同样在 `ip->lock` 内完成并以 release store 发布。
 - **unlink 延迟释放**：unlink 只减 `nlink` 并同步；资源释放延迟到 `iput()` 的 `ref==1 && nlink==0` 分支，经各后端 `itrunc` 钩子完成（ext2 释放数据块与 inode，fat32 释放整条簇链）。打开中的文件被 unlink 后仍可读写，最后一次 close 时才释放，与 xv6 根文件系统语义一致；`unlinkopen` 回归测试常驻守护。
 
 ## 5. ext2 后端设计
@@ -132,7 +136,7 @@ BPB 校验与挂载、8.3 短名目录项查找/创建/删除、普通文件 rea
 - **next-free 提示**：分配从上次停止处继续（含回绕扫描与释放端下调），消除每次从簇 2 全表扫描的 O(n) 分配开销；
 - **链漫游缓存**：`fat32_cluster_at` 从 `addrs[2]/[3]` 缓存的最近漫游位置继续，顺序访问降为 O(1)/块，消除大文件 O(n²) 链重扫。缓存随 inode 填充/截断失效。
 
-两项优化有独立基准数据（`contest/performance.md` §3）：同负载写 273→168→57 ticks，读 86→102→4 ticks。
+两项优化有本轮 P0 修复前采集的阶段性基准数据（`contest/performance.md` §3）：同负载写 273→168→57 ticks，读 86→102→4 ticks；这些记录说明优化方向，不代表最终源码性能。
 
 ## 7. HAL 与双平台设计
 
@@ -153,9 +157,12 @@ LoongArch 的外部中断是位掩码语义（EXTIOI 一次报多个挂起位）
 
 ## 8. 并发与锁设计
 
-锁层级与持有规则的完整定义见 `contest/lock-order.md`，要点如下：
+锁层级与持有规则的完整定义见 `contest/lock_order.md`，要点如下：
 
-- 锁层级自上而下：mtable.lock → itable.lock → ip->lock → 后端 fs 锁（`ext2fs.lock`/`fat32fs.lock`）→ bcache.lock → b->lock → disk.vdisk_lock；
+- 主 I/O 路径的获取方向为：`ip->lock` → 后端 fs 锁（`ext2fs.lock`/`fat32fs.lock`）→ buffer cache/块锁 → `disk.vdisk_lock`；
+- `mtable.oplock` 是 mount 专用的最外层 sleeplock，串行化整次挂载操作并可跨后端 I/O 持有；非 mount 路径不获取它；
+- `mtable.lock` 是只保护挂载表状态的叶级短持有 spinlock。允许在持有 `ip->lock` 时获取它，但持有它时不得再获取 inode/itable、后端或 buffer 锁，也不得调用可能睡眠或进行磁盘 I/O 的函数；
+- 挂载后端初始化在 `mtable.lock` 外执行，锁只负责 `MOUNTING` 预留、`MOUNTED` 发布、失败回收及短查询；
 - 两个后端各一把 sleeplock，仅在分配/释放路径获取，仅允许在 inode 锁之后、缓冲锁之前取得；
 - ext2 位图操作因持有缓冲块睡眠锁而天然串行；fat32 按字节接口绕开了缓冲锁，其 FAT 分配读改写必须显式加锁（否则 SMP 下双分配同一簇，已由 SMP 压测实证并修复）；
 - `iput()` 的延迟释放分支在 `itable.lock` 释放后进行磁盘操作，不持 spinlock 睡眠。
@@ -187,8 +194,8 @@ sequenceDiagram
 
     User->>Sys: open("/mnt/hello.c", O_CREATE|O_WRONLY)
     Sys->>FS: nameiparent("/mnt/hello.c")
-    FS->>VFS: vfs_mountpoint("/mnt")
-    VFS-->>FS: 返回 ext2 mount root
+    FS->>VFS: vfs_mounted_root(mountpoint inode)
+    VFS-->>FS: 返回已引用的 ext2 mount root
     Sys->>VFS: vfs_create(ext2 root, "hello.c")
     VFS->>EXT2: ext2_create()
     EXT2->>Disk: 分配 inode 和目录项
@@ -204,7 +211,7 @@ sequenceDiagram
 
 | 文件/目录 | 职责 |
 |---|---|
-| `kernel/vfs.c`、`vfs.h` | VFS 类型、操作表、挂载表与 wrapper 分发（336 + 47 行） |
+| `kernel/vfs.c`、`vfs.h` | VFS 类型、操作表、三态挂载表与 wrapper 分发（406 + 54 行） |
 | `kernel/ext2.c` | ext2 后端：dinode、目录、位图、直接与双重间接寻址 |
 | `kernel/fat32.c` | fat32 后端：BPB/FAT/簇链、8.3 与 LFN 目录项 |
 | `kernel/block.c`、`block.h` | 字节偏移块读写辅助层（ext2/fat32 共用） |
@@ -213,7 +220,7 @@ sequenceDiagram
 | `kernel/virtio_disk.c` | 共享 virtio 磁盘驱动与中断看门狗 |
 | `kernel/fs.c` | xv6 原生文件系统；`iput()` 含非 xv6 后端的延迟释放分支 |
 | `kernel/sysfile.c` | 系统调用入口；挂载点删除保护 |
-| `kernel/exec.c` | `kexec` 与裸命令名根目录回退 |
+| `kernel/exec.c` | `kexec`、裸命令名根目录回退与 ELF 内容的 VFS 读取 |
 | `kernel/file.h` | 内存 inode 结构（VFS 字段与扩展地址槽位） |
 | `kernel/param.h` | 设备号与镜像区段常量 |
 | `mkfs/mkfs.c` | 镜像打包（支持一级目录） |
@@ -225,6 +232,7 @@ sequenceDiagram
 以下各项是有意不做的范围，理由是超出赛题硬性要求，或在教学规模下风险大于收益：
 
 - fat32 LFN **写**、rename、symlink、umount；
+- 完整挂载拓扑与祖先覆盖检测：`oplock` 只串行挂载调用，顺序执行“先挂 `/a/b`、再挂 `/a`”仍会遮蔽前一挂载，该反向祖先覆盖是当前 P1 限制；
 - ext2 三重间接（`i_block[14]` 维持拒读）、多 block group；
 - ext2/fat32 的日志与崩溃一致性（写直达换取简单性，取舍已在本文件说明）；
 - procfs/tmpfs 等额外后端，VFS 对象模型与错误码体系的重构；
@@ -232,4 +240,4 @@ sequenceDiagram
 
 ## 13. 验证方式
 
-本设计的每一项关键决策都有对应测试：三系统共存与官方流程（`public_vfs`）、后端功能面（`ext2`/`fat32`）、语义边界（`semantics`/`error`）、持久化（`persist`）、并发（`smp`）、原生回归与完整 usertests（`test_baseline`/`full_usertests.sh`），以及 `e2fsck` 对 ext2 镜像的五阶段离线校验。结果汇总见 `contest/test_report.md` 与 `tests/MATRIX.md`。
+关键功能与主要稳定性路径均有对应测试：三系统共存与官方流程（`public_vfs`）、后端功能面（`ext2`/`fat32`）、语义边界（`semantics`/`error`）、持久化（`persist`）、并发（`smp`）、原生回归与完整 usertests（`test_baseline`/`full_usertests.sh`），以及 `e2fsck` 对 ext2 镜像的五阶段离线校验。冷 inode 首访和 `MOUNTING` 发布窗口没有带屏障的确定性触发测试，其正确性依据锁序/内存序审查，自动化回归用于确认修复没有引入功能退化。结果汇总见 `contest/test_report.md` 与 `tests/MATRIX.md`。

@@ -81,6 +81,7 @@ void            vfsinit(void);
 void            vfs_init_inode(struct inode*);
 int             vfs_mount(char*, char*, int);
 struct mount*   vfs_mountpoint(struct inode*);
+struct inode*   vfs_mounted_root(struct inode*);
 struct inode*   vfs_lookup(struct inode*, char*);
 struct inode*   vfs_create(struct inode*, char*, short, short, short);
 int             vfs_unlink(struct inode*, char*);

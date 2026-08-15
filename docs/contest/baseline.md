@@ -28,15 +28,24 @@ diff -r -q -x '.git*' xv6-riscv-src rev5-check     # 输出为空 = 逐文件一
 
 ```sh
 make -C src clean
-diff -ruN -d xv6-riscv-src src > submit/xv6-vfs-hal-final.diff
+diff -ruN -d --strip-trailing-cr xv6-riscv-src src > submit/xv6-vfs-hal-final.diff
 # 去除 ---/+++ 行的时间戳，保证重复生成结果逐字节一致、可复核
 sed -i -E 's/^(---|\+\+\+) ([^\t]+)\t.*$/\1 \2/' submit/xv6-vfs-hal-final.diff
 git apply --stat -p0 submit/xv6-vfs-hal-final.diff > submit/xv6-vfs-hal-final.diff.stat
 ```
 
-`-d`（`--minimal`）输出最小变更集。正确性验证：在基线副本上以 `patch -p0` 套用该 diff，所得源码树与 `src/` 逐文件一致。行数拆分与分类统计见 `submit/diff.md`。
+`-d`（`--minimal`）输出最小变更集。当前 Windows 检出会将基线 `mkfs/mkfs.c` 写成 CRLF；GNU `patch` 不会自动忽略该行尾差异。重放验证先规范这一文件，再应用补丁：
+
+```sh
+sed -i 's/\r$//' xv6-riscv-src/mkfs/mkfs.c  # 仅 CRLF 检出需要
+patch --batch -p0 -i submit/xv6-vfs-hal-final.diff
+diff -ruN -d --strip-trailing-cr xv6-riscv-src src
+```
+
+验证结果为 60 个文件全部应用成功，最后一条命令无输出。行数拆分与分类统计见 `submit/diff.md`。
 
 ## 当前增量规模
 
-- 60 个文件，+6242/−113（diff 文件总行数 7307，含文件头与 hunk 头）。
+- 60 个文件，+6345/−119（diff 文件总行数 7436，含文件头与 hunk 头）。
+- 其中 25 个 rev5 既有文件 +766/−119，35 个新增文件 +5579/−0。
 - 对 rev5 原有文件的修改高度集中，增量主体是新增文件（ext2.c、fat32.c、vfs.c、`kernel/arch/loongarch/` 移植层等整文件计入）。

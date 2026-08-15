@@ -27,11 +27,11 @@ Based on MIT xv6-riscv rev5, the project adds a virtual file system (VFS) and a 
 
 ## Highlights
 
-- **Thin VFS dispatch layer**: three coexisting file systems with unified mounting in 336 lines, zero intrusion into the native xv6 file-system path.
+- **Thin VFS dispatch layer**: operation tables unify three file systems; a sleep lock serializes `mount`, while a three-state mount table handles publication and rollback with minimal intrusion into the native xv6 file-system path.
 - **Three file systems on a single disk**: one virtio disk carries the xv6, ext2 and FAT32 images side by side, mountable on demand after boot.
 - **Symmetric thin HAL for two platforms**: both platforms share the same kernel code; platform differences are confined to a separate porting layer, with interrupt-routing knowledge centralized at a single point.
 - **Mechanism-level stability fallback**: since the external interrupt chain cannot be guaranteed lossless, a virtio watchdog provides a mechanism-level fallback; SMP stress tests pass.
-- **Defect-driven testing**: 8 test points across 2 architectures, 16 regression items all passing, fully reproducible with a single `make verify-all`, with all raw logs archived.
+- **Defect-driven testing**: 8 test points across 2 architectures, 16 regression items all passing. Functional regression is reproducible with one `make verify-all`; key raw logs are archived, while fsck and performance evidence use the separate commands documented for them.
 
 ## Quick Start
 
@@ -97,11 +97,11 @@ Development follows the principle of "baseline first, stage-by-stage progress, e
 
 ## Key Progress
 
-The project went through sixteen stages from baseline to delivery (Stage 0 through Stage O), each recorded as "objectives, changes, verification": the thin VFS dispatch layer, the mount table and block-device interface, ext2 and FAT32 support, LoongArch64 boot and the virtio-pci block device, integration with the official VFS tests, ext2 double-indirect large files, FAT32 long file names, concurrency stability fixes, compliance and performance measurement, and more. Every stage is cross-checkable against the commit history and the test logs in `tests/evidence/`. See `docs/progress.md`.
+The project went through seventeen stages from baseline to delivery (Stage 0 through Stage P), each recorded as "objectives, changes, verification": the thin VFS dispatch layer, the mount table and block-device interface, ext2 and FAT32 support, LoongArch64 boot and the virtio-pci block device, integration with the official VFS tests, ext2 double-indirect large files, FAT32 long file names, concurrency stability fixes, compliance and performance measurement, and more. Every stage is cross-checkable against the commit history and the test logs in `tests/evidence/`. See `docs/progress.md`.
 
 ## System Testing
 
-The testing system has three layers: the xv6 built-in suite (`usertests`, both the quick and the full version run on both architectures — 60 OK items each in the full version, with the verdict line `ALL TESTS PASSED`), the VFS tests designated by the problem statement (test1/test2 pass following the official reference procedure, with an image layout identical to the official one), and eight team-authored test points (official-suite regression, public VFS procedure replication, ext2 and FAT32 feature coverage, fault and semantics, persistence, and SMP concurrency stress). All 8 test points × 2 architectures = 16 items pass; the ext2 image passes e2fsck with zero errors; all raw logs are archived in `tests/evidence/`. See `docs/contest/test_report.md` and `tests/README.md`; performance data is in `docs/contest/performance.md`.
+The testing system has three layers: the xv6 built-in suite (`usertests`, with quick and full runs on both architectures; each full run contains 69 named tests, 63 quick + 6 slow, and ends with `ALL TESTS PASSED`), the VFS tests designated by the problem statement (test1/test2 pass following the official reference procedure, with an image layout identical to the official one), and eight team-authored test points (official-suite regression, public VFS procedure replication, ext2 and FAT32 feature coverage, fault and semantics, persistence, and SMP concurrency stress). All 8 test points × 2 architectures = 16 items pass; the ext2 image passes e2fsck with zero errors; key raw logs are archived in `tests/evidence/`. See `docs/contest/test_report.md` and `tests/README.md`; performance data and its evidence boundary are documented in `docs/contest/performance.md`.
 
 ## Major Problems and Solutions
 
@@ -121,7 +121,7 @@ Through this project the team gained end-to-end engineering practice in file-sys
 .
 ├── README.md                  # Project description
 ├── LICENSE                    # BSD-2-Clause
-├── Makefile                   # Test orchestration: 16 test-point targets and one-command verify-all
+├── Makefile                   # Test orchestration: 8 test points × 2 architectures = 16 runs
 ├── Dockerfile                 # Containerized build and test environment
 ├── src/                       # Project source
 │   ├── kernel/                # Kernel

@@ -15,9 +15,9 @@
 |---|------|------|
 | 1 | 同时支持 xv6、ext2、fat32 文件系统 | 已实现，深度存在短板（见 §3.4） |
 | 2 | 同时支持 RISC-V 和 LoongArch 平台 | 已实现（约 2000 行 arch 代码的完整移植） |
-| 3 | 两平台通过 xv6-riscv 第 5 版自带测例 | 仅执行过 `usertests -q` 快速版，完整版无通过记录（见 A2） |
-| 4 | 通过指定 VFS 测试用例（yanjun-wen/xv6-extend-vfs） | 本地 test1/test2 为自行重写版本，未原样运行官方测例（见 A1） |
-| 5 | 提交与原版 rev5 的 diff 文件 | 已在最终代码上重新生成：60 个文件，+6242/−113（见 `submit/diff.md`） |
+| 3 | 两平台通过 xv6-riscv 第 5 版自带测例 | 双架构完整 `usertests` 均输出 `ALL TESTS PASSED`，证据已归档 |
+| 4 | 通过指定 VFS 测试用例（yanjun-wen/xv6-extend-vfs） | 官方测例已按锚定版本原样入库，双架构回归通过 |
+| 5 | 提交与原版 rev5 的 diff 文件 | 已在最终代码上重新生成：60 个文件，+6345/−119（见 `submit/diff.md`） |
 
 ### 1.2 评审维度（各占 20%）
 
@@ -35,9 +35,9 @@
 
 ## 2. 现状总体评估
 
-项目整体完成度较高：三种文件系统真实并存，LoongArch 为完整移植，diff 规模克制，文档体系基本完整。经审查，剩余工作集中在四个方面：
+项目整体完成度较高：三种文件系统真实并存，LoongArch 为完整移植，diff 规模克制，文档体系基本完整。制定本计划时，审查发现的工作集中在四个方面：
 
-- 合规性：任务 3、4 的证据链不完整；评审验收体验（测例布局、自动挂载、版本锚定）未对齐官方参考流程；
+- 合规性：任务 3、4 的证据链不完整；评审验收体验（测例布局、手动挂载流程、版本锚定）未对齐官方参考流程；
 - 正确性：ext2/fat32 后端存在 2 个高严重度的并发与语义缺陷，可导致数据损坏；
 - 功能深度：ext2 单文件上限约 268KB、fat32 不支持长文件名读取，为功能完成度的主要缺口；
 - 提交物完整性：需求跟踪矩阵、性能量化、创新性分析、对比分析、演示脚本等文档承接物缺失。
@@ -67,7 +67,7 @@
 
 **A4. 评审验收体验未对齐官方参考流程**（严重度：中，已于 Day 1 修复）
 - 现状：测试二进制位于镜像根目录（`_test1`），评审须自行查阅文档才能操作；启动后须手动挂载 ext2。
-- 修复方法：镜像 `/tests` 目录内置入官方 test1/test2 二进制与 cmds.sh、hello.c，支持 `cd /tests; cat cmds.sh | sh` 官方流程；`user/init.c` 在启动 shell 前自动执行 `mount("none","/mnt","ext2")`，手动挂载路径保留。
+- 修复方法：镜像 `/tests` 目录内置官方 test1/test2 二进制与 cmds.sh、hello.c，保留官方要求的手动 `mount ext2 /mnt`，随后支持 `cd /tests; cat cmds.sh | sh` 原流程。
 
 **A5. 官方测例无版本锚定**（严重度：低，已于 Day 1 修复）
 - 背景：官方测试仓库声明“测例建设中，会动态扩充”，且经核实上游测例内容已发生过变动。
@@ -212,7 +212,7 @@
 
 - 功能分析：7 测试点 × 2 架构矩阵、官方测例映射表、完整 usertests 结果；
 - **需求跟踪矩阵**：需求编号—需求描述—设计文档—实现文件—测试状态五列追溯，覆盖赛题功能需求与派生设计需求，使评审可按行抽查“需求—设计—实现—测试”一致性；
-- 性能分析：ext2/fat32 顺序读写吞吐（大文件拷贝计时）、fat32 簇分配优化前后对比、**VFS 开销量化**（同一文件操作在原生 xv6 路径与 VFS 分发路径的对比计时，预先回答“VFS 引入多少开销”）、双架构编译与启动时间、内核镜像大小；
+- 性能分析：ext2/fat32 顺序读写吞吐（大文件拷贝计时）、fat32 簇分配优化前后对比、**VFS 开销量化**（同一文件操作在原生 xv6 路径与 VFS 分发路径的对比计时，预先回答“VFS 引入多少开销”）；双架构编译、启动时间与内核镜像大小仅在最终源码完成可复核采集后引用；
 - 创新性分析：提炼编号创新点，按“创新内容/实现手段/创新价值”三段展开。候选：逻辑设备号偏移复用单一 virtio 盘、薄 VFS ops 分发表、HAL 双平台对称中断抽象、B1/B2 缺陷的根因分析与修复工程、双平台一致性验证方法；
 - 与类似项目的对比分析：参照系为静春山、RuOK、Linux、原版 xv6，从功能、架构设计、代码规模、性能、文档质量、创新性六个维度对比。须实际浏览参照仓库取证，对比结论须有依据。
 
@@ -300,7 +300,7 @@
 **Day 6（8.9，周日）：合规落地与性能测量**
 - [✔] 许可证与来源合规：BSD-2-Clause `LICENSE` 落地仓库根；12 个自有源文件加单行 SPDX 注释头；`compliance.md` 定稿逐文件来源清单；README 许可证表述定稿。
 - [✔] 基线完整性修复（新增发现并解决的问题）：基线副本 `xv6-riscv-src/` 缺失 `mkfs/mkfs.c`（初赛导入时被 `.gitignore` 规则误伤漏交），已补回并与官方 rev5 tag（commit 7d7adbb）全量递归比对逐文件一致；`baseline.md` 落地（F9 修复）。
-- [✔] 性能测量：新增 `vfsbench` 基准程序，完成 VFS 开销量化（写路径约 +18%、读无差异）、三后端双架构吞吐、fat32 两项优化前后三点对比（写 273→57、读 86→4 ticks）、构建/启动/内核体积测量；原始日志归档 `tests/evidence/bench-*.txt`。
+- [△] 性能测量：新增 `vfsbench` 基准程序；本轮 P0 修复前已采集 RISC-V 的 VFS 开销、三后端吞吐和 fat32 两项优化前后三点历史数据（写 273→57、读 86→4 ticks），原始日志归档 `tests/evidence/bench-*.txt`。这些记录用于说明优化方向，不代表最终源码性能；LoongArch 吞吐及最终源码的双架构构建/启动/体积数据仍待重新采集，不引用误标记录。
 - [✔] 参照项目取证：克隆分析两个 2025 参照项目仓库，提取基线/规模/VFS-HAL 形态/功能/测试证据，形成对比分析数据底稿。
 - [✔] tests/ 体系规范化：9 套测试点 README 双语四段式重写、覆盖矩阵、占位目录移除、runner/门禁脚本入库。
 - 产出：门禁双项全绿（16/16 + 完整 usertests 双架构）；3 笔提交推送。
@@ -318,7 +318,7 @@
 - [ ] test_report.md 重写（F6：与官方原版测例及当前测试体系同步）；design.md 最终同步（F8 余项）。
 - [ ] 演示视频按 `video-script.md` 分镜录制；汇报幻灯片与答辩 PPT 定稿（分工页待团队提供）。
 - [ ] 仓库交付态清理：移除临时文件、过程性 TODO、调试残留，评审所见即最终叙事。
-- [✔] `make clean` 后重新生成 `xv6-vfs-hal-final.diff` 与 `.diff.stat`，复核无调试残留、行数与文档声明一致（任务 5）（已完成：60 个文件，+6242/−113，套用回基线验证逐文件一致）。
+- [✔] `make clean` 后重新生成 `xv6-vfs-hal-final.diff` 与 `.diff.stat`，复核无调试残留、行数与文档声明一致（任务 5）（已完成：60 个文件，+6345/−119，套用回基线验证逐文件一致）。
 - [ ] 在干净 clone 上全流程复现（模拟评审环境）：构建 → `verify-all` → 官方流程 `cd /tests; cat cmds.sh | sh`。
 - [ ] 按 §6 清单更新核对 `submit/` 全部材料；预留半天缓冲；答辩 PPT 二次打磨。
 
@@ -330,17 +330,17 @@
 ## 6. 提交物核对清单
 
 **代码与 diff**
-- [✔] `xv6-vfs-hal-final.diff` 与 `.diff.stat`（干净源码树重新生成，60 个文件，+6242/−113）
-- [ ] B1–B5、E1–E3、D1–D4 修复全部合入并回归通过
+- [✔] `xv6-vfs-hal-final.diff` 与 `.diff.stat`（干净源码树重新生成，60 个文件，+6345/−119）
+- [✔] B1–B5、E1–E3、D1–D4 修复全部合入并回归通过
 - [✔] 官方测例逐字节入库 + `VFS_TESTS_PIN.txt` 填写完整 + `/tests` 布局（手动挂载，与官方流程一致；自动挂载项经实证放弃）
 - [ ] 无调试残留、无死代码（ramdisk.c）、无 TODO/FIXME；仓库交付态收敛
 
 **测试证据**
-- [ ] 官方流程（`cd /tests; cat cmds.sh | sh`）双架构通过日志
-- [ ] 完整版 `usertests` 双架构通过日志（任务 3）
-- [ ] 7 测试点 × 2 架构共 14 份日志入库 + 双架构全量启动测试输出
-- [ ] `make verify-all` 可用且 14/14 通过
-- [ ] SMP（CPUS=2/4）与 stressfs 压力测试记录
+- [✔] 官方流程（手动挂载后执行 `cd /tests; cat cmds.sh | sh`）双架构通过并纳入回归
+- [✔] 完整版 `usertests` 双架构通过日志入库（任务 3）
+- [✔] 8 个测试点 × 2 架构汇总证据入库
+- [✔] `make verify-all` 可用且 16/16 通过
+- [✔] SMP（CPUS=3）与 stressfs 压力测试记录
 - [ ] 冲刺期缺陷的“失败—分析—修复—复测”记录入库
 
 **文档包**
@@ -375,13 +375,13 @@
 
 ## 附录：关键文件位置索引
 
-- VFS 层：`src/kernel/vfs.c`（331 行）、`vfs.h`；挂载遍历 `fs.c:688-726`
-- ext2：`src/kernel/ext2.c`（1040 行；B1 见 231-233，B2 见 784-789，B4 见 320/381，D1 见 436-444/228，D3 见 494/527/859）
-- fat32：`src/kernel/fat32.c`（895 行；B1 见 377-379，C1 见 67，簇分配扫描见 199，LFN 跳过点见 276）
-- HAL：`src/kernel/hal.c`、`src/kernel/arch/loongarch/hal.c:24-33`、`arch/loongarch/trap.c:235-251`（E1）
-- 启动与挂载：`src/user/init.c`（A4 自动挂载插入点）；`src/kernel/vfs.c:102-119`（vfsinit）
+- VFS 层：`src/kernel/vfs.c`（406 行）、`vfs.h`（54 行）；挂载发布见 `vfs_mount()`，路径切换见 `fs.c:namex()`
+- ext2：`src/kernel/ext2.c`（1208 行）；冷 inode 加载见 `ext2_iget()`，延迟释放见 `ext2_unlink()`/`ext2_itrunc()`，双重间接见 `ext2_bmap()`
+- fat32：`src/kernel/fat32.c`（1175 行）；冷 inode 加载见 `fat32_iget()`，并发分配与链遍历见后端锁及 FAT 链操作，LFN 读取见 `fat32_lookup_lfn()`
+- HAL：`src/kernel/hal.c`（46 行）、`src/kernel/arch/loongarch/hal.c`（52 行）、`arch/loongarch/trap.c`（中断入口）
+- 启动与挂载：`src/kernel/vfs.c:vfsinit()` 初始化根挂载；用户按官方流程执行 `mount ext2 /mnt`
 - 设备偏移：`src/kernel/virtio_disk.c:377-380`；常量定义 `src/kernel/param.h:7-16`
 - 构建：`src/Makefile`（ARCH 分支 29-69，镜像构建 230-247，E3 见 230-238）；根 `Makefile`（测试目标 290-309）
-- 测试：`tests/runner/run_qemu_case.py:29-30`（C3）；各 `tests/*/run.sh`、`cmds.sh`
+- 测试：`tests/runner/run_qemu_case.py`（提示符等待与精确计数断言）；各 `tests/*/run.sh`、`cmds.sh`
 - 官方测例：https://github.com/yanjun-wen/xv6-extend-vfs/tree/main/tests （4 个文件：cmds.sh、hello.c、test1.c、test2.c）
 - 参考项目：静春山 https://gitlab.eduxiji.net/educg-group-36002-2710490/T202510558995330-264 ；RuOK https://gitlab.eduxiji.net/educg-group-36002-2710490/T202510486995232-2402

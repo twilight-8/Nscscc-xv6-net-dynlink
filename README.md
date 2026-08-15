@@ -27,11 +27,11 @@
 
 ## 项目亮点
 
-- **薄 VFS 分发层**：336 行实现三种文件系统共存与统一挂载，对 xv6 原生文件系统路径零侵入。
+- **薄 VFS 分发层**：以操作表统一三种文件系统，通过挂载操作睡眠锁串行化 `mount`，再用三态挂载表完成发布与失败回滚，对 xv6 原生文件系统路径保持最小侵入。
 - **单盘三文件系统镜像布局**：一块 virtio 磁盘同时承载 xv6、ext2、fat32 三个文件系统镜像，启动后可按需挂载。
 - **双平台对称薄 HAL**：两个平台共用同一套内核代码，平台差异收敛于独立的移植层，中断路由知识单点收敛。
 - **机制级稳定性兜底**：针对外部中断链无法保证不丢中断的现实，设计 virtio 看门狗在机制层兜底，SMP 并发压测通过。
-- **缺陷驱动的测试体系**：8 个测试点 × 2 个架构共 16 项回归全部通过，`make verify-all` 一行命令完整复现，全部结论有原始日志归档。
+- **缺陷驱动的测试体系**：8 个测试点 × 2 个架构共 16 项回归全部通过，功能回归可用 `make verify-all` 一行命令复现，关键原始日志已归档；fsck 与性能数据按各自文档中的独立命令复核。
 
 ## 快速开始
 
@@ -65,7 +65,6 @@ npm.cmd install
 npm.cmd run dev
 ```
 
-开发页面默认访问 `http://localhost:4180`。生产运行、真实 QEMU 探测和推荐演示流程见 [web/README.md](web/README.md)。
 
 进入 shell 后可按官方参考流程挂载 ext2 并执行 VFS 测例：
 
@@ -107,11 +106,11 @@ cat cmds.sh | sh
 
 ## 比赛过程中的重要进展
 
-项目从基线建立到交付共经历十六个阶段（阶段 0 至阶段 O），每阶段按“主要目标、主要改动、验证结果”记录：薄 VFS 分发层、挂载表与块设备接口、ext2 与 fat32 支持、LoongArch64 启动与 virtio-pci 块设备、官方 VFS 测例对接、ext2 双重间接大文件、fat32 长文件名、并发稳定性修复、合规与性能测量等。每阶段均可与提交历史及 `tests/evidence/` 的测试日志互相印证。详见 `docs/progress.md`。
+项目从基线建立到交付共经历十七个阶段（阶段 0 至阶段 P），每阶段按“主要目标、主要改动、验证结果”记录：薄 VFS 分发层、挂载表与块设备接口、ext2 与 fat32 支持、LoongArch64 启动与 virtio-pci 块设备、官方 VFS 测例对接、ext2 双重间接大文件、fat32 长文件名、并发稳定性修复、合规与性能测量等。每阶段均可与提交历史及 `tests/evidence/` 的测试日志互相印证。详见 `docs/progress.md`。
 
 ## 系统测试情况
 
-测试体系由三层组成：xv6 自带测例（`usertests`，双架构均执行快速版与完整版，完整版各 60 项 OK、判定行均为 `ALL TESTS PASSED`）、赛题指定 VFS 测例（test1/test2 按官方参考流程执行通过，镜像布局与官方一致）、团队自拟的 8 个测试点（官方测例回归、公开 VFS 流程复刻、ext2 与 fat32 功能面、异常与语义、持久化、SMP 并发压测）。8 测试点 × 2 架构共 16 项全部通过，ext2 镜像经 e2fsck 校验零错误，全部原始日志归档于 `tests/evidence/`。详见 `docs/contest/test_report.md` 与 `tests/README.md`，性能数据见 `docs/contest/performance.md`。
+测试体系由三层组成：xv6 自带测例（`usertests`，双架构均执行快速版与完整版；完整版各含 69 个命名测试，即 63 quick + 6 slow，判定行均为 `ALL TESTS PASSED`）、赛题指定 VFS 测例（test1/test2 按官方参考流程执行通过，镜像布局与官方一致）、团队自拟的 8 个测试点（官方测例回归、公开 VFS 流程复刻、ext2 与 fat32 功能面、异常与语义、持久化、SMP 并发压测）。8 测试点 × 2 架构共 16 项全部通过，ext2 镜像经 e2fsck 校验零错误，关键原始日志归档于 `tests/evidence/`。详见 `docs/contest/test_report.md` 与 `tests/README.md`，性能数据与证据边界见 `docs/contest/performance.md`。
 
 ## 遇到的主要问题和解决方法
 
@@ -131,7 +130,7 @@ cat cmds.sh | sh
 .
 ├── README.md                  # 项目说明
 ├── LICENSE                    # BSD-2-Clause
-├── Makefile                   # 测试编排：16 个测试点目标与 verify-all 一键复现
+├── Makefile                   # 测试编排：8 个测试点 × 2 个架构共 16 项执行
 ├── Dockerfile                 # 容器化构建与测试环境
 ├── src/                       # 作品源码
 │   ├── kernel/                # 内核

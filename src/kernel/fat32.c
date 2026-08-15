@@ -407,7 +407,7 @@ fat32_fill_inode(struct inode *ip, struct mount *mnt, struct fat32_dirent *de,
   ip->addrs[1] = entry_off;
   ip->addrs[2] = 0;   // chain-walk cache
   ip->addrs[3] = 0;
-  ip->valid = 1;
+  __atomic_store_n(&ip->valid, 1, __ATOMIC_RELEASE);
 }
 
 static struct inode*
@@ -423,10 +423,17 @@ fat32_iget(struct mount *mnt, struct fat32_dirent *de, uint entry_off)
   if(mnt->root != 0 && clus == fs->root_clus)
     return idup(mnt->root);
   ip = iget(mnt->dev, clus);
+  // This reference prevents iput() from clearing valid. The acquire
+  // fast path also avoids nesting inode locks during pathname lookup.
+  if(__atomic_load_n(&ip->valid, __ATOMIC_ACQUIRE))
+    return ip;
+
+  acquiresleep(&ip->lock);
   // Refill only on a cache miss; a live inode may hold in-memory
   // state that is newer than the on-disk directory entry.
   if(!ip->valid)
     fat32_fill_inode(ip, mnt, de, entry_off);
+  releasesleep(&ip->lock);
   return ip;
 }
 
@@ -436,19 +443,23 @@ fat32_root_inode(struct mount *mnt)
   struct inode *ip;
 
   ip = iget(mnt->dev, FAT32_ROOT_INO);
-  ip->fstype = FS_FAT32;
-  ip->mnt = mnt;
-  ip->ops = &fat32_inode_ops;
-  ip->type = T_DIR;
-  ip->major = 0;
-  ip->minor = 0;
-  ip->nlink = 1;
-  ip->size = 0;
-  ip->addrs[0] = fat32fs.root_clus;
-  ip->addrs[1] = 0;
-  ip->addrs[2] = 0;   // chain-walk cache
-  ip->addrs[3] = 0;
-  ip->valid = 1;
+  acquiresleep(&ip->lock);
+  if(!ip->valid){
+    ip->fstype = FS_FAT32;
+    ip->mnt = mnt;
+    ip->ops = &fat32_inode_ops;
+    ip->type = T_DIR;
+    ip->major = 0;
+    ip->minor = 0;
+    ip->nlink = 1;
+    ip->size = 0;
+    ip->addrs[0] = fat32fs.root_clus;
+    ip->addrs[1] = 0;
+    ip->addrs[2] = 0;   // chain-walk cache
+    ip->addrs[3] = 0;
+    __atomic_store_n(&ip->valid, 1, __ATOMIC_RELEASE);
+  }
+  releasesleep(&ip->lock);
   return ip;
 }
 

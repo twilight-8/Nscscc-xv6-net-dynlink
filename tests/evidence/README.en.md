@@ -2,19 +2,23 @@
 
 [中文](README.md) | [English](README.en.md)
 
-This directory archives the final passing evidence of the key test runs (raw QEMU output and summaries), for reviewers to cross-check and reproduce.  Everything here can be regenerated with `make verify-all`.
+This directory archives final passing evidence for key runs (raw QEMU output, fsck output, and summaries). `make verify-all` reruns the dual-architecture functional regression and full usertests, but does not overwrite this directory; fsck and performance evidence use the separate commands below.
 
 ## Contents
 
-- `run_all.txt` — full regression summary (16 test points, both archs)
+- `run_all.txt` — full regression summary (8 test points × 2 architectures = 16 runs)
 - `usertests-full-riscv.txt` — RISC-V complete usertests raw output (without `-q`, including the six slow tests)
 - `usertests-full-loongarch.txt` — LoongArch64 complete usertests output
 - `smp-riscv.txt` / `smp-loongarch.txt` — CPUS=3 concurrency stress raw output (three-way concurrent 1 MiB writes + verification + stressfs inside each mount point)
-- `bench-riscv.txt` / `bench-loongarch.txt` — vfsbench numbers for the three backends on both architectures
-- `bench-rev5-baseline.txt` — pristine rev5 under the same workload (VFS overhead measurement)
-- `bench-fat32-before-opts.txt` / `bench-fat32-nextfree-only.txt` — FAT32 allocation/walk states before and between the two optimizations
+- `error-riscv.txt` / `error-loongarch.txt` — raw QEMU output for the final mount-conflict and error-path runs
+- `semantics-riscv.txt` / `semantics-loongarch.txt` — raw QEMU output for cross-backend ELF execution, mount-root `..`, link, and unlink-while-open semantics
+- `e2fsck-final.txt` — five-pass read-only `e2fsck -fn` output for the final ext2 test image
+- `bench-riscv.txt` — historical RISC-V vfsbench numbers captured before the current P0 fixes; they do not represent final-source performance
+- `bench-loongarch.txt` — retained for audit, but its contents were mistakenly captured from RISC-V and must not be cited as LoongArch evidence; a fresh run is required
+- `bench-rev5-baseline.txt` — pristine rev5 under the workload paired with the historical record above
+- `bench-fat32-before-opts.txt` / `bench-fat32-nextfree-only.txt` — pre-P0 FAT32 allocation/walk states before and between the two optimizations
 
-## How to reproduce
+## Reproducing functional regression
 
 ```sh
 make verify-all
@@ -30,3 +34,13 @@ bash tests/full_usertests.sh loongarch
 make smp && make run
 make loongarch_smp && make run
 ```
+
+Each focused run writes raw QEMU output under `tests/<case>/logs/`. Archive a log here only after its result has been checked, so an interrupted or failed run cannot replace final evidence.
+
+Read-only ext2 consistency check:
+
+```sh
+e2fsck -fn src/ext2.img
+```
+
+See `docs/contest/performance.md` for benchmark workloads, commands, and the current evidence boundary. `make verify-all` does not run `vfsbench`.

@@ -215,7 +215,7 @@ ext2_fill_inode(struct inode *ip, struct mount *mnt, struct ext2_dinode *di)
     ip->addrs[i] = di->i_block[i];
   ip->addrs[NDIRECT] = di->i_block[12];
   ip->addrs[NDIRECT+1] = di->i_block[13];
-  ip->valid = 1;
+  __atomic_store_n(&ip->valid, 1, __ATOMIC_RELEASE);
 }
 
 static struct inode*
@@ -226,8 +226,16 @@ ext2_iget(struct mount *mnt, uint inum)
   struct inode *ip;
 
   ip = iget(mnt->dev, inum);
-  if(ip->valid)
+  // This reference prevents iput() from clearing valid. The acquire
+  // fast path also avoids nesting inode locks during pathname lookup.
+  if(__atomic_load_n(&ip->valid, __ATOMIC_ACQUIRE))
     return ip;
+
+  acquiresleep(&ip->lock);
+  if(ip->valid){
+    releasesleep(&ip->lock);
+    return ip;
+  }
 
   // Only a cache miss touches the disk; refilling a live inode
   // would clobber in-memory state that is newer than the dinode.
@@ -242,9 +250,11 @@ ext2_iget(struct mount *mnt, uint inum)
     goto bad;
 
   ext2_fill_inode(ip, mnt, &di);
+  releasesleep(&ip->lock);
   return ip;
 
 bad:
+  releasesleep(&ip->lock);
   iput(ip);
   return 0;
 }

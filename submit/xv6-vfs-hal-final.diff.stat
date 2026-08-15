@@ -21,13 +21,13 @@
  src/kernel/bio.c                       |    5 
  src/kernel/block.c                     |   53 +
  src/kernel/block.h                     |   10 
- src/kernel/defs.h                      |   43 +
- src/kernel/exec.c                      |   26 +
- src/kernel/ext2.c                      | 1198 ++++++++++++++++++++++++++++++++
- src/kernel/fat32.c                     | 1164 +++++++++++++++++++++++++++++++
+ src/kernel/defs.h                      |   44 +
+ src/kernel/exec.c                      |   32 +
+ src/kernel/ext2.c                      | 1208 ++++++++++++++++++++++++++++++++
+ src/kernel/fat32.c                     | 1175 +++++++++++++++++++++++++++++++
  src/kernel/file.c                      |    7 
  src/kernel/file.h                      |    8 
- src/kernel/fs.c                        |   56 +
+ src/kernel/fs.c                        |   62 +-
  src/kernel/hal.c                       |   46 +
  src/kernel/kalloc.c                    |    4 
  src/kernel/main.c                      |    9 
@@ -40,8 +40,8 @@
  src/kernel/syscall.h                   |    1 
  src/kernel/sysfile.c                   |   78 +-
  src/kernel/trap.c                      |    5 
- src/kernel/vfs.c                       |  337 +++++++++
- src/kernel/vfs.h                       |   48 +
+ src/kernel/vfs.c                       |  406 +++++++++++
+ src/kernel/vfs.h                       |   54 +
  src/kernel/virtio.h                    |    2 
  src/kernel/virtio_disk.c               |  249 ++++++-
  src/mkfs/mkfat32.c                     |  211 ++++++
@@ -58,4 +58,4 @@
  src/user/user.h                        |    1 
  src/user/usys.pl                       |    7 
  src/user/vfsbench.c                    |   85 ++
- 60 files changed, 6242 insertions(+), 113 deletions(-)
+ 60 files changed, 6345 insertions(+), 119 deletions(-)

@@ -1,6 +1,6 @@
 # 测试报告
 
-本文档记录本项目的测试体系、测试覆盖与测试结果。全部结论均有原始日志支撑：实时日志在各测试点 `logs/` 目录，最终通过证据归档在 `tests/evidence/`，并可用 `make verify-all` 一行命令复现。
+本文档记录本项目的测试体系、测试覆盖与测试结果。双架构功能回归和完整 usertests 可用 `make verify-all` 一行命令复现；实时日志写入各测试点 `logs/`，关键最终通过证据归档在 `tests/evidence/`。fsck 与性能结论使用各自章节列出的独立命令和证据，不包含在 `verify-all` 中。
 
 ## 1. 测试环境与复现入口
 
@@ -41,7 +41,7 @@ test outofinodes: ialloc: no inodes
 ALL TESTS PASSED
 ```
 
-说明：`diskfull`/`outofinodes` 两行是测试设计内的内核提示——故意耗尽资源验证内核能否正确拒绝，随后测试通过。两个架构的完整版判定行均为 `ALL TESTS PASSED`，OK 计数各 60 项（原始文件：`tests/evidence/usertests-full-riscv.txt`、`usertests-full-loongarch.txt`）。
+说明：`diskfull`/`outofinodes` 两行是测试设计内的内核提示——故意耗尽资源验证内核能否正确拒绝，随后测试通过。`usertests.c` 定义 69 个命名测试（63 quick + 6 slow），两个架构的完整日志各有 69 个 `test ...` 起始行，最终判定均为 `ALL TESTS PASSED`（原始文件：`tests/evidence/usertests-full-riscv.txt`、`usertests-full-loongarch.txt`）。
 
 ### 2.2 官方 VFS 测例（赛题任务 4）
 
@@ -125,10 +125,26 @@ fat32-lfn-ok
 
 ### 3.3 error 测试点（tests/error）
 
-覆盖：挂载不存在目录、跨文件系统硬链接、删除不存在文件（ext2/fat32 各一）。真实输出片段：
+覆盖：挂载不存在目录；拒绝 `/.`、`/..` 根路径别名；在 CPUS=3 下分别向同一 ext2/fat32 挂载点发起后台与前台请求；验证当前静态单实例后端拒绝同 `fstype` 挂到另一目录，并拒绝不同文件系统叠加到同一路径；随后验证跨文件系统硬链接和删除不存在文件（ext2/fat32 各一）。`mtable.oplock` 将完整 mount 调用串行，后台/前台回归用于证明每组最终只有一个成功；`MOUNTING` 的发布、失败回滚和 unlink 可见性由锁序与状态转换审查保证，不把 shell 测试夸大为确定性屏障测试。真实输出片段：
 
 ```text
 $ mount ext2 /no_such_dir
+mount: failed
+$ mount ext2 /.
+mount: failed
+$ mount fat32 /..
+mount: failed
+$ mount ext2 /mnt &
+mount: ext2 on /mnt dev 2
+$ mount ext2 /mnt
+mount: failed
+$ mount ext2 /mnt2
+mount: failed
+$ mount fat32 /mnt
+mount: failed
+$ mount fat32 /fat &
+mount: fat32 on /fat dev 3
+$ mount fat32 /fat
 mount: failed
 $ ln /mnt/hello.c /fat/cross.txt
 link /mnt/hello.c /fat/cross.txt: failed
@@ -138,13 +154,19 @@ $ echo ERROR_PATH_DONE
 ERROR_PATH_DONE
 ```
 
-判定：各 `failed` 提示必须出现，`ERROR_PATH_DONE` 到达结尾（系统仍在正常运行），无 panic。结果：双架构 PASS。
+判定：runner 对 `mount: failed`、ext2 成功提示和 FAT32 成功提示分别执行精确计数断言；RISC-V 与 LoongArch 均为失败 7/7、ext2 成功 1/1、FAT32 成功 1/1。其余 `failed` 提示必须出现，`ERROR_PATH_DONE` 到达结尾（失败清理后系统仍正常运行），且无 panic。结果：双架构 PASS。
 
 ### 3.4 semantics 测试点（tests/semantics）
 
-覆盖：挂载点 `..` 回父文件系统（ext2 与 fat32 两侧）、ext2 硬链接成功且内容一致、fat32 硬链接显式拒绝、`unlinkopen`（打开中的文件 unlink 后仍可读写，最后一次 close 才释放）双后端。真实输出片段：
+覆盖：将根文件系统的 `/echo` 分别复制到 ext2/fat32 并直接执行、挂载点 `..` 回父文件系统（ext2 与 fat32 两侧）、ext2 硬链接成功且内容一致、fat32 硬链接显式拒绝、`unlinkopen`（打开中的文件 unlink 后仍可读写，最后一次 close 才释放）双后端。真实输出片段：
 
 ```text
+$ cat /echo > /mnt/echo
+$ /mnt/echo EXT2_EXEC_OK
+EXT2_EXEC_OK
+$ cat /echo > /fat/echo
+$ /fat/echo FAT32_EXEC_OK
+FAT32_EXEC_OK
 $ cat /mnt/../parent.txt
 VFS_PARENT_OK
 $ ln /fat/a.txt /fat/b.txt
@@ -155,7 +177,7 @@ $ unlinkopen /fat/uop.txt
 unlinkopen: ok
 ```
 
-结果：双架构 PASS。`unlinkopen` 同时是 unlink 延迟释放修复（B2）的防复发回归。
+结果：双架构 PASS。runner 对命令回显和程序真实输出分别计数，因此 RISC-V 与 LoongArch 的 `EXT2_EXEC_OK`、`FAT32_EXEC_OK` 均精确命中 2/2；这证明 `kexec()` 的 ELF 文件头、program header 和可装载段均能经 `vfs_readi()` 从 ext2/FAT32 后端读取。`unlinkopen` 同时是 unlink 延迟释放修复（B2）的防复发回归。
 
 ### 3.5 persist 测试点（tests/persist）
 
@@ -193,9 +215,11 @@ bigfile: ok (1048576 bytes, verify)
 
 测试点 × 覆盖功能面 × 双架构的完整矩阵见 `tests/MATRIX.md`。补充验证：
 
-- `e2fsck -fn` 对最终 ext2 镜像做五阶段只读校验（inode/块/尺寸、目录结构、目录连通性、链接计数、组汇总），结果为**零错误**，含 SMP 压测后的镜像状态；
+- `e2fsck -fn` 对最后一项 LoongArch SMP 压测完成后的 ext2 镜像做五阶段只读校验（inode/块/尺寸、目录结构、目录连通性、链接计数、组汇总），结果为**零错误**，原始输出见 `tests/evidence/e2fsck-final.txt`；
 - 官方测例版本锚定与镜像布局已核对（`tests/VFS_TESTS_PIN.txt`、`/tests` 五文件布局）；
-- 全部套件日志扫描无 `panic:`。
+- `mtable.oplock` 串行化完整 mount 调用；`MOUNT_FREE/MOUNTING/MOUNTED` 三态负责发布、失败回滚及 unlink 可见性，正常路径只使用 `MOUNTED` 根。error 验证串行后的最终互斥与拒绝语义；`MOUNTING` 窗口没有确定性触发测试，其正确性由锁序和状态转换审查保证；
+- ext2/fat32 冷 inode 使用 acquire 快路径、`ip->lock` 内二次检查和 release 发布；该协议已完成锁序/内存序审查，修复后的双架构 SMP 与完整 usertests 均通过，未出现功能回归。现有测试不宣称确定性命中“同一冷 inode 同时首访”；
+- 本轮归档的套件日志扫描无 `panic:`。
 
 ## 5. 结果汇总
 
@@ -211,18 +235,19 @@ bigfile: ok (1048576 bytes, verify)
 | smp | PASS | PASS |
 | 完整 usertests（不带 -q） | ALL TESTS PASSED | ALL TESTS PASSED |
 
-汇总：`run_all: PASS (16/16)`。
+本轮最终复测汇总（2026-08-15）：`run_all: PASS (16/16)`；两架构完整 usertests 均输出 `ALL TESTS PASSED`。
 
 ## 6. 当前非目标范围
 
 以下为有意保留的边界，理由见 `design.md` 相应章节：
 
 - fat32 LFN 写、rename、symlink、umount；ext2 三重间接（`i_block[14]` 维持拒读）、多 block group；
+- 完整挂载拓扑与祖先覆盖检测：顺序执行“先挂 `/a/b`、再挂 `/a`”仍可能遮蔽前一挂载，列为 P1 限制；
 - 崩溃一致性日志（ext2/fat32 写直达换取简单性，取舍说明见 `design.md`）；
 - procfs/tmpfs 等额外后端、VFS 对象模型与错误码体系重构。
 
 ## 7. 日志与证据文件
 
 - 实时日志：`tests/<case>/logs/`（环境、构建、原始 QEMU 输出、结果摘要），git 忽略；
-- 最终证据：`tests/evidence/`（run_all 汇总、双架构完整 usertests、双架构 SMP 原始输出、五份基准日志）；
-- 复现方式：`make verify-all`，或按 `tests/README.md` 的分步命令执行。
+- 最终证据：`tests/evidence/`（本轮 run_all 汇总，双架构完整 usertests、SMP、error、semantics 原始输出和最终 e2fsck 输出；四份 RISC-V/优化基准为本轮 P0 修复前的历史记录，不代表最终源码性能；误标为 LoongArch 的一份记录仅保留审计，不作为性能证据）；
+- 功能回归复现：`make verify-all`，或按 `tests/README.md` 的分步命令执行；fsck 与性能按 `tests/evidence/README.md`、`docs/contest/performance.md` 的独立命令复核。

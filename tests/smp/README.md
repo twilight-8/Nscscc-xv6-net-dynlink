@@ -16,7 +16,7 @@
 
 - expect：两种挂载成功串；`bigfile: ok`（keep/full/verify 全序列）；`stressfs starting` ×2；`SMP_DONE`。
 - reject：`panic:`、`kerneltrap`、`mount: failed`、`bigfile: FAIL`、`cannot`。
-- runner 使用 `--cpus 3 --prompt-wait`（静默+提示符双判定，防止后台命令早提示导致的输入越位）。
+- runner 使用 `--cpus 3 --prompt-wait --step-wait 0.01`；后台写入间仅保留 10 ms 以维持重叠，前台命令后再用静默+提示符双判定防止输入越位。
 
 ## 关联
 

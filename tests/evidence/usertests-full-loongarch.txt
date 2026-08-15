@@ -343,4 +343,4 @@ OK
 test outofinodes: ialloc: no inodes
 OK
 ALL TESTS PASSED
-$ qemu-system-loongarch64: terminating on signal 15 from pid 43346 ()
+$ qemu-system-loongarch64: terminating on signal 15 from pid 62481 ()

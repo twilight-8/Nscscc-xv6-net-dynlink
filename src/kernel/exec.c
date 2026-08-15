@@ -62,7 +62,7 @@ kexec(char *path, char **argv)
   ilock(ip);
 
   // Read the ELF header.
-  if(readi(ip, 0, (uint64)&elf, 0, sizeof(elf)) != sizeof(elf))
+  if(vfs_readi(ip, 0, (uint64)&elf, 0, sizeof(elf)) != sizeof(elf))
     goto bad;
 
   // Is this really an ELF file?
@@ -74,7 +74,7 @@ kexec(char *path, char **argv)
 
   // Load program into memory.
   for(i=0, off=elf.phoff; i<elf.phnum; i++, off+=sizeof(ph)){
-    if(readi(ip, 0, (uint64)&ph, off, sizeof(ph)) != sizeof(ph))
+    if(vfs_readi(ip, 0, (uint64)&ph, off, sizeof(ph)) != sizeof(ph))
       goto bad;
     if(ph.type != ELF_PROG_LOAD)
       continue;
@@ -189,7 +189,7 @@ loadseg(pagetable_t pagetable, uint64 va, struct inode *ip, uint offset, uint sz
 #ifdef ARCH_LOONGARCH
     pa |= DMWIN_MASK;
 #endif
-    if(readi(ip, 0, (uint64)pa, offset+i, n) != n)
+    if(vfs_readi(ip, 0, (uint64)pa, offset+i, n) != n)
       return -1;
   }
   

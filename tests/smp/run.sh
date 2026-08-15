@@ -32,6 +32,7 @@ python3 "$ROOT_DIR/tests/runner/run_qemu_case.py" \
   --log "$RAW_LOG" \
   --cpus "$TEST_CPUS" \
   --prompt-wait \
+  --step-wait 0.01 \
   --final-wait 300 \
   --expect "mount: ext2 on /mnt dev 2" \
   --expect "mount: fat32 on /fat dev 3" \

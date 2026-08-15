@@ -9,12 +9,19 @@ This directory holds the final contest submission materials. The authoritative v
 | File | Description |
 |---|---|
 | `xv6-vfs-hal-final.diff` | Complete diff between the final version and the xv6-riscv rev5 baseline (source files only; verified to apply cleanly onto the baseline) |
-| `xv6-vfs-hal-final.diff.stat` | Statistics summary of the diff (60 files, +6242/−113) |
+| `xv6-vfs-hal-final.diff.stat` | Statistics summary of the diff (60 files, +6345/−119) |
 | `diff.md` | How the diff is generated, size statistics, and the HAL/VFS/common breakdown |
 | `test_report.md` | Test report (authoritative version `docs/contest/test_report.md`; raw logs in `tests/evidence/`) |
 | `commit_history.md` | Key progress during the contest, recorded by stage (authoritative version `docs/progress.md`) |
-| `final_slides.pdf` / `final_slides.pptx` | Presentation slides |
+| `final_slides.pdf` / `final_slides.pptx` | Historical progress deck dated 2026-06-30; not the final defense deck and must be replaced before submission |
 | `演示视频.mp4` | Demo video (script and storyboard in `docs/contest/video_script.md`) |
+
+## Final Verification
+
+- All eight suites pass on both architectures: `run_all: PASS (16/16)`; the complete usertests output `ALL TESTS PASSED` on both RISC-V and LoongArch.
+- Under CPUS=3, the error suite issues background/foreground ext2 and FAT32 mount requests and rejects two root aliases, same-type/different-directory, and cross-type/same-path requests; each architecture reports exactly 7/7 failures and 1/1 success for each backend. `mtable.oplock` serializes complete mount calls, while the three-state table handles publication, rollback, and unlink visibility.
+- ELF binaries copied to ext2 and FAT32 execute directly and print `EXT2_EXEC_OK` and `FAT32_EXEC_OK`. The post-fix dual-architecture regression passes; cold-inode first load and `MOUNTING` publication are justified by lock-order/memory-order review, and the current tests do not claim to hit either window deterministically.
+- Full mount-topology management is out of scope: mounting `/a/b` first and `/a` afterward can still hide the earlier mount. This reverse-ancestor overmount remains a P1 limitation.
 
 ## See also
 

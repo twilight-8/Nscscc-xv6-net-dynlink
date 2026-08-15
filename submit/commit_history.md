@@ -359,7 +359,7 @@ cat hello.c > /mnt/hello.c
 - 修复后端分配器 SMP 竞争（C1）：两个后端各加一把 sleeplock 包裹分配/释放路径。修复前 fat32 并发写确定性挂死，ext2 对照正常。
 - 修复 fat32 链漫游 O(n²)：inode 空槽位缓存最近漫游位置，顺序访问降为 O(1)/块；同负载写 273→57 ticks、读 86→4 ticks。
 - 修复 LoongArch 磁盘完成中断丢失：devintr 确认后循环重查 used 环，并在定时器路径挂 `virtio_disk_watchdog()` 看门狗兜底。该缺陷由完整版 usertests 的 `manywrites` 暴露，gdb 取证确认设备已投递完成而客户机未处理。
-- 新增 `make verify-all` 一键复现；最终通过证据归档 `tests/evidence/`。
+- 新增 `make verify-all` 一键复现双架构功能回归与完整 usertests；关键最终通过证据归档 `tests/evidence/`，fsck 与性能按独立命令复核。
 
 验证结果：
 
@@ -376,13 +376,33 @@ cat hello.c > /mnt/hello.c
 
 - 仓库根落地 BSD-2-Clause `LICENSE`；12 个自有源文件加单行 SPDX 注释头；`compliance.md` 定稿逐文件来源清单。
 - 修复基线副本缺失 `mkfs/mkfs.c` 的问题（初赛导入时被 `.gitignore` 规则误伤漏交），与官方 rev5 tag（commit 7d7adbb）全量递归比对逐文件一致。
-- 新增 `vfsbench` 基准程序：量化 VFS 分发开销（写路径约 +18%，读路径无差异）、三后端双架构吞吐、fat32 两项优化前后对比。
+- 新增 `vfsbench` 基准程序：在本轮 P0 修复前采集了 RISC-V 的 VFS 分发开销、三后端吞吐和 fat32 两项优化前后历史对比；这些记录用于说明当阶段优化效果，不代表最终源码性能。LoongArch 吞吐因原记录误采为 RISC-V，待重新采集后再引用。
 - 完成两个参照项目仓库取证，形成对比分析数据底稿。
 - tests/ 目录规范化（双语四段式 README、覆盖矩阵、命名约定），docs/ 文档体系分层建设。
 
 验证结果：
 
-- 门禁双项全绿；基准原始日志归档 `tests/evidence/bench-*.txt`。
+- 门禁双项全绿；修复前阶段性基准原始日志归档 `tests/evidence/bench-*.txt`。
+
+## 阶段 P：VFS 并发发布与跨后端 exec 收口
+
+主要目标：
+
+修复冷 inode 首次加载、挂载初始化发布和 ELF 后端分发三个高风险缺口，同时保持用户系统调用接口及原生 xv6 行为不变。
+
+主要改动：
+
+- ext2/fat32 冷 inode 采用 acquire 快路径、`ip->lock` 内二次检查和 release 发布，防止多个 CPU 重复填充或观察到半初始化字段。
+- `kexec()` 的 ELF 文件头、program header 与 `loadseg()` 段读取三处统一调用 `vfs_readi()`。
+- 新增 mount 专用可睡眠 `mtable.oplock`，从路径解析到发布/失败清理串行化完整 `vfs_mount()`；后端磁盘 I/O 不占用短持有 spinlock。
+- 挂载表采用 `MOUNT_FREE/MOUNTING/MOUNTED` 三态：成功发布 `MOUNTED`，失败回收为 `MOUNT_FREE`；`MOUNTING/MOUNTED` 均让 unlink 看见挂载点正在使用，只有 `MOUNTED` 可参与路径跳转。
+- `mtable.lock` 收口为叶级短持有 spinlock，允许 `ip->lock → mtable.lock`，禁止持有它再进入 inode、后端或 buffer 路径。`oplock` 只串行挂载调用，反向祖先覆盖仍列为 P1 限制。
+
+验证结果：
+
+- 本轮双架构 8 个测试点全部通过：`run_all: PASS (16/16)`；两架构完整 usertests 均输出 `ALL TESTS PASSED`。
+- error 测试在 CPUS=3 下发起 ext2/FAT32 后台/前台挂载请求，并覆盖根路径别名、同类型不同目录与跨类型同路径拒绝；每个架构应精确命中失败 7/7、两后端成功各 1/1，且 `ERROR_PATH_DONE` 正常到达。该测试验证串行后的最终互斥语义，不宣称确定性命中 `MOUNTING`。
+- ext2/FAT32 中复制后的 ELF 可直接执行，双架构分别输出 `EXT2_EXEC_OK` 与 `FAT32_EXEC_OK`。
 
 ## 当前阶段总览
 
@@ -404,8 +424,9 @@ flowchart LR
     SM["阶段 M：fat32 LFN 读支持"]
     SN["阶段 N：并发稳定性与压力测试"]
     SO["阶段 O：合规落地与性能测量"]
+    SP["阶段 P：VFS 并发发布与跨后端 exec"]
 
-    S0 --> SA --> SB --> SC --> SD --> SE --> SF --> SG --> SH --> SI --> SJ --> SK --> SL --> SM --> SN --> SO
+    S0 --> SA --> SB --> SC --> SD --> SE --> SF --> SG --> SH --> SI --> SJ --> SK --> SL --> SM --> SN --> SO --> SP
 ```
 
 - 阶段 0：建立项目基线，保留原 xv6 测试能力。
@@ -424,6 +445,7 @@ flowchart LR
 - 阶段 M：fat32 LFN 读支持（链装配、别名匹配、目录列举），夹具注入与三条访问路径回归。
 - 阶段 N：后端分配器 SMP 锁修复、fat32 链漫游缓存、LoongArch 中断看门狗；新增 smp 测试点与 verify-all、证据归档。
 - 阶段 O：BSD-2-Clause 许可证与 SPDX 标注落地，基线副本补齐校验，vfsbench 性能测量，参照项目取证，tests/ 与 docs/ 体系规范化。
+- 阶段 P：冷 inode 有序发布、mount 操作锁、挂载三态和锁外 spinlock 初始化、同类型后端互斥，并补齐 ext2/FAT32 ELF 的 VFS 读取与双架构回归证据。
 
 ## 收尾事项
 

@@ -40,3 +40,5 @@ plan/
 # Logs
 *.log
 !tests/**/logs/README.md
+
+ppt_build

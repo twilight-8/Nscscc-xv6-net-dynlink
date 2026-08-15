@@ -171,8 +171,9 @@ bfree(int dev, uint b)
 // holds, one must hold itable.lock while using any of those fields.
 //
 // An ip->lock sleep-lock protects all ip-> fields other than ref,
-// dev, and inum.  One must hold ip->lock in order to
-// read or write that inode's ip->valid, ip->size, ip->type, &c.
+// dev, and inum. One must hold ip->lock to examine or modify inode
+// contents. Extended backends may first sample valid with an acquire
+// load; its release store is still performed while holding ip->lock.
 
 struct {
   struct spinlock lock;
@@ -713,8 +714,7 @@ skipelem(char *path, char *name)
 static struct inode*
 namex(char *path, int nameiparent, char *name)
 {
-  struct inode *ip, *next;
-  struct mount *mnt;
+  struct inode *ip, *next, *root;
 
   if(*path == '/')
     ip = iget(ROOTDEV, ROOTINO);
@@ -737,9 +737,9 @@ namex(char *path, int nameiparent, char *name)
       return 0;
     }
     iunlockput(ip);
-    if((mnt = vfs_mountpoint(next)) != 0 && mnt->root != 0){
+    if((root = vfs_mounted_root(next)) != 0){
       iput(next);
-      next = idup(mnt->root);
+      next = root;
     }
     ip = next;
   }

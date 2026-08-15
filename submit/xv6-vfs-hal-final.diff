@@ -1,4 +1,4 @@
-diff -ruN -d xv6-riscv-src/.gitignore src/.gitignore
+diff -ruN -d --strip-trailing-cr xv6-riscv-src/.gitignore src/.gitignore
 --- xv6-riscv-src/.gitignore
 +++ src/.gitignore
 @@ -11,8 +11,13 @@
@@ -16,7 +16,7 @@ diff -ruN -d xv6-riscv-src/.gitignore src/.gitignore
  .gdbinit
 +.arch-*
  TAGS
-diff -ruN -d xv6-riscv-src/Makefile src/Makefile
+diff -ruN -d --strip-trailing-cr xv6-riscv-src/Makefile src/Makefile
 --- xv6-riscv-src/Makefile
 +++ src/Makefile
 @@ -1,9 +1,8 @@
@@ -300,7 +300,7 @@ diff -ruN -d xv6-riscv-src/Makefile src/Makefile
  
  qemu: check-qemu-version $K/kernel fs.img
  	$(QEMU) $(QEMUOPTS)
-diff -ruN -d xv6-riscv-src/hello.c src/hello.c
+diff -ruN -d --strip-trailing-cr xv6-riscv-src/hello.c src/hello.c
 --- xv6-riscv-src/hello.c
 +++ src/hello.c
 @@ -0,0 +1,8 @@
@@ -312,7 +312,7 @@ diff -ruN -d xv6-riscv-src/hello.c src/hello.c
 +{
 +  printf("Hello, world!\n");
 +}
-diff -ruN -d xv6-riscv-src/kernel/arch/loongarch/apic.c src/kernel/arch/loongarch/apic.c
+diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/apic.c src/kernel/arch/loongarch/apic.c
 --- xv6-riscv-src/kernel/arch/loongarch/apic.c
 +++ src/kernel/arch/loongarch/apic.c
 @@ -0,0 +1,38 @@
@@ -354,7 +354,7 @@ diff -ruN -d xv6-riscv-src/kernel/arch/loongarch/apic.c src/kernel/arch/loongarc
 +{
 +  *(volatile uint64*)(LS7A_INT_CLEAR_REG) = (irq);
 +}
-diff -ruN -d xv6-riscv-src/kernel/arch/loongarch/asm.h src/kernel/arch/loongarch/asm.h
+diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/asm.h src/kernel/arch/loongarch/asm.h
 --- xv6-riscv-src/kernel/arch/loongarch/asm.h
 +++ src/kernel/arch/loongarch/asm.h
 @@ -0,0 +1,18 @@
@@ -377,7 +377,7 @@ diff -ruN -d xv6-riscv-src/kernel/arch/loongarch/asm.h src/kernel/arch/loongarch
 +
 +/* Direct Map window 0/1 */
 \ No newline at end of file
-diff -ruN -d xv6-riscv-src/kernel/arch/loongarch/entry.S src/kernel/arch/loongarch/entry.S
+diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/entry.S src/kernel/arch/loongarch/entry.S
 --- xv6-riscv-src/kernel/arch/loongarch/entry.S
 +++ src/kernel/arch/loongarch/entry.S
 @@ -0,0 +1,38 @@
@@ -419,7 +419,7 @@ diff -ruN -d xv6-riscv-src/kernel/arch/loongarch/entry.S src/kernel/arch/loongar
 +        bl          main
 +spin:
 +        b           spin
-diff -ruN -d xv6-riscv-src/kernel/arch/loongarch/extioi.c src/kernel/arch/loongarch/extioi.c
+diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/extioi.c src/kernel/arch/loongarch/extioi.c
 --- xv6-riscv-src/kernel/arch/loongarch/extioi.c
 +++ src/kernel/arch/loongarch/extioi.c
 @@ -0,0 +1,35 @@
@@ -458,7 +458,7 @@ diff -ruN -d xv6-riscv-src/kernel/arch/loongarch/extioi.c src/kernel/arch/loonga
 +{
 +    iocsr_writeq(irq, LOONGARCH_IOCSR_EXTIOI_ISR_BASE);
 +}
-diff -ruN -d xv6-riscv-src/kernel/arch/loongarch/hal.c src/kernel/arch/loongarch/hal.c
+diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/hal.c src/kernel/arch/loongarch/hal.c
 --- xv6-riscv-src/kernel/arch/loongarch/hal.c
 +++ src/kernel/arch/loongarch/hal.c
 @@ -0,0 +1,52 @@
@@ -514,7 +514,7 @@ diff -ruN -d xv6-riscv-src/kernel/arch/loongarch/hal.c src/kernel/arch/loongarch
 +{
 +  virtio_disk_rw(b, write);
 +}
-diff -ruN -d xv6-riscv-src/kernel/arch/loongarch/kernel.ld src/kernel/arch/loongarch/kernel.ld
+diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/kernel.ld src/kernel/arch/loongarch/kernel.ld
 --- xv6-riscv-src/kernel/arch/loongarch/kernel.ld
 +++ src/kernel/arch/loongarch/kernel.ld
 @@ -0,0 +1,48 @@
@@ -566,7 +566,7 @@ diff -ruN -d xv6-riscv-src/kernel/arch/loongarch/kernel.ld src/kernel/arch/loong
 +
 +  PROVIDE(end = .);
 +}
-diff -ruN -d xv6-riscv-src/kernel/arch/loongarch/kernelvec.S src/kernel/arch/loongarch/kernelvec.S
+diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/kernelvec.S src/kernel/arch/loongarch/kernelvec.S
 --- xv6-riscv-src/kernel/arch/loongarch/kernelvec.S
 +++ src/kernel/arch/loongarch/kernelvec.S
 @@ -0,0 +1,85 @@
@@ -655,7 +655,7 @@ diff -ruN -d xv6-riscv-src/kernel/arch/loongarch/kernelvec.S src/kernel/arch/loo
 +
 +        // return to whatever we were doing in the kernel.
 +        ertn
-diff -ruN -d xv6-riscv-src/kernel/arch/loongarch/loongarch.h src/kernel/arch/loongarch/loongarch.h
+diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/loongarch.h src/kernel/arch/loongarch/loongarch.h
 --- xv6-riscv-src/kernel/arch/loongarch/loongarch.h
 +++ src/kernel/arch/loongarch/loongarch.h
 @@ -0,0 +1,332 @@
@@ -991,7 +991,7 @@ diff -ruN -d xv6-riscv-src/kernel/arch/loongarch/loongarch.h src/kernel/arch/loo
 +
 +typedef uint64 pte_t;
 +typedef uint64 *pagetable_t;
-diff -ruN -d xv6-riscv-src/kernel/arch/loongarch/merror.S src/kernel/arch/loongarch/merror.S
+diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/merror.S src/kernel/arch/loongarch/merror.S
 --- xv6-riscv-src/kernel/arch/loongarch/merror.S
 +++ src/kernel/arch/loongarch/merror.S
 @@ -0,0 +1,7 @@
@@ -1003,14 +1003,14 @@ diff -ruN -d xv6-riscv-src/kernel/arch/loongarch/merror.S src/kernel/arch/loonga
 +    bl machine_trap
 +    ertn
 \ No newline at end of file
-diff -ruN -d xv6-riscv-src/kernel/arch/loongarch/start.c src/kernel/arch/loongarch/start.c
+diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/start.c src/kernel/arch/loongarch/start.c
 --- xv6-riscv-src/kernel/arch/loongarch/start.c
 +++ src/kernel/arch/loongarch/start.c
 @@ -0,0 +1,3 @@
 +#include "param.h"
 +
 +__attribute__ ((aligned (16))) char stack0[4096 * NCPU];
-diff -ruN -d xv6-riscv-src/kernel/arch/loongarch/swtch.S src/kernel/arch/loongarch/swtch.S
+diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/swtch.S src/kernel/arch/loongarch/swtch.S
 --- xv6-riscv-src/kernel/arch/loongarch/swtch.S
 +++ src/kernel/arch/loongarch/swtch.S
 @@ -0,0 +1,37 @@
@@ -1051,7 +1051,7 @@ diff -ruN -d xv6-riscv-src/kernel/arch/loongarch/swtch.S src/kernel/arch/loongar
 +        jirl $zero, $ra, 0
 +
 +	
-diff -ruN -d xv6-riscv-src/kernel/arch/loongarch/tlbrefill.S src/kernel/arch/loongarch/tlbrefill.S
+diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/tlbrefill.S src/kernel/arch/loongarch/tlbrefill.S
 --- xv6-riscv-src/kernel/arch/loongarch/tlbrefill.S
 +++ src/kernel/arch/loongarch/tlbrefill.S
 @@ -0,0 +1,26 @@
@@ -1081,7 +1081,7 @@ diff -ruN -d xv6-riscv-src/kernel/arch/loongarch/tlbrefill.S src/kernel/arch/loo
 +	csrrd	$t0, LOONGARCH_CSR_TLBRSAVE
 +	ertn
 +	
-diff -ruN -d xv6-riscv-src/kernel/arch/loongarch/trap.c src/kernel/arch/loongarch/trap.c
+diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/trap.c src/kernel/arch/loongarch/trap.c
 --- xv6-riscv-src/kernel/arch/loongarch/trap.c
 +++ src/kernel/arch/loongarch/trap.c
 @@ -0,0 +1,277 @@
@@ -1362,7 +1362,7 @@ diff -ruN -d xv6-riscv-src/kernel/arch/loongarch/trap.c src/kernel/arch/loongarc
 +    return 0;
 +  }
 +}
-diff -ruN -d xv6-riscv-src/kernel/arch/loongarch/user.ld src/kernel/arch/loongarch/user.ld
+diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/user.ld src/kernel/arch/loongarch/user.ld
 --- xv6-riscv-src/kernel/arch/loongarch/user.ld
 +++ src/kernel/arch/loongarch/user.ld
 @@ -0,0 +1,39 @@
@@ -1405,7 +1405,7 @@ diff -ruN -d xv6-riscv-src/kernel/arch/loongarch/user.ld src/kernel/arch/loongar
 +
 +  PROVIDE(end = .);
 +}
-diff -ruN -d xv6-riscv-src/kernel/arch/loongarch/uservec.S src/kernel/arch/loongarch/uservec.S
+diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/uservec.S src/kernel/arch/loongarch/uservec.S
 --- xv6-riscv-src/kernel/arch/loongarch/uservec.S
 +++ src/kernel/arch/loongarch/uservec.S
 @@ -0,0 +1,134 @@
@@ -1543,7 +1543,7 @@ diff -ruN -d xv6-riscv-src/kernel/arch/loongarch/uservec.S src/kernel/arch/loong
 +        # return to user mode and user pc.
 +        # usertrapret() set up prmd and era.
 +        ertn
-diff -ruN -d xv6-riscv-src/kernel/arch/loongarch/virtio_pci.c src/kernel/arch/loongarch/virtio_pci.c
+diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/virtio_pci.c src/kernel/arch/loongarch/virtio_pci.c
 --- xv6-riscv-src/kernel/arch/loongarch/virtio_pci.c
 +++ src/kernel/arch/loongarch/virtio_pci.c
 @@ -0,0 +1,315 @@
@@ -1862,7 +1862,7 @@ diff -ruN -d xv6-riscv-src/kernel/arch/loongarch/virtio_pci.c src/kernel/arch/lo
 +{
 +  (void)*isr_cfg;
 +}
-diff -ruN -d xv6-riscv-src/kernel/arch/loongarch/vm.c src/kernel/arch/loongarch/vm.c
+diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/vm.c src/kernel/arch/loongarch/vm.c
 --- xv6-riscv-src/kernel/arch/loongarch/vm.c
 +++ src/kernel/arch/loongarch/vm.c
 @@ -0,0 +1,461 @@
@@ -2327,7 +2327,7 @@ diff -ruN -d xv6-riscv-src/kernel/arch/loongarch/vm.c src/kernel/arch/loongarch/
 +    return -1;
 +  }
 +}//todo
-diff -ruN -d xv6-riscv-src/kernel/bio.c src/kernel/bio.c
+diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/bio.c src/kernel/bio.c
 --- xv6-riscv-src/kernel/bio.c
 +++ src/kernel/bio.c
 @@ -96,7 +96,7 @@
@@ -2353,7 +2353,7 @@ diff -ruN -d xv6-riscv-src/kernel/bio.c src/kernel/bio.c
  }
  
 -
-diff -ruN -d xv6-riscv-src/kernel/block.c src/kernel/block.c
+diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/block.c src/kernel/block.c
 --- xv6-riscv-src/kernel/block.c
 +++ src/kernel/block.c
 @@ -0,0 +1,53 @@
@@ -2410,7 +2410,7 @@ diff -ruN -d xv6-riscv-src/kernel/block.c src/kernel/block.c
 +
 +  return tot;
 +}
-diff -ruN -d xv6-riscv-src/kernel/block.h src/kernel/block.h
+diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/block.h src/kernel/block.h
 --- xv6-riscv-src/kernel/block.h
 +++ src/kernel/block.h
 @@ -0,0 +1,10 @@
@@ -2424,7 +2424,7 @@ diff -ruN -d xv6-riscv-src/kernel/block.h src/kernel/block.h
 +int block_write_bytes(uint dev, uint off, uchar *src, uint n);
 +
 +#endif
-diff -ruN -d xv6-riscv-src/kernel/defs.h src/kernel/defs.h
+diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/defs.h src/kernel/defs.h
 --- xv6-riscv-src/kernel/defs.h
 +++ src/kernel/defs.h
 @@ -2,6 +2,7 @@
@@ -2469,7 +2469,7 @@ diff -ruN -d xv6-riscv-src/kernel/defs.h src/kernel/defs.h
  struct inode*   idup(struct inode*);
  void            iinit();
  void            ilock(struct inode*);
-@@ -55,6 +76,26 @@
+@@ -55,6 +76,27 @@
  void            itrunc(struct inode*);
  void            ireclaim(int);
  
@@ -2478,6 +2478,7 @@ diff -ruN -d xv6-riscv-src/kernel/defs.h src/kernel/defs.h
 +void            vfs_init_inode(struct inode*);
 +int             vfs_mount(char*, char*, int);
 +struct mount*   vfs_mountpoint(struct inode*);
++struct inode*   vfs_mounted_root(struct inode*);
 +struct inode*   vfs_lookup(struct inode*, char*);
 +struct inode*   vfs_create(struct inode*, char*, short, short, short);
 +int             vfs_unlink(struct inode*, char*);
@@ -2496,7 +2497,7 @@ diff -ruN -d xv6-riscv-src/kernel/defs.h src/kernel/defs.h
  // kalloc.c
  void*           kalloc(void);
  void            kfree(void *);
-@@ -180,6 +221,8 @@
+@@ -180,6 +222,8 @@
  void            virtio_disk_init(void);
  void            virtio_disk_rw(struct buf *, int);
  void            virtio_disk_intr(void);
@@ -2505,10 +2506,10 @@ diff -ruN -d xv6-riscv-src/kernel/defs.h src/kernel/defs.h
  
  // number of elements in fixed-size array
  #define NELEM(x) (sizeof(x)/sizeof((x)[0]))
-diff -ruN -d xv6-riscv-src/kernel/exec.c src/kernel/exec.c
+diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/exec.c src/kernel/exec.c
 --- xv6-riscv-src/kernel/exec.c
 +++ src/kernel/exec.c
-@@ -38,7 +38,24 @@
+@@ -38,14 +38,31 @@
    begin_op();
  
    // Open the executable file.
@@ -2534,6 +2535,23 @@ diff -ruN -d xv6-riscv-src/kernel/exec.c src/kernel/exec.c
      end_op();
      return -1;
    }
+   ilock(ip);
+ 
+   // Read the ELF header.
+-  if(readi(ip, 0, (uint64)&elf, 0, sizeof(elf)) != sizeof(elf))
++  if(vfs_readi(ip, 0, (uint64)&elf, 0, sizeof(elf)) != sizeof(elf))
+     goto bad;
+ 
+   // Is this really an ELF file?
+@@ -57,7 +74,7 @@
+ 
+   // Load program into memory.
+   for(i=0, off=elf.phoff; i<elf.phnum; i++, off+=sizeof(ph)){
+-    if(readi(ip, 0, (uint64)&ph, off, sizeof(ph)) != sizeof(ph))
++    if(vfs_readi(ip, 0, (uint64)&ph, off, sizeof(ph)) != sizeof(ph))
+       goto bad;
+     if(ph.type != ELF_PROG_LOAD)
+       continue;
 @@ -131,7 +148,11 @@
    oldpagetable = p->pagetable;
    p->pagetable = pagetable;
@@ -2546,20 +2564,22 @@ diff -ruN -d xv6-riscv-src/kernel/exec.c src/kernel/exec.c
    p->trapframe->sp = sp; // initial stack pointer
    proc_freepagetable(oldpagetable, oldsz);
  
-@@ -165,6 +186,9 @@
+@@ -165,7 +186,10 @@
        n = sz - i;
      else
        n = PGSIZE;
+-    if(readi(ip, 0, (uint64)pa, offset+i, n) != n)
 +#ifdef ARCH_LOONGARCH
 +    pa |= DMWIN_MASK;
 +#endif
-     if(readi(ip, 0, (uint64)pa, offset+i, n) != n)
++    if(vfs_readi(ip, 0, (uint64)pa, offset+i, n) != n)
        return -1;
    }
-diff -ruN -d xv6-riscv-src/kernel/ext2.c src/kernel/ext2.c
+   
+diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/ext2.c src/kernel/ext2.c
 --- xv6-riscv-src/kernel/ext2.c
 +++ src/kernel/ext2.c
-@@ -0,0 +1,1198 @@
+@@ -0,0 +1,1208 @@
 +// SPDX-License-Identifier: BSD-2-Clause
 +#include "types.h"
 +#include "riscv.h"
@@ -2777,7 +2797,7 @@ diff -ruN -d xv6-riscv-src/kernel/ext2.c src/kernel/ext2.c
 +    ip->addrs[i] = di->i_block[i];
 +  ip->addrs[NDIRECT] = di->i_block[12];
 +  ip->addrs[NDIRECT+1] = di->i_block[13];
-+  ip->valid = 1;
++  __atomic_store_n(&ip->valid, 1, __ATOMIC_RELEASE);
 +}
 +
 +static struct inode*
@@ -2788,8 +2808,16 @@ diff -ruN -d xv6-riscv-src/kernel/ext2.c src/kernel/ext2.c
 +  struct inode *ip;
 +
 +  ip = iget(mnt->dev, inum);
-+  if(ip->valid)
++  // This reference prevents iput() from clearing valid. The acquire
++  // fast path also avoids nesting inode locks during pathname lookup.
++  if(__atomic_load_n(&ip->valid, __ATOMIC_ACQUIRE))
 +    return ip;
++
++  acquiresleep(&ip->lock);
++  if(ip->valid){
++    releasesleep(&ip->lock);
++    return ip;
++  }
 +
 +  // Only a cache miss touches the disk; refilling a live inode
 +  // would clobber in-memory state that is newer than the dinode.
@@ -2804,9 +2832,11 @@ diff -ruN -d xv6-riscv-src/kernel/ext2.c src/kernel/ext2.c
 +    goto bad;
 +
 +  ext2_fill_inode(ip, mnt, &di);
++  releasesleep(&ip->lock);
 +  return ip;
 +
 +bad:
++  releasesleep(&ip->lock);
 +  iput(ip);
 +  return 0;
 +}
@@ -3758,10 +3788,10 @@ diff -ruN -d xv6-riscv-src/kernel/ext2.c src/kernel/ext2.c
 +{
 +  return &ext2_fs_ops;
 +}
-diff -ruN -d xv6-riscv-src/kernel/fat32.c src/kernel/fat32.c
+diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/fat32.c src/kernel/fat32.c
 --- xv6-riscv-src/kernel/fat32.c
 +++ src/kernel/fat32.c
-@@ -0,0 +1,1164 @@
+@@ -0,0 +1,1175 @@
 +// SPDX-License-Identifier: BSD-2-Clause
 +#include "types.h"
 +#include "riscv.h"
@@ -4171,7 +4201,7 @@ diff -ruN -d xv6-riscv-src/kernel/fat32.c src/kernel/fat32.c
 +  ip->addrs[1] = entry_off;
 +  ip->addrs[2] = 0;   // chain-walk cache
 +  ip->addrs[3] = 0;
-+  ip->valid = 1;
++  __atomic_store_n(&ip->valid, 1, __ATOMIC_RELEASE);
 +}
 +
 +static struct inode*
@@ -4187,10 +4217,17 @@ diff -ruN -d xv6-riscv-src/kernel/fat32.c src/kernel/fat32.c
 +  if(mnt->root != 0 && clus == fs->root_clus)
 +    return idup(mnt->root);
 +  ip = iget(mnt->dev, clus);
++  // This reference prevents iput() from clearing valid. The acquire
++  // fast path also avoids nesting inode locks during pathname lookup.
++  if(__atomic_load_n(&ip->valid, __ATOMIC_ACQUIRE))
++    return ip;
++
++  acquiresleep(&ip->lock);
 +  // Refill only on a cache miss; a live inode may hold in-memory
 +  // state that is newer than the on-disk directory entry.
 +  if(!ip->valid)
 +    fat32_fill_inode(ip, mnt, de, entry_off);
++  releasesleep(&ip->lock);
 +  return ip;
 +}
 +
@@ -4200,19 +4237,23 @@ diff -ruN -d xv6-riscv-src/kernel/fat32.c src/kernel/fat32.c
 +  struct inode *ip;
 +
 +  ip = iget(mnt->dev, FAT32_ROOT_INO);
-+  ip->fstype = FS_FAT32;
-+  ip->mnt = mnt;
-+  ip->ops = &fat32_inode_ops;
-+  ip->type = T_DIR;
-+  ip->major = 0;
-+  ip->minor = 0;
-+  ip->nlink = 1;
-+  ip->size = 0;
-+  ip->addrs[0] = fat32fs.root_clus;
-+  ip->addrs[1] = 0;
-+  ip->addrs[2] = 0;   // chain-walk cache
-+  ip->addrs[3] = 0;
-+  ip->valid = 1;
++  acquiresleep(&ip->lock);
++  if(!ip->valid){
++    ip->fstype = FS_FAT32;
++    ip->mnt = mnt;
++    ip->ops = &fat32_inode_ops;
++    ip->type = T_DIR;
++    ip->major = 0;
++    ip->minor = 0;
++    ip->nlink = 1;
++    ip->size = 0;
++    ip->addrs[0] = fat32fs.root_clus;
++    ip->addrs[1] = 0;
++    ip->addrs[2] = 0;   // chain-walk cache
++    ip->addrs[3] = 0;
++    __atomic_store_n(&ip->valid, 1, __ATOMIC_RELEASE);
++  }
++  releasesleep(&ip->lock);
 +  return ip;
 +}
 +
@@ -4926,7 +4967,7 @@ diff -ruN -d xv6-riscv-src/kernel/fat32.c src/kernel/fat32.c
 +{
 +  return &fat32_fs_ops;
 +}
-diff -ruN -d xv6-riscv-src/kernel/file.c src/kernel/file.c
+diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/file.c src/kernel/file.c
 --- xv6-riscv-src/kernel/file.c
 +++ src/kernel/file.c
 @@ -92,7 +92,7 @@
@@ -4961,7 +5002,7 @@ diff -ruN -d xv6-riscv-src/kernel/file.c src/kernel/file.c
    return ret;
  }
 -
-diff -ruN -d xv6-riscv-src/kernel/file.h src/kernel/file.h
+diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/file.h src/kernel/file.h
 --- xv6-riscv-src/kernel/file.h
 +++ src/kernel/file.h
 @@ -1,3 +1,5 @@
@@ -4988,10 +5029,22 @@ diff -ruN -d xv6-riscv-src/kernel/file.h src/kernel/file.h
  };
  
  // map major device number to device functions.
-diff -ruN -d xv6-riscv-src/kernel/fs.c src/kernel/fs.c
+diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/fs.c src/kernel/fs.c
 --- xv6-riscv-src/kernel/fs.c
 +++ src/kernel/fs.c
-@@ -190,8 +190,6 @@
+@@ -171,8 +171,9 @@
+ // holds, one must hold itable.lock while using any of those fields.
+ //
+ // An ip->lock sleep-lock protects all ip-> fields other than ref,
+-// dev, and inum.  One must hold ip->lock in order to
+-// read or write that inode's ip->valid, ip->size, ip->type, &c.
++// dev, and inum. One must hold ip->lock to examine or modify inode
++// contents. Extended backends may first sample valid with an acquire
++// load; its release store is still performed while holding ip->lock.
+ 
+ struct {
+   struct spinlock lock;
+@@ -190,8 +191,6 @@
    }
  }
  
@@ -5000,7 +5053,7 @@ diff -ruN -d xv6-riscv-src/kernel/fs.c src/kernel/fs.c
  // Allocate an inode on device dev.
  // Mark it as allocated by  giving it type type.
  // Returns an unlocked but allocated and referenced inode,
-@@ -236,7 +234,11 @@
+@@ -236,7 +235,11 @@
    dip->minor = ip->minor;
    dip->nlink = ip->nlink;
    dip->size = ip->size;
@@ -5013,7 +5066,7 @@ diff -ruN -d xv6-riscv-src/kernel/fs.c src/kernel/fs.c
    log_write(bp);
    brelse(bp);
  }
-@@ -244,7 +246,7 @@
+@@ -244,7 +247,7 @@
  // Find the inode with number inum on device dev
  // and return the in-memory copy. Does not lock
  // the inode and does not read it from disk.
@@ -5022,7 +5075,7 @@ diff -ruN -d xv6-riscv-src/kernel/fs.c src/kernel/fs.c
  iget(uint dev, uint inum)
  {
    struct inode *ip, *empty;
-@@ -272,6 +274,7 @@
+@@ -272,6 +275,7 @@
    ip->inum = inum;
    ip->ref = 1;
    ip->valid = 0;
@@ -5030,7 +5083,7 @@ diff -ruN -d xv6-riscv-src/kernel/fs.c src/kernel/fs.c
    release(&itable.lock);
  
    return ip;
-@@ -301,6 +304,9 @@
+@@ -301,6 +305,9 @@
  
    acquiresleep(&ip->lock);
  
@@ -5040,7 +5093,7 @@ diff -ruN -d xv6-riscv-src/kernel/fs.c src/kernel/fs.c
    if(ip->valid == 0){
      bp = bread(ip->dev, IBLOCK(ip->inum, sb));
      dip = (struct dinode*)bp->data + ip->inum%IPB;
-@@ -309,7 +315,8 @@
+@@ -309,7 +316,8 @@
      ip->minor = dip->minor;
      ip->nlink = dip->nlink;
      ip->size = dip->size;
@@ -5050,7 +5103,7 @@ diff -ruN -d xv6-riscv-src/kernel/fs.c src/kernel/fs.c
      brelse(bp);
      ip->valid = 1;
      if(ip->type == 0)
-@@ -339,6 +346,38 @@
+@@ -339,6 +347,38 @@
  {
    acquire(&itable.lock);
  
@@ -5089,11 +5142,12 @@ diff -ruN -d xv6-riscv-src/kernel/fs.c src/kernel/fs.c
    if(ip->ref == 1 && ip->valid && ip->nlink == 0){
      // inode has no links and no other references: truncate and free.
  
-@@ -675,6 +714,7 @@
+@@ -674,7 +714,7 @@
+ static struct inode*
  namex(char *path, int nameiparent, char *name)
  {
-   struct inode *ip, *next;
-+  struct mount *mnt;
+-  struct inode *ip, *next;
++  struct inode *ip, *next, *root;
  
    if(*path == '/')
      ip = iget(ROOTDEV, ROOTINO);
@@ -5107,14 +5161,14 @@ diff -ruN -d xv6-riscv-src/kernel/fs.c src/kernel/fs.c
        return 0;
      }
      iunlockput(ip);
-+    if((mnt = vfs_mountpoint(next)) != 0 && mnt->root != 0){
++    if((root = vfs_mounted_root(next)) != 0){
 +      iput(next);
-+      next = idup(mnt->root);
++      next = root;
 +    }
      ip = next;
    }
    if(nameiparent){
-diff -ruN -d xv6-riscv-src/kernel/hal.c src/kernel/hal.c
+diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/hal.c src/kernel/hal.c
 --- xv6-riscv-src/kernel/hal.c
 +++ src/kernel/hal.c
 @@ -0,0 +1,46 @@
@@ -5164,7 +5218,7 @@ diff -ruN -d xv6-riscv-src/kernel/hal.c src/kernel/hal.c
 +{
 +  virtio_disk_rw(b, write);
 +}
-diff -ruN -d xv6-riscv-src/kernel/kalloc.c src/kernel/kalloc.c
+diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/kalloc.c src/kernel/kalloc.c
 --- xv6-riscv-src/kernel/kalloc.c
 +++ src/kernel/kalloc.c
 @@ -27,7 +27,11 @@
@@ -5179,7 +5233,7 @@ diff -ruN -d xv6-riscv-src/kernel/kalloc.c src/kernel/kalloc.c
  }
  
  void
-diff -ruN -d xv6-riscv-src/kernel/main.c src/kernel/main.c
+diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/main.c src/kernel/main.c
 --- xv6-riscv-src/kernel/main.c
 +++ src/kernel/main.c
 @@ -22,12 +22,13 @@
@@ -5208,7 +5262,7 @@ diff -ruN -d xv6-riscv-src/kernel/main.c src/kernel/main.c
    }
  
    scheduler();        
-diff -ruN -d xv6-riscv-src/kernel/memlayout.h src/kernel/memlayout.h
+diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/memlayout.h src/kernel/memlayout.h
 --- xv6-riscv-src/kernel/memlayout.h
 +++ src/kernel/memlayout.h
 @@ -1,3 +1,34 @@
@@ -5252,7 +5306,7 @@ diff -ruN -d xv6-riscv-src/kernel/memlayout.h src/kernel/memlayout.h
  #define TRAPFRAME (TRAMPOLINE - PGSIZE)
 +
 +#endif
-diff -ruN -d xv6-riscv-src/kernel/param.h src/kernel/param.h
+diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/param.h src/kernel/param.h
 --- xv6-riscv-src/kernel/param.h
 +++ src/kernel/param.h
 @@ -5,11 +5,14 @@
@@ -5271,7 +5325,7 @@ diff -ruN -d xv6-riscv-src/kernel/param.h src/kernel/param.h
  #define MAXPATH      128   // maximum file path name
  #define USERSTACK    1     // user stack pages
 -
-diff -ruN -d xv6-riscv-src/kernel/proc.c src/kernel/proc.c
+diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/proc.c src/kernel/proc.c
 --- xv6-riscv-src/kernel/proc.c
 +++ src/kernel/proc.c
 @@ -18,7 +18,9 @@
@@ -5359,7 +5413,7 @@ diff -ruN -d xv6-riscv-src/kernel/proc.c src/kernel/proc.c
  }
  
  // Sleep on channel chan, releasing condition lock lk.
-diff -ruN -d xv6-riscv-src/kernel/proc.h src/kernel/proc.h
+diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/proc.h src/kernel/proc.h
 --- xv6-riscv-src/kernel/proc.h
 +++ src/kernel/proc.h
 @@ -13,9 +13,13 @@
@@ -5431,7 +5485,7 @@ diff -ruN -d xv6-riscv-src/kernel/proc.h src/kernel/proc.h
  
  enum procstate { UNUSED, USED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
  
-diff -ruN -d xv6-riscv-src/kernel/riscv.h src/kernel/riscv.h
+diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/riscv.h src/kernel/riscv.h
 --- xv6-riscv-src/kernel/riscv.h
 +++ src/kernel/riscv.h
 @@ -1,3 +1,6 @@
@@ -5460,7 +5514,7 @@ diff -ruN -d xv6-riscv-src/kernel/riscv.h src/kernel/riscv.h
  #define MAXVA (1L << (9 + 9 + 9 + 12 - 1))
 +
 +#endif
-diff -ruN -d xv6-riscv-src/kernel/syscall.c src/kernel/syscall.c
+diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/syscall.c src/kernel/syscall.c
 --- xv6-riscv-src/kernel/syscall.c
 +++ src/kernel/syscall.c
 @@ -101,6 +101,7 @@
@@ -5479,7 +5533,7 @@ diff -ruN -d xv6-riscv-src/kernel/syscall.c src/kernel/syscall.c
  };
  
  void
-diff -ruN -d xv6-riscv-src/kernel/syscall.h src/kernel/syscall.h
+diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/syscall.h src/kernel/syscall.h
 --- xv6-riscv-src/kernel/syscall.h
 +++ src/kernel/syscall.h
 @@ -20,3 +20,4 @@
@@ -5487,7 +5541,7 @@ diff -ruN -d xv6-riscv-src/kernel/syscall.h src/kernel/syscall.h
  #define SYS_mkdir  20
  #define SYS_close  21
 +#define SYS_mount  22
-diff -ruN -d xv6-riscv-src/kernel/sysfile.c src/kernel/sysfile.c
+diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/sysfile.c src/kernel/sysfile.c
 --- xv6-riscv-src/kernel/sysfile.c
 +++ src/kernel/sysfile.c
 @@ -16,6 +16,20 @@
@@ -5634,7 +5688,7 @@ diff -ruN -d xv6-riscv-src/kernel/sysfile.c src/kernel/sysfile.c
      end_op();
      return -1;
    }
-diff -ruN -d xv6-riscv-src/kernel/trap.c src/kernel/trap.c
+diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/trap.c src/kernel/trap.c
 --- xv6-riscv-src/kernel/trap.c
 +++ src/kernel/trap.c
 @@ -191,7 +191,7 @@
@@ -5660,10 +5714,10 @@ diff -ruN -d xv6-riscv-src/kernel/trap.c src/kernel/trap.c
    }
  }
 -
-diff -ruN -d xv6-riscv-src/kernel/vfs.c src/kernel/vfs.c
+diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/vfs.c src/kernel/vfs.c
 --- xv6-riscv-src/kernel/vfs.c
 +++ src/kernel/vfs.c
-@@ -0,0 +1,337 @@
+@@ -0,0 +1,406 @@
 +// SPDX-License-Identifier: BSD-2-Clause
 +#include "types.h"
 +#include "riscv.h"
@@ -5678,6 +5732,7 @@ diff -ruN -d xv6-riscv-src/kernel/vfs.c src/kernel/vfs.c
 +
 +static struct {
 +  struct spinlock lock;
++  struct sleeplock oplock;
 +  struct mount mount[NMOUNT];
 +} mtable;
 +
@@ -5772,17 +5827,21 @@ diff -ruN -d xv6-riscv-src/kernel/vfs.c src/kernel/vfs.c
 +  struct mount *root;
 +
 +  initlock(&mtable.lock, "mtable");
++  initsleeplock(&mtable.oplock, "mountop");
 +
 +  root = &mtable.mount[0];
-+  root->used = 1;
++  root->state = MOUNTING;
 +  root->fstype = FS_XV6;
 +  root->dev = ROOTDEV;
 +  root->mountpoint = 0;
 +  root->root = 0;
 +  root->fsops = &xv6_fs_ops;
 +  root->fs_private = 0;
++
 +  if(root->fsops->mount(root) < 0)
 +    panic("vfsinit: xv6 mount");
++
++  root->state = MOUNTED;
 +}
 +
 +void
@@ -5819,56 +5878,81 @@ diff -ruN -d xv6-riscv-src/kernel/vfs.c src/kernel/vfs.c
 +  if(path[0] == '/' && path[1] == '\0')
 +    return -1;
 +
++  // Serialize the complete path-resolution and publication sequence.
++  // mtable.lock remains a short-held spinlock and never covers disk I/O.
++  acquiresleep(&mtable.oplock);
 +  begin_op();
 +
 +  if((parent = nameiparent(path, name)) == 0){
 +    end_op();
++    releasesleep(&mtable.oplock);
 +    return -1;
 +  }
 +
-+  if((mp = namei(path)) == 0){
++  // nameiparent() cannot provide the real parent for these aliases.
++  if(namecmp(name, ".") == 0 || namecmp(name, "..") == 0){
 +    iput(parent);
 +    end_op();
++    releasesleep(&mtable.oplock);
 +    return -1;
 +  }
 +
++  // Resolve the final component in the parent we just found. Besides
++  // avoiding a second path walk, this keeps parent and mp in one view.
++  ilock(parent);
++  mp = vfs_lookup(parent, name);
++  iunlock(parent);
++  if(mp == 0){
++    iput(parent);
++    end_op();
++    releasesleep(&mtable.oplock);
++    return -1;
++  }
++
++  // Keep mp locked until MOUNTING is visible. Unlink takes the same
++  // ip->lock then mtable.lock order and will observe either outcome.
 +  ilock(mp);
-+  if(mp->type != T_DIR){
++  if((mp->dev == ROOTDEV && mp->inum == ROOTINO) ||
++     mp->type != T_DIR || mp->nlink < 1){
 +    iunlockput(mp);
 +    iput(parent);
 +    end_op();
++    releasesleep(&mtable.oplock);
 +    return -1;
 +  }
-+  iunlock(mp);
 +
 +  free = -1;
 +  acquire(&mtable.lock);
 +  for(i = 1; i < NMOUNT; i++){
-+    if(mtable.mount[i].used &&
-+       mtable.mount[i].mountpoint != 0 &&
-+       mtable.mount[i].mountpoint->dev == mp->dev &&
-+       mtable.mount[i].mountpoint->inum == mp->inum){
-+      release(&mtable.lock);
-+      iput(mp);
-+      iput(parent);
-+      end_op();
-+      return -1;
++    mnt = &mtable.mount[i];
++    if(mnt->state == MOUNT_FREE){
++      if(free < 0)
++        free = i;
++      continue;
 +    }
-+    if(!mtable.mount[i].used && free < 0)
-+      free = i;
++    if(mnt->fstype == type ||
++       (mnt->mountpoint != 0 &&
++        mnt->mountpoint->dev == mp->dev &&
++        mnt->mountpoint->inum == mp->inum) ||
++       (mnt->state == MOUNTED && mnt->root != 0 &&
++        mnt->root->dev == mp->dev &&
++        mnt->root->inum == mp->inum)){
++      free = -1;
++      break;
++    }
 +  }
 +
 +  if(free < 0){
 +    release(&mtable.lock);
-+    iput(mp);
++    iunlockput(mp);
 +    iput(parent);
 +    end_op();
++    releasesleep(&mtable.oplock);
 +    return -1;
 +  }
 +
 +  mnt = &mtable.mount[free];
 +  memset(mnt, 0, sizeof(*mnt));
-+  mnt->used = 1;
 +  mnt->fstype = type;
 +  mnt->dev = dev;
 +  mnt->mountpoint = mp;
@@ -5876,7 +5960,9 @@ diff -ruN -d xv6-riscv-src/kernel/vfs.c src/kernel/vfs.c
 +  mnt->root = 0;
 +  mnt->fsops = ops;
 +  mnt->fs_private = 0;
++  mnt->state = MOUNTING;
 +  release(&mtable.lock);
++  iunlock(mp);
 +
 +  if(ops->mount(mnt) < 0){
 +    acquire(&mtable.lock);
@@ -5885,13 +5971,22 @@ diff -ruN -d xv6-riscv-src/kernel/vfs.c src/kernel/vfs.c
 +    iput(mp);
 +    iput(parent);
 +    end_op();
++    releasesleep(&mtable.oplock);
 +    return -1;
 +  }
 +
++  acquire(&mtable.lock);
++  mnt->state = MOUNTED;
++  release(&mtable.lock);
++
 +  end_op();
++  releasesleep(&mtable.oplock);
 +  return 0;
 +}
 +
++// A MOUNTING entry is already busy: unlink must not invalidate its
++// mount point while the backend is initialized. Mount calls are
++// serialized separately by mtable.oplock.
 +struct mount*
 +vfs_mountpoint(struct inode *ip)
 +{
@@ -5904,7 +5999,7 @@ diff -ruN -d xv6-riscv-src/kernel/vfs.c src/kernel/vfs.c
 +  acquire(&mtable.lock);
 +  for(i = 1; i < NMOUNT; i++){
 +    mnt = &mtable.mount[i];
-+    if(mnt->used &&
++    if(mnt->state != MOUNT_FREE &&
 +       mnt->mountpoint != 0 &&
 +       mnt->mountpoint->dev == ip->dev &&
 +       mnt->mountpoint->inum == ip->inum){
@@ -5915,6 +6010,34 @@ diff -ruN -d xv6-riscv-src/kernel/vfs.c src/kernel/vfs.c
 +  release(&mtable.lock);
 +
 +  return 0;
++}
++
++// Return a referenced mounted root. MOUNTING entries remain hidden until
++// their backend initialization has completed and the mount is published.
++struct inode*
++vfs_mounted_root(struct inode *ip)
++{
++  struct inode *root = 0;
++  struct mount *mnt;
++  int i;
++
++  if(ip == 0)
++    return 0;
++
++  acquire(&mtable.lock);
++  for(i = 1; i < NMOUNT; i++){
++    mnt = &mtable.mount[i];
++    if(mnt->state == MOUNTED &&
++       mnt->mountpoint != 0 &&
++       mnt->mountpoint->dev == ip->dev &&
++       mnt->mountpoint->inum == ip->inum){
++      root = mnt->root;
++      break;
++    }
++  }
++  release(&mtable.lock);
++
++  return root == 0 ? 0 : idup(root);
 +}
 +
 +struct inode*
@@ -5931,7 +6054,7 @@ diff -ruN -d xv6-riscv-src/kernel/vfs.c src/kernel/vfs.c
 +    acquire(&mtable.lock);
 +    for(i = 1; i < NMOUNT; i++){
 +      mnt = &mtable.mount[i];
-+      if(mnt->used && mnt->root != 0 && mnt->parent != 0 &&
++      if(mnt->state == MOUNTED && mnt->root != 0 && mnt->parent != 0 &&
 +         mnt->root->dev == dp->dev && mnt->root->inum == dp->inum){
 +        parent = mnt->parent;
 +        release(&mtable.lock);
@@ -6001,10 +6124,10 @@ diff -ruN -d xv6-riscv-src/kernel/vfs.c src/kernel/vfs.c
 +    return;
 +  ip->ops->trunc(ip);
 +}
-diff -ruN -d xv6-riscv-src/kernel/vfs.h src/kernel/vfs.h
+diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/vfs.h src/kernel/vfs.h
 --- xv6-riscv-src/kernel/vfs.h
 +++ src/kernel/vfs.h
-@@ -0,0 +1,48 @@
+@@ -0,0 +1,54 @@
 +// SPDX-License-Identifier: BSD-2-Clause
 +#ifndef XV6_VFS_H
 +#define XV6_VFS_H
@@ -6020,6 +6143,12 @@ diff -ruN -d xv6-riscv-src/kernel/vfs.h src/kernel/vfs.h
 +  FS_XV6 = 1,
 +  FS_EXT2,
 +  FS_FAT32,
++};
++
++enum mount_state {
++  MOUNT_FREE = 0,
++  MOUNTING,
++  MOUNTED,
 +};
 +
 +#define NMOUNT 8
@@ -6042,7 +6171,7 @@ diff -ruN -d xv6-riscv-src/kernel/vfs.h src/kernel/vfs.h
 +};
 +
 +struct mount {
-+  int used;
++  enum mount_state state;
 +  enum fs_type fstype;
 +  uint dev;
 +  struct inode *mountpoint;
@@ -6053,7 +6182,7 @@ diff -ruN -d xv6-riscv-src/kernel/vfs.h src/kernel/vfs.h
 +};
 +
 +#endif
-diff -ruN -d xv6-riscv-src/kernel/virtio.h src/kernel/virtio.h
+diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/virtio.h src/kernel/virtio.h
 --- xv6-riscv-src/kernel/virtio.h
 +++ src/kernel/virtio.h
 @@ -44,6 +44,8 @@
@@ -6065,7 +6194,7 @@ diff -ruN -d xv6-riscv-src/kernel/virtio.h src/kernel/virtio.h
  
  // this many virtio descriptors.
  // must be a power of two.
-diff -ruN -d xv6-riscv-src/kernel/virtio_disk.c src/kernel/virtio_disk.c
+diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/virtio_disk.c src/kernel/virtio_disk.c
 --- xv6-riscv-src/kernel/virtio_disk.c
 +++ src/kernel/virtio_disk.c
 @@ -16,8 +16,157 @@
@@ -6429,7 +6558,7 @@ diff -ruN -d xv6-riscv-src/kernel/virtio_disk.c src/kernel/virtio_disk.c
 +    return;
 +  virtio_disk_intr();
 +}
-diff -ruN -d xv6-riscv-src/mkfs/mkfat32.c src/mkfs/mkfat32.c
+diff -ruN -d --strip-trailing-cr xv6-riscv-src/mkfs/mkfat32.c src/mkfs/mkfat32.c
 --- xv6-riscv-src/mkfs/mkfat32.c
 +++ src/mkfs/mkfat32.c
 @@ -0,0 +1,211 @@
@@ -6644,7 +6773,7 @@ diff -ruN -d xv6-riscv-src/mkfs/mkfat32.c src/mkfs/mkfat32.c
 +  fclose(f);
 +  return 0;
 +}
-diff -ruN -d xv6-riscv-src/mkfs/mkfs.c src/mkfs/mkfs.c
+diff -ruN -d --strip-trailing-cr xv6-riscv-src/mkfs/mkfs.c src/mkfs/mkfs.c
 --- xv6-riscv-src/mkfs/mkfs.c
 +++ src/mkfs/mkfs.c
 @@ -32,6 +32,12 @@
@@ -6756,7 +6885,7 @@ diff -ruN -d xv6-riscv-src/mkfs/mkfs.c src/mkfs/mkfs.c
  #define min(a, b) ((a) < (b) ? (a) : (b))
  
  void
-diff -ruN -d xv6-riscv-src/test-xv6.py src/test-xv6.py
+diff -ruN -d --strip-trailing-cr xv6-riscv-src/test-xv6.py src/test-xv6.py
 --- xv6-riscv-src/test-xv6.py
 +++ src/test-xv6.py
 @@ -28,7 +28,7 @@
@@ -6768,7 +6897,7 @@ diff -ruN -d xv6-riscv-src/test-xv6.py src/test-xv6.py
  
      def reset_fs(self):
          try:
-diff -ruN -d xv6-riscv-src/tests/cmds.sh src/tests/cmds.sh
+diff -ruN -d --strip-trailing-cr xv6-riscv-src/tests/cmds.sh src/tests/cmds.sh
 --- xv6-riscv-src/tests/cmds.sh
 +++ src/tests/cmds.sh
 @@ -0,0 +1,5 @@
@@ -6777,7 +6906,7 @@ diff -ruN -d xv6-riscv-src/tests/cmds.sh src/tests/cmds.sh
 +cat hello.c > /mnt/hello.c
 +test1
 +test2
-diff -ruN -d xv6-riscv-src/tests/hello.c src/tests/hello.c
+diff -ruN -d --strip-trailing-cr xv6-riscv-src/tests/hello.c src/tests/hello.c
 --- xv6-riscv-src/tests/hello.c
 +++ src/tests/hello.c
 @@ -0,0 +1,5 @@
@@ -6786,7 +6915,7 @@ diff -ruN -d xv6-riscv-src/tests/hello.c src/tests/hello.c
 +void main () {
 +  printf ("Hello, world!\n");
 +}
-diff -ruN -d xv6-riscv-src/user/bigfile.c src/user/bigfile.c
+diff -ruN -d --strip-trailing-cr xv6-riscv-src/user/bigfile.c src/user/bigfile.c
 --- xv6-riscv-src/user/bigfile.c
 +++ src/user/bigfile.c
 @@ -0,0 +1,110 @@
@@ -6900,7 +7029,7 @@ diff -ruN -d xv6-riscv-src/user/bigfile.c src/user/bigfile.c
 +  printf("bigfile: ok (%d bytes, %s)\n", TOTAL, mode);
 +  exit(0);
 +}
-diff -ruN -d xv6-riscv-src/user/hello.c src/user/hello.c
+diff -ruN -d --strip-trailing-cr xv6-riscv-src/user/hello.c src/user/hello.c
 --- xv6-riscv-src/user/hello.c
 +++ src/user/hello.c
 @@ -0,0 +1,10 @@
@@ -6914,7 +7043,7 @@ diff -ruN -d xv6-riscv-src/user/hello.c src/user/hello.c
 +  printf("Hello, world!\n");
 +  exit(0);
 +}
-diff -ruN -d xv6-riscv-src/user/mount.c src/user/mount.c
+diff -ruN -d --strip-trailing-cr xv6-riscv-src/user/mount.c src/user/mount.c
 --- xv6-riscv-src/user/mount.c
 +++ src/user/mount.c
 @@ -0,0 +1,40 @@
@@ -6958,7 +7087,7 @@ diff -ruN -d xv6-riscv-src/user/mount.c src/user/mount.c
 +  printf("mount: %s on %s dev %d\n", argv[1], argv[2], dev);
 +  exit(0);
 +}
-diff -ruN -d xv6-riscv-src/user/test1.c src/user/test1.c
+diff -ruN -d --strip-trailing-cr xv6-riscv-src/user/test1.c src/user/test1.c
 --- xv6-riscv-src/user/test1.c
 +++ src/user/test1.c
 @@ -0,0 +1,67 @@
@@ -7029,7 +7158,7 @@ diff -ruN -d xv6-riscv-src/user/test1.c src/user/test1.c
 +  printf("----------- %s: finished -----------------}\n", argv[0]);
 +  return 0;
 +}
-diff -ruN -d xv6-riscv-src/user/test2.c src/user/test2.c
+diff -ruN -d --strip-trailing-cr xv6-riscv-src/user/test2.c src/user/test2.c
 --- xv6-riscv-src/user/test2.c
 +++ src/user/test2.c
 @@ -0,0 +1,82 @@
@@ -7115,7 +7244,7 @@ diff -ruN -d xv6-riscv-src/user/test2.c src/user/test2.c
 +  printf("--------- %s: finished -------------------}\n", argv[0]);
 +  return 0;
 +}
-diff -ruN -d xv6-riscv-src/user/unlinkopen.c src/user/unlinkopen.c
+diff -ruN -d --strip-trailing-cr xv6-riscv-src/user/unlinkopen.c src/user/unlinkopen.c
 --- xv6-riscv-src/user/unlinkopen.c
 +++ src/user/unlinkopen.c
 @@ -0,0 +1,59 @@
@@ -7178,7 +7307,7 @@ diff -ruN -d xv6-riscv-src/user/unlinkopen.c src/user/unlinkopen.c
 +  printf("unlinkopen: ok\n");
 +  exit(0);
 +}
-diff -ruN -d xv6-riscv-src/user/user.h src/user/user.h
+diff -ruN -d --strip-trailing-cr xv6-riscv-src/user/user.h src/user/user.h
 --- xv6-riscv-src/user/user.h
 +++ src/user/user.h
 @@ -21,6 +21,7 @@
@@ -7189,7 +7318,7 @@ diff -ruN -d xv6-riscv-src/user/user.h src/user/user.h
  char* sys_sbrk(int,int);
  int pause(int);
  int uptime(void);
-diff -ruN -d xv6-riscv-src/user/usys.pl src/user/usys.pl
+diff -ruN -d --strip-trailing-cr xv6-riscv-src/user/usys.pl src/user/usys.pl
 --- xv6-riscv-src/user/usys.pl
 +++ src/user/usys.pl
 @@ -16,9 +16,15 @@
@@ -7216,7 +7345,7 @@ diff -ruN -d xv6-riscv-src/user/usys.pl src/user/usys.pl
  entry("sbrk");
  entry("pause");
  entry("uptime");
-diff -ruN -d xv6-riscv-src/user/vfsbench.c src/user/vfsbench.c
+diff -ruN -d --strip-trailing-cr xv6-riscv-src/user/vfsbench.c src/user/vfsbench.c
 --- xv6-riscv-src/user/vfsbench.c
 +++ src/user/vfsbench.c
 @@ -0,0 +1,85 @@

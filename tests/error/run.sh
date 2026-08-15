@@ -29,9 +29,12 @@ python3 "$ROOT_DIR/tests/runner/run_qemu_case.py" \
   --xv6-dir "$XV6_DIR" \
   --commands "$SCRIPT_DIR/cmds.sh" \
   --log "$RAW_LOG" \
-  --expect "mount: failed" \
-  --expect "mount: ext2 on /mnt dev 2" \
-  --expect "mount: fat32 on /fat dev 3" \
+  --cpus 3 \
+  --prompt-wait \
+  --step-wait 0.01 \
+  --expect-count "mount: failed" 7 \
+  --expect-count "mount: ext2 on /mnt dev 2" 1 \
+  --expect-count "mount: fat32 on /fat dev 3" 1 \
   --expect "link /mnt/hello.c /fat/cross.txt: failed" \
   --expect "rm: /mnt/no_such_file failed to delete" \
   --expect "rm: /fat/no_such.txt failed to delete" \
