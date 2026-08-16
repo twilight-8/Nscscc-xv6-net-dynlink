@@ -231,7 +231,7 @@ function TerminalPanel({
         </div>
         <div className="terminal-actions">
           <div className="mode-control" aria-label="会话模式">
-            <button className={mode === 'demo' ? 'active' : ''} onClick={() => onModeChange('demo')}>演示</button>
+            <button className={mode === 'demo' ? 'active' : ''} onClick={() => onModeChange('demo')}>快速</button>
             <button
               className={mode === 'real' ? 'active' : ''}
               onClick={() => onModeChange('real')}
