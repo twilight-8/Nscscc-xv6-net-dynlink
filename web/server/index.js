@@ -5,15 +5,22 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { WebSocketServer } from 'ws';
-import { DemoShell } from './demo-shell.js';
+import { createAiTrace, getAiConfig } from './ai-trace.js';
+import { TerminalSession } from './terminal-session.js';
 
 const WEB_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const REPO_ROOT = path.resolve(WEB_ROOT, '..');
 const PORT = Number(process.env.PORT || 4182);
 const WSL_DISTRO = process.env.XV6_WSL_DISTRO || 'Ubuntu-24.04';
+const RUNTIME_PROBE_TIMEOUT_MS = Math.min(
+  Math.max(Number(process.env.XV6_PROBE_TIMEOUT_MS) || 10000, 3500),
+  30000,
+);
 
 const app = express();
+app.use(express.json({ limit: '96kb' }));
 app.use('/project-assets', express.static(path.join(REPO_ROOT, 'outputs')));
+const aiConfig = getAiConfig();
 
 function toWslPath(windowsPath) {
   const match = /^([A-Za-z]):[\\/](.*)$/.exec(windowsPath);
@@ -46,13 +53,41 @@ function probeRuntime() {
   const timer = setTimeout(() => {
     finish(false);
     probe.kill();
-  }, 3500);
+  }, RUNTIME_PROBE_TIMEOUT_MS);
   probe.on('error', () => { clearTimeout(timer); finish(false); });
   probe.on('exit', (code) => { clearTimeout(timer); finish(code === 0); });
 }
 
 probeRuntime();
 app.get('/api/runtime', (_request, response) => response.json(runtimeInfo));
+
+app.get('/api/ai/status', (_request, response) => response.json({
+  available: aiConfig.available,
+  model: aiConfig.available ? aiConfig.model : '',
+  reason: aiConfig.reason,
+}));
+
+app.post('/api/ai/trace', async (request, response) => {
+  const payload = request.body;
+  if (!payload || typeof payload.command !== 'string' || payload.command.length > 300)
+    return response.status(400).json({ error: '命令为空或超过 300 个字符' });
+  if (!aiConfig.available) return response.status(503).json({ error: aiConfig.reason });
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  request.once('aborted', abort);
+  response.once('close', abort);
+  try {
+    const result = await createAiTrace({ repoRoot: REPO_ROOT, config: aiConfig, payload, signal: controller.signal });
+    if (!controller.signal.aborted) response.json(result);
+  } catch (error) {
+    if (controller.signal.aborted) return;
+    console.error(`[AI trace] ${error.message}`);
+    response.status(502).json({ error: error.message || 'AI 分析失败' });
+  } finally {
+    request.off('aborted', abort);
+    response.off('close', abort);
+  }
+});
 
 app.get('/api/source', (request, response) => {
   const relative = String(request.query.file || '').replaceAll('\\', '/');
@@ -84,71 +119,14 @@ const server = createServer(app);
 const terminalServer = new WebSocketServer({ server, path: '/terminal' });
 
 terminalServer.on('connection', (socket) => {
-  let child = null;
-  let demo = null;
-  let mode = 'idle';
-
-  const emit = (type, payload = {}) => {
-    // ws uses 1 for OPEN; using the explicit protocol value also works across
-    // ws versions where OPEN is exposed only on the WebSocket constructor.
-    if (socket.readyState === 1) socket.send(JSON.stringify({ type, ...payload }));
-  };
-  const stop = () => {
-    if (child && !child.killed) {
-      child.stdin.write('\x01x');
-      setTimeout(() => child && !child.killed && child.kill(), 500);
-    }
-    child = null;
-    demo = null;
-    mode = 'idle';
-  };
-  const startDemo = (arch, note = '') => {
-    stop();
-    mode = 'demo';
-    demo = new DemoShell((data) => emit('output', { data }), arch);
-    emit('status', { mode, state: 'running', note });
-    demo.boot();
-  };
-  const startReal = (arch) => {
-    stop();
-    if (!runtimeInfo.realAvailable) return startDemo(arch, runtimeInfo.reason);
-
-    mode = 'real';
-    const makeArgs = arch === 'loongarch' ? 'ARCH=loongarch CPUS=1 qemu' : 'ARCH=riscv CPUS=3 qemu';
-    const command = `cd '${runtimeInfo.source}' && exec make ${makeArgs}`;
-    child = spawn('wsl.exe', ['-d', WSL_DISTRO, 'bash', '-lc', command], {
-      stdio: ['pipe', 'pipe', 'pipe'],
-      windowsHide: true,
-    });
-    emit('status', { mode, state: 'booting', note: `通过 ${WSL_DISTRO} 启动 QEMU` });
-    child.stdout.on('data', (data) => emit('output', { data: data.toString() }));
-    child.stderr.on('data', (data) => emit('output', { data: data.toString() }));
-    child.on('error', (error) => startDemo(arch, `真实会话启动失败：${error.message}`));
-    child.on('exit', (code) => {
-      if (mode === 'real') {
-        emit('output', { data: `\r\n[QEMU 已退出，状态码 ${code ?? 'unknown'}]\r\n` });
-        emit('status', { mode: 'real', state: 'stopped', note: '可重新启动内核' });
-      }
-      child = null;
-    });
-  };
-
-  emit('ready', { runtime: runtimeInfo });
+  const session = new TerminalSession({ socket, runtimeInfo, wslDistro: WSL_DISTRO });
+  session.ready();
   socket.on('message', (raw) => {
     let message;
     try { message = JSON.parse(raw.toString()); } catch { return; }
-    if (message.type === 'start') {
-      if (message.mode === 'real') startReal(message.arch || 'riscv');
-      else startDemo(message.arch || 'riscv');
-    } else if (message.type === 'input') {
-      if (mode === 'real' && child?.stdin.writable) child.stdin.write(message.data);
-      else if (mode === 'demo') demo.input(message.data);
-    } else if (message.type === 'stop') {
-      stop();
-      emit('status', { mode: 'demo', state: 'stopped', note: '可重新启动内核会话' });
-    }
+    session.handle(message);
   });
-  socket.on('close', stop);
+  socket.on('close', () => session.stop());
 });
 
 server.listen(PORT, () => {

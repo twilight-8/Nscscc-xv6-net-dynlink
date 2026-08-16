@@ -21,12 +21,15 @@ import {
   FileCode2,
   GitCompareArrows,
   HardDrive,
+  Eye,
   Layers3,
   PanelLeft,
   Play,
   RefreshCw,
   RotateCcw,
   ServerCog,
+  ShieldCheck,
+  Sparkles,
   Square,
   TerminalSquare,
   Workflow,
@@ -34,7 +37,8 @@ import {
 } from 'lucide-react';
 import { examples, layerMeta, traceCommand, updateTeachingState } from './traces';
 
-const INITIAL_TEACHING_STATE = { cwd: '/', mounts: { ext2: '', fat32: '' } };
+const createInitialTeachingState = () => ({ cwd: '/', mounts: { ext2: '', fat32: '' } });
+const INITIAL_TEACHING_STATE = createInitialTeachingState();
 
 function TraceNode({ data }) {
   const meta = layerMeta[data.layer];
@@ -44,7 +48,7 @@ function TraceNode({ data }) {
       style={{ '--delay': `${data.index * 55}ms` }}
       aria-label={`查看 ${data.title} 节点详情`}
     >
-      <Handle type="target" position={Position.Top} />
+      <Handle type="target" position={data.targetPosition || Position.Top} />
       <span className="trace-node__step">{String(data.index + 1).padStart(2, '0')}</span>
       <span className="trace-node__body">
         <span className="trace-node__meta">{meta.label}</span>
@@ -52,7 +56,7 @@ function TraceNode({ data }) {
         <code>{data.fn}</code>
       </span>
       <span className="trace-node__file">{data.file.replace('src/', '')}:{data.line}</span>
-      <Handle type="source" position={Position.Bottom} />
+      <Handle type="source" position={data.sourcePosition || Position.Bottom} />
     </button>
   );
 }
@@ -60,14 +64,32 @@ function TraceNode({ data }) {
 const nodeTypes = { trace: TraceNode };
 
 function TraceCanvas({ trace, selectedId, onSelect, viewKey }) {
-  const { fitView } = useReactFlow();
-  const flowNodes = useMemo(() => trace.nodes.map((item, index) => ({
-    id: item.id,
-    type: 'trace',
-    position: { x: index % 2 === 0 ? 38 : 310, y: index * 116 },
-    data: { ...item, index, selected: item.id === selectedId },
-    draggable: false,
-  })), [trace, selectedId]);
+  const { fitView, getViewport, setViewport } = useReactFlow();
+  const flowNodes = useMemo(() => {
+    const columnFor = (index) => {
+      const row = Math.floor(index / 2);
+      return row % 2 === 0 ? index % 2 : 1 - (index % 2);
+    };
+    return trace.nodes.map((item, index) => {
+      const row = Math.floor(index / 2);
+      const column = columnFor(index);
+      const previousRow = index > 0 ? Math.floor((index - 1) / 2) : -1;
+      const nextRow = index + 1 < trace.nodes.length ? Math.floor((index + 1) / 2) : -1;
+      const targetPosition = previousRow === row
+        ? (columnFor(index - 1) < column ? Position.Left : Position.Right)
+        : Position.Top;
+      const sourcePosition = nextRow === row
+        ? (columnFor(index + 1) > column ? Position.Right : Position.Left)
+        : Position.Bottom;
+      return {
+        id: item.id,
+        type: 'trace',
+        position: { x: column === 0 ? 24 : 292, y: row * 112 },
+        data: { ...item, index, selected: item.id === selectedId, targetPosition, sourcePosition },
+        draggable: false,
+      };
+    });
+  }, [trace, selectedId]);
   const edges = useMemo(() => trace.nodes.slice(0, -1).map((item, index) => ({
     id: `${item.id}-${trace.nodes[index + 1].id}`,
     source: item.id,
@@ -78,9 +100,13 @@ function TraceCanvas({ trace, selectedId, onSelect, viewKey }) {
   })), [trace]);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => fitView({ padding: 0.12, duration: 450 }), 80);
+    const timer = window.setTimeout(async () => {
+      await fitView({ padding: 0.12, minZoom: 0.68, maxZoom: 1, duration: 0 });
+      const viewport = getViewport();
+      await setViewport({ ...viewport, y: 14 }, { duration: 350 });
+    }, 80);
     return () => window.clearTimeout(timer);
-  }, [trace.raw, selectedId, viewKey, fitView]);
+  }, [trace.raw, viewKey, fitView, getViewport, setViewport]);
 
   return (
     <ReactFlow
@@ -90,7 +116,7 @@ function TraceCanvas({ trace, selectedId, onSelect, viewKey }) {
       onNodeClick={(_event, selected) => onSelect(selected.id)}
       nodesConnectable={false}
       nodesFocusable
-      minZoom={0.34}
+      minZoom={0.58}
       maxZoom={1.25}
       proOptions={{ hideAttribution: true }}
       colorMode="light"
@@ -254,8 +280,16 @@ function App() {
   const commandBufferRef = useRef('');
   const teachingStateRef = useRef(INITIAL_TEACHING_STATE);
   const sessionConfigRef = useRef({ arch: 'riscv', mode: 'demo' });
+  const aiEnabledRef = useRef(false);
+  const aiRuntimeRef = useRef({ available: false, reason: '正在探测 AI 服务' });
+  const analysisRequestRef = useRef({ id: 0, controller: null });
+  const lastCommandRef = useRef(null);
   const [arch, setArch] = useState('riscv');
   const [mode, setMode] = useState('demo');
+  const [aiEnabled, setAiEnabled] = useState(false);
+  const [aiTask, setAiTask] = useState({ state: 'idle', trace: null, note: '' });
+  const [showAi, setShowAi] = useState(false);
+  const [aiRuntime, setAiRuntime] = useState({ available: false, model: '', reason: '正在探测 AI 服务' });
   const [runtime, setRuntime] = useState({ realAvailable: false, reason: '正在探测本机环境' });
   const [session, setSession] = useState({ state: 'booting', mode: 'demo', note: '' });
   const [trace, setTrace] = useState(() => traceCommand('ls /', INITIAL_TEACHING_STATE));
@@ -265,27 +299,80 @@ function App() {
 
   useEffect(() => { sessionConfigRef.current = { arch, mode }; }, [arch, mode]);
 
-  const commitCommand = useCallback((raw) => {
+  const requestAiTrace = useCallback(async (input, baseTrace) => {
+    analysisRequestRef.current.controller?.abort();
+    const controller = new AbortController();
+    const requestId = analysisRequestRef.current.id + 1;
+    analysisRequestRef.current = { id: requestId, controller };
+    setAiTask({ state: 'running', trace: null, note: '正在后台检索并核对仓库源码' });
+    try {
+      const response = await fetch('/api/ai/trace', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        signal: controller.signal,
+        body: JSON.stringify({ ...input, baseTrace }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error || 'AI 分析失败');
+      if (analysisRequestRef.current.id !== requestId || !aiEnabledRef.current) return;
+      setAiTask({ state: 'ready', trace: body.trace, note: body.trace.analysisNote || 'AI 分析已通过源码校验' });
+    } catch (error) {
+      if (error.name === 'AbortError' || analysisRequestRef.current.id !== requestId) return;
+      setAiTask({ state: 'error', trace: null, note: `AI 分析失败：${error.message}` });
+    }
+  }, []);
+
+  const commitCommand = useCallback((raw, result = null) => {
     const command = raw.trim();
     if (!command) return;
     const current = teachingStateRef.current;
-    const nextTrace = traceCommand(command, current);
-    teachingStateRef.current = updateTeachingState(command, current);
+    const nextTrace = traceCommand(command, current, result);
+    const input = {
+      command,
+      state: current,
+      result,
+      arch: sessionConfigRef.current.arch,
+      terminalMode: sessionConfigRef.current.mode,
+    };
+    lastCommandRef.current = { input, baseTrace: nextTrace };
+    teachingStateRef.current = updateTeachingState(command, current, result);
+    setShowAi(false);
     setTrace(nextTrace);
     setSelectedId(nextTrace.nodes.find((item) => item.layer === 'vfs')?.id || nextTrace.nodes[0]?.id);
-  }, []);
+    if (aiEnabledRef.current) requestAiTrace(input, nextTrace);
+    else setAiTask({ state: 'idle', trace: null, note: '' });
+  }, [requestAiTrace]);
 
   useEffect(() => {
-    fetch('/api/runtime').then((response) => response.json()).then(setRuntime).catch(() => {});
+    let active = true;
+    let runtimeTimer = null;
+    const refreshRuntime = () => {
+      fetch('/api/runtime').then((response) => response.json()).then((status) => {
+        if (!active) return;
+        setRuntime(status);
+        if (status.probing) runtimeTimer = window.setTimeout(refreshRuntime, 500);
+      }).catch(() => {});
+    };
+    refreshRuntime();
+    fetch('/api/ai/status').then((response) => response.json()).then((status) => {
+      aiRuntimeRef.current = status;
+      setAiRuntime(status);
+    }).catch(() => {
+      const status = { available: false, model: '', reason: '无法连接 AI 状态接口' };
+      aiRuntimeRef.current = status;
+      setAiRuntime(status);
+    });
 
     const terminal = new XTerm({
       cursorBlink: true,
       cursorStyle: 'bar',
       fontFamily: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace',
-      fontSize: 14,
+      fontSize: 16,
       lineHeight: 1.42,
       scrollback: 4000,
-      convertEol: false,
+      // QEMU's serial console emits bare LF characters. Keep every new line
+      // aligned to column zero, as a hardware terminal would.
+      convertEol: true,
       theme: {
         background: '#101412',
         foreground: '#d9e2dc',
@@ -314,6 +401,7 @@ function App() {
         setRuntime(message.runtime);
         socket.send(JSON.stringify({ type: 'start', arch: 'riscv', mode: 'demo' }));
       } else if (message.type === 'output') terminal.write(message.data);
+      else if (message.type === 'command-result') commitCommand(message.result.command, message.result);
       else if (message.type === 'status') setSession({ state: message.state, mode: message.mode, note: message.note || '' });
     });
 
@@ -321,7 +409,7 @@ function App() {
       if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'input', data }));
       for (const char of data) {
         if (char === '\r' || char === '\n') {
-          commitCommand(commandBufferRef.current);
+          if (sessionConfigRef.current.mode === 'real') commitCommand(commandBufferRef.current);
           commandBufferRef.current = '';
         } else if (char === '\u007f' || char === '\b') {
           commandBufferRef.current = commandBufferRef.current.slice(0, -1);
@@ -332,6 +420,8 @@ function App() {
     const resize = new ResizeObserver(() => fitAddon.fit());
     resize.observe(terminalHostRef.current);
     return () => {
+      active = false;
+      if (runtimeTimer) window.clearTimeout(runtimeTimer);
       inputDisposable.dispose();
       resize.disconnect();
       socket.close();
@@ -341,9 +431,21 @@ function App() {
 
   const restart = useCallback((next = {}) => {
     const config = { ...sessionConfigRef.current, ...next };
-    terminalRef.current?.clear();
+    sessionConfigRef.current = config;
+    terminalRef.current?.reset();
+    analysisRequestRef.current.controller?.abort();
     commandBufferRef.current = '';
-    teachingStateRef.current = INITIAL_TEACHING_STATE;
+    teachingStateRef.current = createInitialTeachingState();
+    lastCommandRef.current = null;
+    const initialTrace = traceCommand('ls /', INITIAL_TEACHING_STATE);
+    setTrace(initialTrace);
+    setSelectedId(initialTrace.nodes.find((item) => item.layer === 'vfs')?.id || initialTrace.nodes[0]?.id);
+    setShowAi(false);
+    setAiTask({
+      state: aiEnabledRef.current ? 'armed' : 'idle',
+      trace: null,
+      note: aiEnabledRef.current ? '输入下一条命令后将在后台分析' : '',
+    });
     if (socketRef.current?.readyState === WebSocket.OPEN)
       socketRef.current.send(JSON.stringify({ type: 'start', ...config }));
   }, []);
@@ -356,6 +458,42 @@ function App() {
     setMode(value);
     restart({ mode: value });
   };
+  const toggleAiAnalysis = () => {
+    if (!aiEnabledRef.current && !aiRuntimeRef.current.available) return;
+    analysisRequestRef.current.controller?.abort();
+    const enabled = !aiEnabledRef.current;
+    aiEnabledRef.current = enabled;
+    setAiEnabled(enabled);
+    setShowAi(false);
+    const last = lastCommandRef.current;
+    if (last) {
+      setTrace(last.baseTrace);
+      setSelectedId(last.baseTrace.nodes.find((item) => item.layer === 'vfs')?.id || last.baseTrace.nodes[0]?.id);
+    }
+    if (enabled && last) requestAiTrace(last.input, last.baseTrace);
+    else setAiTask({
+      state: enabled ? 'armed' : 'idle',
+      trace: null,
+      note: enabled ? '输入命令后将在后台分析' : '',
+    });
+  };
+  const showAiTrace = () => {
+    if (!aiTask.trace) return;
+    setShowAi(true);
+    setTrace(aiTask.trace);
+    setSelectedId(aiTask.trace.nodes.find((item) => item.layer === 'vfs')?.id || aiTask.trace.nodes[0]?.id);
+  };
+  const showRuleTrace = () => {
+    const ruleTrace = lastCommandRef.current?.baseTrace;
+    if (!ruleTrace) return;
+    setShowAi(false);
+    setTrace(ruleTrace);
+    setSelectedId(ruleTrace.nodes.find((item) => item.layer === 'vfs')?.id || ruleTrace.nodes[0]?.id);
+  };
+  const retryAiTrace = () => {
+    const last = lastCommandRef.current;
+    if (aiEnabledRef.current && last) requestAiTrace(last.input, last.baseTrace);
+  };
   const stop = () => socketRef.current?.send(JSON.stringify({ type: 'stop' }));
   const runExample = async (commands) => {
     terminalRef.current?.focus();
@@ -366,7 +504,7 @@ function App() {
         await new Promise((resolve) => window.setTimeout(resolve, 18));
       }
       socketRef.current?.send(JSON.stringify({ type: 'input', data: '\r' }));
-      commitCommand(commandBufferRef.current);
+      if (sessionConfigRef.current.mode === 'real') commitCommand(commandBufferRef.current);
       commandBufferRef.current = '';
       await new Promise((resolve) => window.setTimeout(resolve, 220));
     }
@@ -376,9 +514,9 @@ function App() {
     <main className="app-shell">
       <header className="app-header">
         <div className="brand-lockup">
-          <img src="/handsomeos-team-logo.png" alt="HandsomeOS" />
+          <img src="/handsomeos-team-logo.png" alt="HandsoMeOS 队伍标志" />
           <div>
-            <strong>HandsomeOS</strong>
+            <strong>HandsoMeOS</strong>
             <span>xv6 VFS + HAL 教学控制台</span>
           </div>
         </div>
@@ -408,9 +546,55 @@ function App() {
               <span className="pane-kicker"><GitCompareArrows size={14} /> COMMAND TRACE</span>
               <h1>命令执行链</h1>
             </div>
-            <div className="trace-summary">
-              <code>$ {trace.raw}</code>
-              <span>{trace.nodes.length} 个节点 · {trace.backend}</span>
+            <div className="trace-header-tools">
+              <div className="analysis-actions" aria-label="AI 分析控制">
+                <button
+                  className={`ai-trigger ${aiEnabled ? 'active' : ''}`}
+                  onClick={toggleAiAnalysis}
+                  title={aiRuntime.available
+                    ? `${aiEnabled ? '关闭' : '启动'} ${aiRuntime.model} 后台分析`
+                    : aiRuntime.reason}
+                  disabled={!aiRuntime.available && !aiEnabled}
+                ><Sparkles size={11} />{aiTask.state === 'running' ? '停止 AI' : aiEnabled ? '关闭 AI' : '启动 AI'}</button>
+                {aiTask.state === 'ready' && !showAi && (
+                  <button className="ai-result" onClick={showAiTrace} title="显示已经完成的 AI 调用链">
+                    <Eye size={11} />显示 AI 分析
+                  </button>
+                )}
+                {showAi && (
+                  <button className="ai-result" onClick={showRuleTrace} title="返回确定性规则调用链">
+                    <RotateCcw size={11} />显示规则链
+                  </button>
+                )}
+                {aiTask.state === 'error' && aiEnabled && (
+                  <button className="ai-retry" onClick={retryAiTrace} title={aiTask.note}>
+                    <RotateCcw size={11} />重试
+                  </button>
+                )}
+              </div>
+              <div className="trace-summary">
+                <code>$ {trace.raw}</code>
+                <span className={`trace-status status-${trace.status}`}>
+                  {trace.status === 'success' ? '执行成功' : trace.status === 'error' ? '执行失败' : '实时推导'}
+                  {' · '}{trace.nodes.length} 个节点 · {trace.backend}
+                </span>
+                <span
+                  className={`trace-analysis analysis-${showAi ? 'ai' : aiTask.state === 'running' ? 'ai-loading' : aiTask.state === 'error' ? 'rule-fallback' : aiTask.state === 'ready' ? 'ai-ready' : 'rule'}`}
+                  title={showAi ? trace.analysisNote : aiTask.note || trace.analysisNote}
+                >
+                  {showAi
+                    ? <><ShieldCheck size={11} />AI 已通过源码校验</>
+                    : aiTask.state === 'running'
+                      ? <><Sparkles size={11} />规则链已展示 · AI 后台分析中</>
+                      : aiTask.state === 'ready'
+                        ? <><ShieldCheck size={11} />规则链已展示 · AI 结果已就绪</>
+                        : aiTask.state === 'error'
+                          ? <>规则链正常 · AI 分析失败</>
+                          : aiTask.state === 'armed'
+                            ? <>规则链正常 · AI 等待命令</>
+                            : <>确定性规则链</>}
+                </span>
+              </div>
             </div>
           </header>
           <div className="layer-legend">

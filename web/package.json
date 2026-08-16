@@ -5,8 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "concurrently -k -n web,server -c cyan,yellow \"vite --host 0.0.0.0\" \"node --watch server/index.js\"",
+    "test": "node --test server/*.test.js",
     "build": "vite build",
     "qa": "node scripts/qa.mjs",
+    "qa:ai": "node scripts/qa-ai-live.mjs",
+    "qa:real": "node scripts/qa-real-switch.mjs",
     "start": "node server/index.js"
   },
   "dependencies": {
