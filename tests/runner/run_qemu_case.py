@@ -95,12 +95,36 @@ def main():
     def text():
         return log.decode("utf-8", "replace")
 
+    def wait_for_idle_prompt(timeout):
+        end = time.time() + timeout
+        quiet_since = None
+        while time.time() < end:
+            before = len(log)
+            drain(0.2)
+            current = text()
+            if len(log) != before:
+                quiet_since = None
+                continue
+            if not current.rstrip().endswith("$"):
+                quiet_since = None
+                continue
+            if quiet_since is None:
+                quiet_since = time.time()
+            if time.time() - quiet_since >= 0.5:
+                return True
+        return False
+
     result = "PASS"
     failed_reason = ""
 
     try:
         drain(args.boot_wait)
+        if args.prompt_wait and not wait_for_idle_prompt(args.cmd_timeout):
+            result = "FAIL"
+            failed_reason = "Initial shell prompt timeout"
         for idx, command in enumerate(commands, 1):
+            if result != "PASS":
+                break
             prefix = "\n" if args.live else ""
             print(f"{prefix}[{idx:02d}/{len(commands):02d}] {command}", flush=True)
             if args.prompt_wait and command.endswith("&"):
@@ -117,25 +141,15 @@ def main():
                 # work is still running.
                 qemu.stdin.write((command + "\n").encode("utf-8"))
                 qemu.stdin.flush()
-                end = time.time() + args.cmd_timeout
-                quiet_since = None
-                while time.time() < end:
-                    before = len(text())
-                    drain(0.2)
-                    cur = text()
-                    if len(cur) != before:
-                        quiet_since = None
-                        continue
-                    if not cur.rstrip().endswith("$"):
-                        quiet_since = None
-                        continue
-                    if quiet_since is None:
-                        quiet_since = time.time()
-                    if time.time() - quiet_since >= 0.5:
-                        break
+                prompt_ready = wait_for_idle_prompt(args.cmd_timeout)
                 if os.environ.get("RUNNER_DEBUG"):
-                    print(f"    [prompt-wait] quiet-idle at {len(text())} bytes",
+                    print(f"    [prompt-wait] ready={prompt_ready} "
+                          f"at {len(text())} bytes",
                           flush=True)
+                if not prompt_ready:
+                    result = "FAIL"
+                    failed_reason = f"Command prompt timeout: {command}"
+                    break
                 drain(0.2)
             else:
                 qemu.stdin.write((command + "\n").encode("utf-8"))

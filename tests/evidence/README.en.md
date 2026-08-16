@@ -6,12 +6,15 @@ This directory archives final passing evidence for key runs (raw QEMU output, fs
 
 ## Contents
 
-- `run_all.txt` — full regression summary (8 test points × 2 architectures = 16 runs)
+- `run_all.txt` — full regression summary (11 test points × 2 architectures = 22 runs)
 - `usertests-full-riscv.txt` — RISC-V complete usertests raw output (without `-q`, including the six slow tests)
 - `usertests-full-loongarch.txt` — LoongArch64 complete usertests output
 - `smp-riscv.txt` / `smp-loongarch.txt` — CPUS=3 concurrency stress raw output (three-way concurrent 1 MiB writes + verification + stressfs + lookup/mount/umount races)
 - `error-riscv.txt` / `error-loongarch.txt` — raw QEMU output for the final mount-conflict and error-path runs
 - `semantics-riscv.txt` / `semantics-loongarch.txt` — raw QEMU output for cross-backend ELF execution, mount-root `..`, links, unlink-while-open, safe unmount, and remount semantics
+- `mount-lifecycle-riscv.txt` / `mount-lifecycle-loongarch.txt` — rollback, nested mounts, mount-point protection, and underlay recovery
+- `remount-io-riscv.txt` / `remount-io-loongarch.txt` — repeated dual-backend 1 MiB remount and byte verification
+- `mount-storm-riscv.txt` / `mount-storm-loongarch.txt` — raw CPUS=3 dual-backend mount/unmount stress output
 - `e2fsck-final.txt` — five-pass read-only `e2fsck -fn` output for the final ext2 test image
 - `bench-riscv.txt` — historical RISC-V vfsbench numbers captured before the current P0 fixes; they do not represent final-source performance
 - `bench-loongarch.txt` — retained for audit, but its contents were mistakenly captured from RISC-V and must not be cited as LoongArch evidence; a fresh run is required

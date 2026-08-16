@@ -30,10 +30,10 @@ diff -ruN -d --strip-trailing-cr "$replay" src
 ## 当前规模
 
 ```text
-62 files changed, 6612 insertions(+), 119 deletions(-)
+62 files changed, 6635 insertions(+), 119 deletions(-)
 ```
 
-diff 文件总行数 7718 行（含文件头与 hunk 头），SHA-256 为 `741dfcdd3ff7e25bfe078ba4800302cfb3499a41a3432e6408690aef42c1fec3`。对 rev5 原有文件的修改高度集中，增量主体是新增文件（ext2.c、fat32.c、vfs.c、`kernel/arch/loongarch/` 移植层等整文件计入）。
+diff 文件总行数 7741 行（含文件头与 hunk 头），SHA-256 为 `9578692fc63468f27c322adc5af46d8a5561e47c2334d107ca99c686a0b95102`。对 rev5 原有文件的修改高度集中，增量主体是新增文件（ext2.c、fat32.c、vfs.c、`kernel/arch/loongarch/` 移植层等整文件计入）。
 
 ## 分类统计
 
@@ -42,7 +42,7 @@ diff 文件总行数 7718 行（含文件头与 hunk 头），SHA-256 为 `741df
 | 分类 | 文件数 | 插入 | 删除 | diff 行数 | 说明 |
 | --- | ---: | ---: | ---: | ---: | --- |
 | HAL / 平台支持 | 28 | 2340 | 37 | 2763 | `kernel/arch/loongarch/` 移植层、HAL 入口、virtio-pci 磁盘、看门狗与架构相关内存/中断改动 |
-| VFS / 文件系统支持 | 31 | 4112 | 56 | 4639 | VFS 层、ext2、fat32、块设备抽象、mkfs/mkfat32 与用户态 mount/umount/测试程序 |
+| VFS / 文件系统支持 | 31 | 4135 | 56 | 4662 | VFS 层、ext2、fat32、块设备抽象、mkfs/mkfat32 与用户态 mount/umount/测试程序 |
 | 公共构建/配置 | 3 | 160 | 26 | 316 | `src/Makefile`、`src/.gitignore`、`src/test-xv6.py` 中同时服务 HAL 与 VFS 的公共调整 |
 
-合计：62 个文件，+6612/−119，7718 行。
+合计：62 个文件，+6635/−119，7741 行。

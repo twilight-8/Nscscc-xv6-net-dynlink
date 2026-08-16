@@ -61,7 +61,7 @@ write 4
 read
 $ cd /
 $ umountstress
-UMOUNT_STRESS_OK
+UMOUNT_STRESS_OK ext2 80 loops 2 ticks
 $ echo SMP_DONE
 SMP_DONE
 $ 

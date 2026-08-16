@@ -8,7 +8,7 @@ This directory collects the documents written to the contest's submission requir
 
 | Requirement | Document |
 |---|---|
-| System testing | `test_report.md`、`../../tests/MATRIX.md` |
+| System testing | `test_report.md`, `test_effects_ppt_outline.md`, `../../tests/MATRIX.md` |
 | Problems encountered and solutions | `problems.md` |
 | Innovation analysis | `innovation.md` |
 | Comparison with similar projects | `comparison.md` |

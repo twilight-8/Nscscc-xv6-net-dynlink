@@ -31,7 +31,7 @@
 - **单盘三文件系统镜像布局**：一块 virtio 磁盘同时承载 xv6、ext2、fat32 三个文件系统镜像，启动后可按需挂载。
 - **双平台对称薄 HAL**：两个平台共用同一套内核代码，平台差异收敛于独立的移植层，中断路由知识单点收敛。
 - **机制级稳定性兜底**：针对外部中断链无法保证不丢中断的现实，设计 virtio 看门狗在机制层兜底，SMP 并发压测通过。
-- **缺陷驱动的测试体系**：8 个测试点 × 2 个架构共 16 项回归全部通过，功能回归可用 `make verify-all` 一行命令复现，关键原始日志已归档；fsck 与性能数据按各自文档中的独立命令复核。
+- **缺陷驱动的测试体系**：11 个测试点 × 2 个架构共 22 项回归全部通过；新增状态机、双后端 1 MiB 重挂载和 CPUS=3 挂载风暴专项测试，功能回归可用 `make verify-all` 一行命令复现。
 
 ## 快速开始
 
@@ -45,7 +45,7 @@ docker run --rm -it xv6-vfs-hal          # 进入容器，工作目录 /xv6
 容器内或本地环境（依赖见 `tests/README.md`）均可执行：
 
 ```sh
-make verify-all        # 环境检查 + 16 项双架构回归 + 双架构完整 usertests
+make verify-all        # 环境检查 + 22 项双架构回归 + 双架构完整 usertests
 make test_baseline && make run    # 官方入口执行 usertests -q
 ```
 
@@ -112,7 +112,7 @@ umount /mnt            # 若文件仍打开或 cwd 位于该文件系统，则�
 
 ## 系统测试情况
 
-测试体系由三层组成：xv6 自带测例（`usertests`，双架构均执行快速版与完整版；完整版各含 69 个命名测试，即 63 quick + 6 slow，判定行均为 `ALL TESTS PASSED`）、赛题指定 VFS 测例（test1/test2 按官方参考流程执行通过，镜像布局与官方一致）、团队自拟的 8 个测试点（官方测例回归、公开 VFS 流程复刻、ext2 与 fat32 功能面、异常与语义、持久化、SMP 并发压测）。8 测试点 × 2 架构共 16 项全部通过，ext2 镜像经 e2fsck 校验零错误，关键原始日志归档于 `tests/evidence/`。详见 `docs/contest/test_report.md` 与 `tests/README.md`，性能数据与证据边界见 `docs/contest/performance.md`。
+测试体系由三层组成：xv6 自带测例（`usertests`，双架构均执行快速版与完整版；完整版各含 69 个命名测试，即 63 quick + 6 slow，判定行均为 `ALL TESTS PASSED`）、赛题指定 VFS 测例（test1/test2 按官方参考流程执行通过，镜像布局与官方一致）、统一编排的 11 个测试点（文件系统功能与错误语义、持久化、SMP I/O、挂载生命周期、1 MiB 多轮重挂载、双后端挂载风暴）。11 测试点 × 2 架构共 22 项全部通过，ext2 镜像经 e2fsck 校验零错误。详见 `docs/contest/test_report.md` 与 `tests/README.md`，性能数据与证据边界见 `docs/contest/performance.md`。
 
 ## 遇到的主要问题和解决方法
 
@@ -132,7 +132,7 @@ umount /mnt            # 若文件仍打开或 cwd 位于该文件系统，则�
 .
 ├── README.md                  # 项目说明
 ├── LICENSE                    # BSD-2-Clause
-├── Makefile                   # 测试编排：8 个测试点 × 2 个架构共 16 项执行
+├── Makefile                   # 测试编排：11 个测试点 × 2 个架构共 22 项执行
 ├── Dockerfile                 # 容器化构建与测试环境
 ├── src/                       # 作品源码
 │   ├── kernel/                # 内核

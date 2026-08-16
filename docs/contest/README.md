@@ -8,7 +8,7 @@
 
 | 官方要求 | 对应文档 |
 |---|---|
-| 系统测试情况 | `test_report.md`、 `../../tests/MATRIX.md` |
+| 系统测试情况 | `test_report.md`、`test_effects_ppt_outline.md`、`../../tests/MATRIX.md` |
 | 遇到的主要问题和解决方法 | `problems.md` |
 | 创新性分析 | `innovation.md` |
 | 与类似项目的对比分析 | `comparison.md` |

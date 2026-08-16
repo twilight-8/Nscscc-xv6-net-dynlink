@@ -35,6 +35,7 @@
 | 文档 | 对应条目 |
 |---|---|
 | `contest/test_report.md` | 系统测试情况 |
+| `contest/test_effects_ppt_outline.md` | 答辩“测试与效果”板块内容与图表设计 |
 | `contest/problems.md` | 遇到的主要问题和解决方法 |
 | `contest/innovation.md` | 创新性分析 |
 | `contest/comparison.md` | 类似项目对比分析 |

@@ -35,6 +35,7 @@ Each document maps to a submission requirement; the mapping table is in `contest
 | Document | Requirement |
 |---|---|
 | `contest/test_report.md` | System testing |
+| `contest/test_effects_ppt_outline.md` | Content and visual plan for the defense testing/results section |
 | `contest/problems.md` | Problems encountered and solutions |
 | `contest/innovation.md` | Innovation analysis |
 | `contest/comparison.md` | Comparison with similar projects |

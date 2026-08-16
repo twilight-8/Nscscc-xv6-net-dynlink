@@ -55,9 +55,9 @@
  src/user/test1.c                       |   67 ++
  src/user/test2.c                       |   82 ++
  src/user/umount.c                      |   21 +
- src/user/umountstress.c                |   86 ++
+ src/user/umountstress.c                |  109 +++
  src/user/unlinkopen.c                  |   59 ++
  src/user/user.h                        |    2
  src/user/usys.pl                       |    8
  src/user/vfsbench.c                    |   85 ++
- 62 files changed, 6612 insertions(+), 119 deletions(-)
+ 62 files changed, 6635 insertions(+), 119 deletions(-)

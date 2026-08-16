@@ -3,8 +3,8 @@ qemu-system-loongarch64 -machine virt -kernel kernel/kernel -m 1G -smp 3 -nograp
 
 xv6 kernel is booting
 
-hart 2 starting
 hart 1 starting
+hart 2 starting
 init: starting sh
 $ mount ext2 /no_such_dir
 mount: failed

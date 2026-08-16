@@ -6,8 +6,10 @@ ARCH_STATE_FILE := .last-test-arch
 TEST_ARCH ?= riscv
 
 .PHONY: test_baseline public_vfs ext2 fat32 error semantics persist smp \
+	mount_lifecycle remount_io mount_storm \
 	loongarch_baseline loongarch_public_vfs loongarch_ext2 loongarch_fat32 loongarch_error \
-	loongarch_semantics loongarch_persist loongarch_smp \
+	loongarch_semantics loongarch_persist loongarch_smp loongarch_mount_lifecycle \
+	loongarch_remount_io loongarch_mount_storm \
 	test_public_vfs test_ext2 test_fat32 test_error_path run verify-all
 
 test_baseline:
@@ -330,6 +332,51 @@ smp:
 loongarch_smp:
 	@$(MAKE) TEST_ARCH=loongarch smp
 
+define prepare_extended_case
+	@set -eu; \
+	TEST_NAME="$(1)"; \
+	TEST_DIR="tests/$$TEST_NAME"; \
+	LOG_DIR="$$TEST_DIR/logs"; \
+	mkdir -p "$$LOG_DIR"; \
+	{ \
+		echo "Test Name: $$TEST_NAME"; \
+		echo "Date: $$(date -Iseconds)"; \
+		echo "Platform: $(TEST_ARCH)"; \
+		echo "Host: $$(uname -a)"; \
+		echo "Git: $$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"; \
+	} > "$$LOG_DIR/env.log" 2>&1; \
+	echo "[$$TEST_NAME] build $(TEST_ARCH) kernel and fs image"; \
+	( \
+		cd "$(XV6_DIR)" && \
+		make ARCH="$(TEST_ARCH)" clean && \
+		make ARCH="$(TEST_ARCH)" kernel/kernel && \
+		rm -f fs.img ext2.img fat32.img && \
+		make ARCH="$(TEST_ARCH)" fs.img \
+	) > "$$LOG_DIR/build.log" 2>&1; \
+	printf "%s\n" "$$TEST_NAME" > "$(STATE_FILE)"; \
+	printf "%s\n" "$(TEST_ARCH)" > "$(ARCH_STATE_FILE)"; \
+	echo "[$$TEST_NAME] prepare done"; \
+	echo "Next command: make run"
+endef
+
+mount_lifecycle:
+	$(call prepare_extended_case,mount_lifecycle)
+
+remount_io:
+	$(call prepare_extended_case,remount_io)
+
+mount_storm:
+	$(call prepare_extended_case,mount_storm)
+
+loongarch_mount_lifecycle:
+	@$(MAKE) TEST_ARCH=loongarch mount_lifecycle
+
+loongarch_remount_io:
+	@$(MAKE) TEST_ARCH=loongarch remount_io
+
+loongarch_mount_storm:
+	@$(MAKE) TEST_ARCH=loongarch mount_storm
+
 test_public_vfs: public_vfs
 test_ext2: ext2
 test_fat32: fat32
@@ -339,7 +386,7 @@ run:
 	@set -eu; \
 	if [ ! -f "$(STATE_FILE)" ]; then \
 		echo "No prepared test."; \
-		echo "Use: make test_baseline, make public_vfs, make ext2, make fat32, or make error"; \
+		echo "Use: make <test>; see tests/README.md for available tests"; \
 		exit 1; \
 	fi; \
 	TEST_NAME="$$(cat "$(STATE_FILE)")"; \
@@ -353,6 +400,9 @@ run:
 		semantics) ARCH="$$TEST_ARCH" TEST_ARCH="$$TEST_ARCH" bash "tests/semantics/run.sh" ;; \
 		persist) ARCH="$$TEST_ARCH" TEST_ARCH="$$TEST_ARCH" bash "tests/persist/run.sh" ;; \
 		smp) ARCH="$$TEST_ARCH" TEST_ARCH="$$TEST_ARCH" bash "tests/smp/run.sh" ;; \
+		mount_lifecycle) ARCH="$$TEST_ARCH" TEST_ARCH="$$TEST_ARCH" bash "tests/mount_lifecycle/run.sh" ;; \
+		remount_io) ARCH="$$TEST_ARCH" TEST_ARCH="$$TEST_ARCH" bash "tests/remount_io/run.sh" ;; \
+		mount_storm) ARCH="$$TEST_ARCH" TEST_ARCH="$$TEST_ARCH" bash "tests/mount_storm/run.sh" ;; \
 		*) echo "Unknown prepared test: $$TEST_NAME"; exit 1 ;; \
 	esac
 

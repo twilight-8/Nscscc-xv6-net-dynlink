@@ -31,7 +31,7 @@ Based on MIT xv6-riscv rev5, the project adds a virtual file system (VFS) and a 
 - **Three file systems on a single disk**: one virtio disk carries the xv6, ext2 and FAT32 images side by side, mountable on demand after boot.
 - **Symmetric thin HAL for two platforms**: both platforms share the same kernel code; platform differences are confined to a separate porting layer, with interrupt-routing knowledge centralized at a single point.
 - **Mechanism-level stability fallback**: since the external interrupt chain cannot be guaranteed lossless, a virtio watchdog provides a mechanism-level fallback; SMP stress tests pass.
-- **Defect-driven testing**: 8 test points across 2 architectures, 16 regression items all passing. Functional regression is reproducible with one `make verify-all`; key raw logs are archived, while fsck and performance evidence use the separate commands documented for them.
+- **Defect-driven testing**: 11 test points across 2 architectures, 22 regression runs all passing, including dedicated state-machine, repeated 1 MiB remount, and CPUS=3 dual-backend mount-storm tests. Functional regression is reproducible with one `make verify-all`.
 
 ## Quick Start
 
@@ -45,7 +45,7 @@ docker run --rm -it xv6-vfs-hal          # enter the container, workdir /xv6
 Inside the container, or in a local environment (dependencies listed in `tests/README.md`):
 
 ```sh
-make verify-all        # env check + 16 dual-arch regression items + full usertests on both arches
+make verify-all        # env check + 22 dual-arch regression runs + full usertests on both arches
 make test_baseline && make run    # run usertests -q via the official entry point
 ```
 
@@ -103,7 +103,7 @@ The project went through eighteen stages from baseline to delivery (Stage 0 thro
 
 ## System Testing
 
-The testing system has three layers: the xv6 built-in suite (`usertests`, with quick and full runs on both architectures; each full run contains 69 named tests, 63 quick + 6 slow, and ends with `ALL TESTS PASSED`), the VFS tests designated by the problem statement (test1/test2 pass following the official reference procedure, with an image layout identical to the official one), and eight team-authored test points (official-suite regression, public VFS procedure replication, ext2 and FAT32 feature coverage, fault and semantics, persistence, and SMP concurrency stress). All 8 test points × 2 architectures = 16 items pass; the ext2 image passes e2fsck with zero errors; key raw logs are archived in `tests/evidence/`. See `docs/contest/test_report.md` and `tests/README.md`; performance data and its evidence boundary are documented in `docs/contest/performance.md`.
+The testing system has three layers: the xv6 built-in suite (`usertests`, with quick and full runs on both architectures; each full run contains 69 named tests, 63 quick + 6 slow, and ends with `ALL TESTS PASSED`), the designated VFS tests, and 11 uniformly orchestrated test points covering filesystem behavior, error semantics, persistence, SMP I/O, mount lifecycle, repeated 1 MiB remount verification, and a dual-backend mount storm. All 11 × 2 = 22 runs pass, and the ext2 image passes e2fsck with zero errors. See `docs/contest/test_report.md` and `tests/README.md`; performance evidence boundaries are documented in `docs/contest/performance.md`.
 
 ## Major Problems and Solutions
 
@@ -123,7 +123,7 @@ Through this project the team gained end-to-end engineering practice in file-sys
 .
 ├── README.md                  # Project description
 ├── LICENSE                    # BSD-2-Clause
-├── Makefile                   # Test orchestration: 8 test points × 2 architectures = 16 runs
+├── Makefile                   # Test orchestration: 11 test points × 2 architectures = 22 runs
 ├── Dockerfile                 # Containerized build and test environment
 ├── src/                       # Project source
 │   ├── kernel/                # Kernel

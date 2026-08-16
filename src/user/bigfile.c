@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: BSD-2-Clause
-// Large-file exercise for the ext2 backend: writes 1 MiB of a
-// deterministic pattern (past the 268 KiB direct+single-indirect
-// limit, forcing double-indirect allocation), reads it back and
-// verifies every byte.
+// Large-file exercise for any writable VFS backend: writes 1 MiB of a
+// deterministic pattern and verifies every byte. On ext2 this exceeds
+// the 268 KiB direct+single-indirect limit and forces double-indirect
+// allocation; on FAT32 it exercises a long cluster chain.
 //
 // Usage: bigfile [path] [mode]
 //   mode "full" (default): write + verify + unlink

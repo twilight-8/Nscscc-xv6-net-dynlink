@@ -12,7 +12,7 @@ tests/
 |-- MATRIX.md                    测试覆盖矩阵
 |-- VFS_TESTS_PIN.txt            官方测例版本锚定
 |-- check_env.sh                 环境自检
-|-- run_all.sh                   16 项一键双架构回归
+|-- run_all.sh                   22 项一键双架构回归
 |-- full_usertests.sh            完整 usertests（不带 -q）
 |-- runner/
 |   `-- run_qemu_case.py         QEMU 测试驱动
@@ -24,7 +24,10 @@ tests/
 |-- error/                       错误路径稳定性
 |-- semantics/                   挂载/链接/unlink 语义
 |-- persist/                     双会话持久性
-`-- smp/                         CPUS=3 并发压测
+|-- smp/                         CPUS=3 文件 I/O 并发压测
+|-- mount_lifecycle/             挂载状态机、嵌套拓扑与失败回滚
+|-- remount_io/                  双后端 1 MiB 多轮重挂载校验
+`-- mount_storm/                 CPUS=3 双后端挂卸载风暴
 ```
 
 每个测试点目录为统一三件套：`README.md + `*.cmds.sh`（喂给 xv6 shell 的命令）+ `run.sh`（expect/reject 断言）+ `logs/`（运行产物，不入库）。
@@ -39,6 +42,9 @@ tests/
 - `semantics`：挂载点 `..`、ext2 硬链接、fat32 拒链、unlinkopen，以及 umount busy/成功/底层目录恢复/重挂载。
 - `persist`：写入→重启→重挂载→逐字节读回（含 1MiB 双间接文件）。
 - `smp`：CPUS=3 三路并发 bigfile + 挂载点内 stressfs + lookup/mount/umount 竞态（C1 与卸载生命周期回归）。
+- `mount_lifecycle`：非法卸载、后端失败回滚、挂载点删除保护、嵌套挂载 busy、下层目录恢复和跨挂载点重挂载。
+- `remount_io`：ext2/FAT32 各写入 1 MiB，三轮卸载/重挂载后逐字节复验，并检查每轮下层目录恢复。
+- `mount_storm`：CPUS=3 下，ext2/FAT32 各由 2 个 lookup worker 与 2 个拓扑 worker 执行 256 轮竞争。
 
 ## 运行
 
@@ -52,7 +58,7 @@ make loongarch_<name> && make run
 聚合入口：
 
 ```sh
-bash tests/run_all.sh          # 16 项双架构回归
+bash tests/run_all.sh          # 11 测试点 × 2 架构 = 22 项回归
 bash tests/full_usertests.sh riscv
 bash tests/full_usertests.sh loongarch
 make verify-all                # 环境检查 + 全部上述内容
@@ -63,7 +69,7 @@ make verify-all                # 环境检查 + 全部上述内容
 推送远端前必须全部通过：
 
 ```sh
-bash tests/run_all.sh                      # 16/16 双架构
+bash tests/run_all.sh                      # 22/22 双架构
 bash tests/full_usertests.sh riscv         # 完整 usertests（无 -q）
 bash tests/full_usertests.sh loongarch
 ```
@@ -71,6 +77,7 @@ bash tests/full_usertests.sh loongarch
 ## 规范约定
 
 1. 命令文件：单会话测试点用 `cmds.sh`；多会话用 `<阶段>.cmds.sh`（如 `write.cmds.sh`/`read.cmds.sh`）。
-2. 断言模式：`--expect` 只写“成功才出现的串”；`--reject` 只写“失败/异常串”；每个测试点必须含 `panic:`/`kerneltrap` 负断言。
-3. `logs/` 为本地运行产物，不入库；最终通过证据归 `evidence/`。
-4. 新增测试点 = 新建同名目录（三件套）+ 根 Makefile 目标 + `run_all.sh` 登记 + `MATRIX.md` 增行。
+2. 断言模式：`--expect` 只写“成功才出现的串”；`--expect-count` 验证次数和状态转换；`--reject` 只写“失败/异常串”；每个测试点必须含 `panic:`/`kerneltrap` 负断言。
+3. 使用 `--prompt-wait` 的用例会在首条和后续命令前等待 shell 提示符稳定，命令超时直接失败，避免串口丢字符被误判为内核缺陷。
+4. `logs/` 为本地运行产物，不入库；最终通过证据归 `evidence/`。
+5. 新增测试点 = 新建同名目录（三件套）+ 根 Makefile 目标 + `run_all.sh` 登记 + `MATRIX.md` 增行。

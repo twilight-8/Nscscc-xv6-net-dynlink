@@ -21,8 +21,8 @@ bash tests/check_env.sh    # 全部工具在位输出 OK，任一缺失给出明
 统一复现入口：
 
 ```sh
-make verify-all            # 环境检查 + 16 项双架构回归 + 双架构完整 usertests
-bash tests/run_all.sh      # 8 测试点 × 2 架构，输出 16 行 PASS/FAIL 汇总
+make verify-all            # 环境检查 + 22 项双架构回归 + 双架构完整 usertests
+bash tests/run_all.sh      # 11 测试点 × 2 架构，输出 22 行 PASS/FAIL 汇总
 ```
 
 ## 2. 官方测例执行结果
@@ -226,18 +226,37 @@ bigfile: ok (1048576 bytes, verify)
 $ bigfile /fat/b verify
 bigfile: ok (1048576 bytes, verify)
 $ umountstress
-UMOUNT_STRESS_OK
+UMOUNT_STRESS_OK ext2 80 loops 11 ticks
 ```
 
 结果：双架构 PASS。修复前基线在同一场景下 fat32 段确定性挂死（后端分配器竞争，详见 `problems.md` P6），修复后作为防复发回归保留；新增卸载压力段在 CPUS=3 下均到达 `UMOUNT_STRESS_OK`，无 panic/kerneltrap 或失败终态。
+
+### 3.7 mount_lifecycle 测试点（tests/mount_lifecycle）
+
+覆盖：非法路径和根目录别名卸载拒绝；错误设备触发 ext2/FAT32 后端初始化失败后的挂载表回滚；挂载点删除保护；FAT32 作为 ext2 子挂载时父挂载 busy；子/父卸载后的下层目录恢复；两个后端重挂载后数据再次可见。该用例使用一条确定性时间线覆盖 `MOUNTING → MOUNTED → MOUNT_UNMOUNTING → FREE` 的成功、拒绝和回滚分支。
+
+runner 精确命中：`umount: busy or invalid` 5/5、`mount: failed` 2/2、两个挂载点删除失败各 1/1；下层与持久化标记分别为 2/2、2/2、3/3、3/3。结果：双架构 PASS。
+
+### 3.8 remount_io 测试点（tests/remount_io）
+
+覆盖：ext2/FAT32 各写入一个 1 MiB 确定性模式文件并立即校验，随后完成三轮卸载/重挂载，每轮对两个文件逐字节复验，并读取 xv6 下层标记。ext2 负载跨越直接块、单间接和双重间接；FAT32 负载形成长簇链。精确断言为 8 次挂载、2 次 `keep`、6 次 `verify` 和 6 次下层读取，总计核验 8 MiB 数据。结果：双架构 PASS。
+
+该结论证明正常卸载/重挂载下的数据完整性和后端重初始化正确，不等价于突然断电下的崩溃一致性保证。
+
+### 3.9 mount_storm 测试点（tests/mount_storm，CPUS=3）
+
+`umountstress` 被参数化后，对 ext2 与 FAT32 运行同构压力：每个后端包含 2 个 lookup/open worker 与 2 个 mount/umount worker，每个 worker 256 轮，两个后端合计 2048 次并发 worker 迭代；开始时还确定性检查打开文件导致 busy，结束后读取探针验证最终拓扑。
+
+结果：双架构 PASS，均出现两个后端专属 `UMOUNT_STRESS_OK`，无 panic、trap、挂载失败或 worker 失败。本轮完整回归单次观测为 RISC-V ext2/FAT32 38/39 ticks、LoongArch 7/7 ticks；ticks 仅用于同环境复现，不作为跨平台性能对比或通过阈值。
 
 ## 4. 覆盖矩阵与补充验证
 
 测试点 × 覆盖功能面 × 双架构的完整矩阵见 `tests/MATRIX.md`。补充验证：
 
-- `e2fsck -fn` 对最后一项 LoongArch SMP 压测完成后的 ext2 镜像做五阶段只读校验（inode/块/尺寸、目录结构、目录连通性、链接计数、组汇总），结果为**零错误**，原始输出见 `tests/evidence/e2fsck-final.txt`；
+- `e2fsck -fn` 对完整回归最后一项 LoongArch `mount_storm` 完成后的 ext2 镜像做五阶段只读校验（inode/块/尺寸、目录结构、目录连通性、链接计数、组汇总），结果为**零错误**，原始输出见 `tests/evidence/e2fsck-final.txt`；
 - 官方测例版本锚定与镜像布局已核对（`tests/VFS_TESTS_PIN.txt`、`/tests` 五文件布局）；
-- `mtable.oplock` 串行化完整 `mount/umount`；`MOUNT_FREE/MOUNTING/MOUNTED/MOUNT_UNMOUNTING` 四态负责发布、失败回滚、unlink 可见性与卸载隔离。短期 `readers` pin 保护表项指针到 `idup()` 的锁外窗口，长期 busy 复用 `inode.ref`。error 验证挂载互斥；semantics 与 SMP 验证卸载语义和并发终态；
+- `mtable.oplock` 串行化完整 `mount/umount`；`MOUNT_FREE/MOUNTING/MOUNTED/MOUNT_UNMOUNTING` 四态负责发布、失败回滚、unlink 可见性与卸载隔离。短期 `readers` pin 保护表项指针到 `idup()` 的锁外窗口，长期 busy 复用 `inode.ref`。`mount_lifecycle` 验证确定性状态转换，`mount_storm` 验证双后端并发终态；
+- runner 在首条及后续命令前等待 shell 提示符稳定，prompt 超时直接失败；该机制修复了 LoongArch CPUS=3 启动时首字符偶发丢失造成的测试工具假阴性；
 - ext2/fat32 冷 inode 使用 acquire 快路径、`ip->lock` 内二次检查和 release 发布；该协议已完成锁序/内存序审查，修复后的双架构 SMP 与完整 usertests 均通过，未出现功能回归。现有测试不宣称确定性命中“同一冷 inode 同时首访”；
 - 本轮归档的套件日志扫描无 `panic:`。
 
@@ -253,9 +272,12 @@ UMOUNT_STRESS_OK
 | semantics | PASS | PASS |
 | persist | PASS | PASS |
 | smp | PASS | PASS |
+| mount_lifecycle | PASS | PASS |
+| remount_io | PASS | PASS |
+| mount_storm | PASS | PASS |
 | 完整 usertests（不带 -q） | ALL TESTS PASSED | ALL TESTS PASSED |
 
-本轮最终复测汇总（2026-08-15）：`run_all: PASS (16/16)`；两架构完整 usertests 均输出 `ALL TESTS PASSED`。
+本轮最终复测汇总（2026-08-16）：`run_all: PASS (22/22)`；两架构完整 usertests 最近一次归档均输出 `ALL TESTS PASSED`。
 
 ## 6. 当前非目标范围
 
@@ -268,6 +290,6 @@ UMOUNT_STRESS_OK
 
 ## 7. 日志与证据文件
 
-- 实时日志：`tests/<case>/logs/`（环境、构建、原始 QEMU 输出、结果摘要），git 忽略；
-- 最终证据：`tests/evidence/`（本轮 run_all 汇总，双架构完整 usertests、SMP、error、semantics 原始输出和最终 e2fsck 输出；四份 RISC-V/优化基准为本轮 P0 修复前的历史记录，不代表最终源码性能；误标为 LoongArch 的一份记录仅保留审计，不作为性能证据）；
+- 实时日志：`tests/<case>/logs/`（环境、构建、原始 QEMU 输出、结果摘要），git 忽略；新增三组用例的双架构日志已在本轮实际生成并核验；
+- 最终证据：`tests/evidence/`（本轮 run_all 汇总，双架构完整 usertests，以及 SMP、error、semantics、mount_lifecycle、remount_io、mount_storm 原始输出和最终 e2fsck 输出；四份 RISC-V/优化基准为本轮 P0 修复前的历史记录，不代表最终源码性能；误标为 LoongArch 的一份记录仅保留审计，不作为性能证据）；
 - 功能回归复现：`make verify-all`，或按 `tests/README.md` 的分步命令执行；fsck 与性能按 `tests/evidence/README.md`、`docs/contest/performance.md` 的独立命令复核。

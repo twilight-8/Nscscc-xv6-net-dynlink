@@ -35,11 +35,11 @@ bigfile: ok (1048576 bytes, verify)
 $ cd /mnt
 $ stressfs
 stressfs starting
-write w0
-writrie tew2
- 1wrritie 3
-
-te 4
+writew 0rite wr
+itwrite e4
+1wr i
+t3
+e 2
 read
 read
 read
@@ -49,19 +49,19 @@ $ cd /
 $ cd /fat
 $ stressfs
 stressfs starting
-write writewriwt riwer 13i
-te 2
-t
-e0
- 4
-read
+write 0w
+rwrite i1
+twrite 2e w3
+rite r4
+e
+ad
 read
 read
 read
 read
 $ cd /
 $ umountstress
-UMOUNT_STRESS_OK
+UMOUNT_STRESS_OK ext2 80 loops 11 ticks
 $ echo SMP_DONE
 SMP_DONE
 $ 
