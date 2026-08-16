@@ -81,6 +81,10 @@ $(OBJS): $(ARCH_STAMP)
 
 %.o: $(ARCH_STAMP)
 
+# riscv64-unknown-elf- or riscv64-linux-gnu-
+# perhaps in /opt/riscv/bin
+#TOOLPREFIX = 
+
 # Try to infer the correct TOOLPREFIX if not set
 ifndef TOOLPREFIX
 ifeq ($(ARCH),riscv)
@@ -229,8 +233,6 @@ EXT2IMG = ext2.img
 EXT2_BLOCKS = 4096
 FAT32IMG = fat32.img
 
-# The on-disk layout constants (FSSIZE/EXT2SIZE/FAT32START) live in
-# kernel/param.h; rebuild the images when they change.
 $(EXT2IMG): hello.c $K/param.h
 	@command -v mkfs.ext2 >/dev/null || { echo "missing mkfs.ext2 (install e2fsprogs)"; exit 1; }
 	@command -v debugfs >/dev/null || { echo "missing debugfs (install e2fsprogs)"; exit 1; }
@@ -247,9 +249,6 @@ $(FAT32IMG): mkfs/mkfat32 $K/param.h
 	rm -f $(FAT32IMG)
 	mkfs/mkfat32 $(FAT32IMG)
 
-# Build-time symlinks that place the public VFS test binaries under
-# /tests in the xv6 root file system, matching the upstream layout
-# (tests/cmds.sh and tests/hello.c are checked in as regular files).
 tests/test1: $U/_test1
 	ln -sf ../user/_test1 $@
 

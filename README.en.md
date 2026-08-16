@@ -142,8 +142,10 @@ See the README in each directory for details: `docs/README.md`, `tests/README.md
 
 ## Submission Materials (`submit/`)
 
-- `xv6-vfs-hal-final.diff`: the complete diff between the final version and the xv6-riscv rev5 baseline (generation procedure in `docs/contest/baseline.md`).
-- `xv6-vfs-hal-final.diff.stat`: statistics summary of the diff.
+- `xv6-vfs-hal-final.diff`: the standard replayable diff against the xv6-riscv rev5 baseline (62 files, +6405/−113; generation procedure in `docs/contest/baseline.md`).
+- `xv6-vfs-hal-final.diff.stat`: statistics summary of the standard diff.
+- `xv6-vfs-hal-final.nonblank.diff`: audit/reporting view with whitespace-only added/deleted lines excluded (+5602/−106, 5708 total); it is not a replayable patch.
+- `xv6-vfs-hal-final.nonblank.diff.stat`: per-file statistics for nonblank textual changes.
 - `final_slides.pdf` / `final_slides.pptx`: presentation slides.
 - `演示视频.mp4`: demo video (script and storyboard in `docs/contest/video_script.md`).
 - `test_report.md`, `diff.md`, `commit_history.md`: test report, diff notes and commit-history snapshot.

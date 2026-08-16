@@ -1,9 +1,3 @@
-// vfsbench: minimal file I/O benchmark used for the performance
-// numbers in the test report.  Writes TOTAL bytes to a file several
-// times (create/write/close/unlink), then reads a prepared 1 MiB file
-// several times, reporting wall time in ticks (10 ms per tick).
-//
-// Usage: vfsbench [path] [iters] [size_kb]
 #include "kernel/types.h"
 #include "kernel/stat.h"
 #include "user/user.h"
@@ -31,7 +25,6 @@ main(int argc, char *argv[])
 
   memset(buf, 'x', sizeof(buf));
 
-  // write phase: full create/write/close/unlink cycle per iteration
   t0 = uptime();
   for(i = 0; i < iters; i++){
     if((fd = open(path, O_WRONLY | O_CREATE | O_TRUNC)) < 0){
@@ -50,7 +43,6 @@ main(int argc, char *argv[])
   t1 = uptime();
   printf("vfsbench: write %d x %d bytes = %d ticks\n", iters, total, t1 - t0);
 
-  // read phase: one prepared file, read repeatedly
   if((fd = open(path, O_WRONLY | O_CREATE | O_TRUNC)) < 0){
     printf("vfsbench: prepare %s failed\n", path);
     exit(1);

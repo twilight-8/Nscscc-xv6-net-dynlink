@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: BSD-2-Clause
-// Regression test: an unlinked file that is still open must remain
-// readable until the last close (POSIX unlink semantics).
-// Usage: unlinkopen [path]   (default path: /mnt/uop.txt)
 #include "kernel/types.h"
 #include "kernel/stat.h"
 #include "user/user.h"
@@ -38,7 +35,6 @@ main(int argc, char *argv[])
     exit(1);
   }
 
-  // The data must still be readable through the open descriptor.
   n = read(rfd, buf, 5);
   if(n != 5 || memcmp(buf, "hello", 5) != 0){
     printf("unlinkopen: FAIL (read %d bytes after unlink)\n", n);
@@ -48,7 +44,6 @@ main(int argc, char *argv[])
   close(wfd);
   close(rfd);
 
-  // The last close frees the inode; the name must stay gone.
   if(open(path, O_RDONLY) >= 0){
     printf("unlinkopen: FAIL (file resurrected after close)\n");
     exit(1);

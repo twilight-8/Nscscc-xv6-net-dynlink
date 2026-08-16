@@ -64,7 +64,6 @@ main(int argc, char *argv[])
     }
   }
 
-  // An open inode must keep the mount busy.
   fd = open(probe, O_RDONLY);
   if(fd < 0 || umount(path) == 0){
     printf("umountstress: FAIL open busy\n");

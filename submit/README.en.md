@@ -8,8 +8,10 @@ This directory holds the final contest submission materials. The authoritative v
 
 | File | Description |
 |---|---|
-| `xv6-vfs-hal-final.diff` | Complete diff between the final version and the xv6-riscv rev5 baseline (source files only; verified to apply cleanly onto the baseline) |
-| `xv6-vfs-hal-final.diff.stat` | Statistics summary of the diff (62 files, +6635/−119) |
+| `xv6-vfs-hal-final.diff` | Standard diff against the xv6-riscv rev5 baseline (source files only; verified to apply cleanly onto the baseline) |
+| `xv6-vfs-hal-final.diff.stat` | Statistics summary of the standard diff (62 files, +6405/−113) |
+| `xv6-vfs-hal-final.nonblank.diff` | Audit/reporting view with whitespace-only added/deleted lines excluded (+5602/−106, 5708 total; not replayable as a patch) |
+| `xv6-vfs-hal-final.nonblank.diff.stat` | Per-file statistics for nonblank textual changes |
 | `diff.md` | How the diff is generated, size statistics, and the HAL/VFS/common breakdown |
 | `test_report.md` | Test report (authoritative version `docs/contest/test_report.md`; raw logs in `tests/evidence/`) |
 | `commit_history.md` | Key progress during the contest, recorded by stage (authoritative version `docs/progress.md`) |

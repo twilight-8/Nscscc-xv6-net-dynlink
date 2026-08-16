@@ -6,18 +6,15 @@
 #define SRC_FILENAME "hello.c"
 #define DST_FILENAME "/mnt/hello.c"
 
-// 返回值：0表示成功，否则表示失败。
 int test_cross_fs_copy() {
   printf("将从 xv6 文件系统复制文件到 EXT2 文件系统\n\n");
 
-  // 打开源文件 (用户创建的 test.txt)
   int src_fd = open(SRC_FILENAME, O_RDONLY);
   if(src_fd < 0) {
     printf("错误: 找不到源文件 %s\n", SRC_FILENAME);
     return 1;
   }
 
-  // 创建目标文件 (在 EXT2 文件系统中)
   int dst_fd = open(DST_FILENAME, O_WRONLY | O_CREATE);
   if(dst_fd < 0) {
     printf("错误: 无法创建目标文件 %s\n", DST_FILENAME);
@@ -26,7 +23,6 @@ int test_cross_fs_copy() {
     return 2;
   }
 
-  // 复制数据
   char copy_buf[512];
   int copy_n;
   while((copy_n = read(src_fd, copy_buf, sizeof(copy_buf))) > 0) {
@@ -48,7 +44,6 @@ int test_cross_fs_copy() {
 
   printf("✓ 文件复制成功！\n\n");
 
-  // 验证复制的文件
   printf("验证复制结果:\n");
   int fd = open(DST_FILENAME, O_RDONLY);
   if(fd < 0) {

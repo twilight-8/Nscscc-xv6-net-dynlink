@@ -11,9 +11,6 @@
 #define LOONGARCH_IOCSR_EXTIOI_ROUTE_BASE	    0x1c00
 #define LOONGARCH_IOCSR_EXRIOI_NODETYPE_BASE  0x14a0
 
-// read and write tp, the thread pointer, which holds
-// this core's hartid (core number), the index into cpus[].
-
 static inline uint64
 r_sp()
 {
@@ -248,7 +245,6 @@ r_csr_badv()
   return x;
 }
 
-/* IOCSR */
 static inline uint32 iocsr_readl(uint32 reg)
 {
 	return __iocsrrd_w(reg);
@@ -276,14 +272,12 @@ intr_get()
   return (x & CSR_CRMD_IE) != 0;
 }
 
-// enable device interrupts
 static inline void
 intr_on()
 {
   w_csr_crmd(r_csr_crmd() | CSR_CRMD_IE);
 }
 
-// disable device interrupts
 static inline void
 intr_off()
 {
@@ -317,11 +311,9 @@ cpu_idle()
 
 #define PAMASK          0xFFFFFFFFFUL << PGSHIFT
 #define PTE2PA(pte) (pte & PAMASK)
-// shift a physical address to the right place for a PTE.
 #define PA2PTE(pa) (((uint64)pa) & PAMASK)
 #define PTE_FLAGS(pte) ((pte) & 0xE0000000000001FFUL)
 
-// extract the three 9-bit page table indices from a virtual address.
 #define PXMASK          0x1FF // 9 bits
 #define PXSHIFT(level)  (PGSHIFT+(9*(level)))
 #define PX(level, va) ((((uint64) (va)) >> PXSHIFT(level)) & PXMASK)

@@ -1,8 +1,3 @@
-	# qemu -kernel loads the kernel at 0x00000000
-        # and causes each CPU to jump there.
-        # kernel.ld causes the following code to
-        # be placed at 0x00000000.
-
 #include "asm.h"
 
 .section .text
@@ -20,11 +15,6 @@ _entry:
         li.w	    $t0, 0xb0		      # PLV=0, IE=0, PG=1
 	csrwr	    $t0, LOONGARCH_CSR_CRMD
         invtlb      0x0,$zero,$zero
-	# set up a stack for C.
-        # stack0 is declared in start.c,
-        # with a 4096-byte stack per CPU.
-        # sp = stack0 + (hartid * 4096)
-     
         la          $sp, stack0
         li.d        $a0, 1024*4
 	csrrd       $a1, LOONGARCH_CSR_CPUID
@@ -32,7 +22,6 @@ _entry:
         addi.d      $a1, $a1, 1
         mul.d       $a0, $a0, $a1
         add.d       $sp, $sp, $a0
-	# jump to start() in start.c
         bl          main
 spin:
         b           spin

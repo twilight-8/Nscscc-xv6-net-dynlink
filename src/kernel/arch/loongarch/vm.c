@@ -13,7 +13,7 @@ tlbinit(void)
 {
   asm volatile("invtlb  0x0,$zero,$zero");
   w_csr_stlbps(0xcU);
-  w_csr_asid(0x0U);//todo
+  w_csr_asid(0x0U);
   w_csr_tlbrehi(0xcU);
 }
 
@@ -47,19 +47,6 @@ kvmmap(pagetable_t kpgtbl, uint64 va, uint64 pa, uint64 sz, int perm)
     panic("kvmmap");
 }
 
-// Return the address of the PTE in page table pagetable
-// that corresponds to virtual address va.  If alloc!=0,
-// create any required page-table pages.
-//
-// The paging scheme has four levels of page-table
-// pages. A page-table page contains 512 64-bit PTEs.
-// A 64-bit virtual address is split into five fields:
-//   48..63 -- must be zero.
-//   39..47 -- 9 bits of level-3 index.
-//   30..38 -- 9 bits of level-2 index.
-//   21..29 -- 9 bits of level-1 index.
-//   12..20 -- 9 bits of level-0 index.
-//    0..11 -- 12 bits of byte offset within the page.
 pte_t *
 walk(pagetable_t pagetable, uint64 va, int alloc)
 {
@@ -80,9 +67,6 @@ walk(pagetable_t pagetable, uint64 va, int alloc)
   return &pagetable[PX(0, va)];
 }
 
-// Look up a virtual address, return the physical address,
-// or 0 if not mapped.
-// Can only be used to look up user pages.
 uint64
 walkaddr(pagetable_t pagetable, uint64 va)
 {
@@ -114,10 +98,6 @@ ismapped(pagetable_t pagetable, uint64 va)
   return pte != 0 && (*pte & PTE_V) != 0;
 }
 
-// Create PTEs for virtual addresses starting at va that refer to
-// physical addresses starting at pa. va and size might not
-// be page-aligned. Returns 0 on success, -1 if walk() couldn't
-// allocate a needed page-table page.
 int
 mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
 {
@@ -143,9 +123,6 @@ mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
   return 0;
 }
 
-// Remove npages of mappings starting from va. va must be
-// page-aligned. The mappings must exist.
-// Optionally free the physical memory.
 void
 uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
 {
@@ -170,8 +147,6 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
   }
 }
 
-// create an empty user page table.
-// returns 0 if out of memory.
 pagetable_t
 uvmcreate()
 {
@@ -183,9 +158,6 @@ uvmcreate()
   return pagetable;
 }
 
-// Load the user initcode into address 0 of pagetable,
-// for the very first process.
-// sz must be less than a page.
 void
 uvminit(pagetable_t pagetable, uchar *src, uint sz)
 {
@@ -197,10 +169,8 @@ uvminit(pagetable_t pagetable, uchar *src, uint sz)
   memset(mem, 0, PGSIZE);
   mappages(pagetable, 0, PGSIZE, (uint64)mem, PTE_P|PTE_W|PTE_PLV|PTE_MAT);
   memmove(mem, src, sz);
-}//todo
+}
 
-// Allocate PTEs and physical memory to grow process from oldsz to
-// newsz, which need not be page aligned.  Returns new size or 0 on error.
 uint64
 uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz, int xperm)
 {
@@ -260,10 +230,6 @@ vmfault(pagetable_t pagetable, uint64 va, int read)
   return (uint64)mem;
 }
 
-// Deallocate user pages to bring the process size from oldsz to
-// newsz.  oldsz and newsz need not be page-aligned, nor does newsz
-// need to be less than oldsz.  oldsz can be larger than the actual
-// process size.  Returns the new process size.
 uint64
 uvmdealloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz)
 {
@@ -278,16 +244,12 @@ uvmdealloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz)
   return newsz;
 }
 
-// Recursively free page-table pages.
-// All leaf mappings must already have been removed.
 void
 freewalk(pagetable_t pagetable)
 {
-  // there are 2^9 = 512 PTEs in a page table.
   for(int i = 0; i < 512; i++){
     pte_t pte = pagetable[i];
     if((pte & PTE_V) && (PTE_FLAGS(pte) == PTE_V)){
-      // this PTE points to a lower-level page table.
       uint64 child = (PTE2PA(pte) | DMWIN_MASK);
       freewalk((pagetable_t)child);
       pagetable[i] = 0;
@@ -298,8 +260,6 @@ freewalk(pagetable_t pagetable)
   kfree((void*)pagetable);
 }
 
-// Free user memory pages,
-// then free page-table pages.
 void
 uvmfree(pagetable_t pagetable, uint64 sz)
 {
@@ -308,12 +268,6 @@ uvmfree(pagetable_t pagetable, uint64 sz)
   freewalk(pagetable);
 }
 
-// Given a parent process's page table, copy
-// its memory into a child's page table.
-// Copies both the page table and the
-// physical memory.
-// returns 0 on success, -1 on failure.
-// frees any allocated pages on failure.
 int
 uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
 {
@@ -344,8 +298,6 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
   return -1;
 }
 
-// mark a PTE invalid for user access.
-// used by exec for the user stack guard page.
 void
 uvmclear(pagetable_t pagetable, uint64 va)
 {
@@ -357,9 +309,6 @@ uvmclear(pagetable_t pagetable, uint64 va)
   *pte &= ~PTE_PLV;
 }
 
-// Copy from kernel to user.
-// Copy len bytes from src to virtual address dstva in a given page table.
-// Return 0 on success, -1 on error.
 int
 copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 {
@@ -386,11 +335,8 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
     dstva = va0 + PGSIZE;
   }
   return 0;
-}//todo
+}
 
-// Copy from user to kernel.
-// Copy len bytes to dst from virtual address srcva in a given page table.
-// Return 0 on success, -1 on error.
 int
 copyin(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len)
 {
@@ -413,12 +359,8 @@ copyin(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len)
     srcva = va0 + PGSIZE;
   }
   return 0;
-}//todo
+}
 
-// Copy a null-terminated string from user to kernel.
-// Copy bytes to dst from virtual address srcva in a given page table,
-// until a '\0', or max.
-// Return 0 on success, -1 on error.
 int
 copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
 {
@@ -458,4 +400,4 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
   } else {
     return -1;
   }
-}//todo
+}

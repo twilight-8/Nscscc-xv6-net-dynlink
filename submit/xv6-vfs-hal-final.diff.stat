@@ -1,31 +1,31 @@
  src/.gitignore                         |    7
- src/Makefile                           |  177 ++++-
+ src/Makefile                           |  170 ++++
  src/hello.c                            |    8
- src/kernel/arch/loongarch/apic.c       |   38 +
- src/kernel/arch/loongarch/asm.h        |   18
- src/kernel/arch/loongarch/entry.S      |   38 +
- src/kernel/arch/loongarch/extioi.c     |   35 +
+ src/kernel/arch/loongarch/apic.c       |   33 +
+ src/kernel/arch/loongarch/asm.h        |   16
+ src/kernel/arch/loongarch/entry.S      |   27 +
+ src/kernel/arch/loongarch/extioi.c     |   34 +
  src/kernel/arch/loongarch/hal.c        |   52 +
  src/kernel/arch/loongarch/kernel.ld    |   48 +
- src/kernel/arch/loongarch/kernelvec.S  |   85 ++
- src/kernel/arch/loongarch/loongarch.h  |  332 +++++++++
+ src/kernel/arch/loongarch/kernelvec.S  |   75 ++
+ src/kernel/arch/loongarch/loongarch.h  |  324 +++++++++
  src/kernel/arch/loongarch/merror.S     |    7
  src/kernel/arch/loongarch/start.c      |    3
- src/kernel/arch/loongarch/swtch.S      |   37 +
- src/kernel/arch/loongarch/tlbrefill.S  |   26 +
- src/kernel/arch/loongarch/trap.c       |  277 +++++++
+ src/kernel/arch/loongarch/swtch.S      |   31 +
+ src/kernel/arch/loongarch/tlbrefill.S  |   23 +
+ src/kernel/arch/loongarch/trap.c       |  223 ++++++
  src/kernel/arch/loongarch/user.ld      |   39 +
- src/kernel/arch/loongarch/uservec.S    |  134 ++++
+ src/kernel/arch/loongarch/uservec.S    |   97 +++
  src/kernel/arch/loongarch/virtio_pci.c |  315 ++++++++
- src/kernel/arch/loongarch/vm.c         |  461 ++++++++++++
- src/kernel/bio.c                       |    5
+ src/kernel/arch/loongarch/vm.c         |  403 +++++++++++
+ src/kernel/bio.c                       |    4
  src/kernel/block.c                     |   53 +
  src/kernel/block.h                     |   10
  src/kernel/defs.h                      |   46 +
  src/kernel/exec.c                      |   32 +
  src/kernel/ext2.c                      | 1216 ++++++++++++++++++++++++++++++++
  src/kernel/fat32.c                     | 1183 +++++++++++++++++++++++++++++++
- src/kernel/file.c                      |    7
+ src/kernel/file.c                      |    6
  src/kernel/file.h                      |    8
  src/kernel/fs.c                        |   83 ++
  src/kernel/hal.c                       |   46 +
@@ -39,7 +39,7 @@
  src/kernel/syscall.c                   |    4
  src/kernel/syscall.h                   |    2
  src/kernel/sysfile.c                   |   88 ++
- src/kernel/trap.c                      |    5
+ src/kernel/trap.c                      |    4
  src/kernel/vfs.c                       |  507 +++++++++++++
  src/kernel/vfs.h                       |   57 ++
  src/kernel/virtio.h                    |    2
@@ -49,15 +49,15 @@
  src/test-xv6.py                        |    2
  src/tests/cmds.sh                      |    5
  src/tests/hello.c                      |    5
- src/user/bigfile.c                     |  110 +++
+ src/user/bigfile.c                     |  101 +++
  src/user/hello.c                       |   10
  src/user/mount.c                       |   40 +
- src/user/test1.c                       |   67 ++
- src/user/test2.c                       |   82 ++
+ src/user/test1.c                       |   64 ++
+ src/user/test2.c                       |   77 ++
  src/user/umount.c                      |   21 +
- src/user/umountstress.c                |  109 +++
- src/user/unlinkopen.c                  |   59 ++
+ src/user/umountstress.c                |  108 +++
+ src/user/unlinkopen.c                  |   54 +
  src/user/user.h                        |    2
  src/user/usys.pl                       |    8
- src/user/vfsbench.c                    |   85 ++
- 62 files changed, 6635 insertions(+), 119 deletions(-)
+ src/user/vfsbench.c                    |   77 ++
+ 62 files changed, 6405 insertions(+), 113 deletions(-)

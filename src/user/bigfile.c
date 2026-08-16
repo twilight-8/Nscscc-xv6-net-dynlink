@@ -1,13 +1,4 @@
 // SPDX-License-Identifier: BSD-2-Clause
-// Large-file exercise for any writable VFS backend: writes 1 MiB of a
-// deterministic pattern and verifies every byte. On ext2 this exceeds
-// the 268 KiB direct+single-indirect limit and forces double-indirect
-// allocation; on FAT32 it exercises a long cluster chain.
-//
-// Usage: bigfile [path] [mode]
-//   mode "full" (default): write + verify + unlink
-//   mode "keep":           write + verify, keep the file
-//   mode "verify":         verify an existing file written by "keep"
 #include "kernel/types.h"
 #include "kernel/stat.h"
 #include "user/user.h"

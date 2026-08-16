@@ -1,16 +1,10 @@
-	#
-        # interrupts and exceptions while in privilege0
-        # push all registers, call kerneltrap(), restore, return.
-        #
 .section k_eentry
 .globl kerneltrap
 .globl kernelvec
 .align 4
 kernelvec:
-        // make room to save registers.
         addi.d $sp, $sp, -256
 
-        // save the registers.
         st.d $ra, $sp, 0
         st.d $tp, $sp, 8
         st.d $sp, $sp, 16
@@ -43,12 +37,9 @@ kernelvec:
         st.d $s7, $sp, 232
         st.d $s8, $sp, 240
 
-	// call the C trap handler in trap.c
         bl kerneltrap
 
-        // restore register
         ld.d $ra, $sp, 0
-        // not this, in case we moved CPUs: ld.d $tp, $sp, 8
         ld.d $sp, $sp, 16
         ld.d $a0, $sp, 24
         ld.d $a1, $sp, 32
@@ -81,5 +72,4 @@ kernelvec:
 
         addi.d $sp, $sp, 256
 
-        // return to whatever we were doing in the kernel.
         ertn

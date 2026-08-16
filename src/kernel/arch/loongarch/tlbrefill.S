@@ -6,9 +6,6 @@
 handle_tlbr:
 	csrwr	$t0, LOONGARCH_CSR_TLBRSAVE
 	csrrd	$t0, LOONGARCH_CSR_PGD
-//	lddir	$t0, $t0, 4
-//	srli.d	$t0, $t0, 12
-//	slli.d	$t0, $t0, 12
 	lddir	$t0, $t0, 3
 	srli.d	$t0, $t0, 12
 	slli.d	$t0, $t0, 12

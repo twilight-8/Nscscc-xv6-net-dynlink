@@ -22,7 +22,6 @@ extioiinit(void)
     extioi_init();
 }
 
-// ask the extioi what interrupt we should serve.
 uint64
 extioi_claim(void)
 {

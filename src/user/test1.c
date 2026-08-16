@@ -6,8 +6,6 @@
 #define NULL 0
 #define LEN 1024
 
-/* 文件拷贝测试。
-   返回值：0表示成功，否则表示失败。*/
 int test_copy_file(const char *src, const char *dst) {
   int inf, outf;
 
@@ -53,7 +51,6 @@ static const char * fnames[][2] = {
   {"/tests/hello.c",  "/mnt/hello.c"}
 };
 
-// number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))
 #define NUM_TESTS NELEM(fnames)
 

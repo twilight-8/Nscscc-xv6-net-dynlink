@@ -1,4 +1,4 @@
-diff -ruN -d --strip-trailing-cr xv6-riscv-src/.gitignore src/.gitignore
+diff -ruN -d --strip-trailing-cr -B xv6-riscv-src/.gitignore src/.gitignore
 --- xv6-riscv-src/.gitignore
 +++ src/.gitignore
 @@ -11,8 +11,13 @@
@@ -16,7 +16,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/.gitignore src/.gitignore
  .gdbinit
 +.arch-*
  TAGS
-diff -ruN -d --strip-trailing-cr xv6-riscv-src/Makefile src/Makefile
+diff -ruN -d --strip-trailing-cr -B xv6-riscv-src/Makefile src/Makefile
 --- xv6-riscv-src/Makefile
 +++ src/Makefile
 @@ -1,9 +1,8 @@
@@ -31,7 +31,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/Makefile src/Makefile
    $K/console.o \
    $K/printf.o \
    $K/uart.o \
-@@ -11,31 +10,80 @@
+@@ -11,24 +10,76 @@
    $K/spinlock.o \
    $K/string.o \
    $K/main.o \
@@ -99,10 +99,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/Makefile src/Makefile
 +else
 +$(error unsupported ARCH=$(ARCH))
 +endif
- 
--# riscv64-unknown-elf- or riscv64-linux-gnu-
--# perhaps in /opt/riscv/bin
--#TOOLPREFIX = 
++
 +OBJS = $(ARCH_OBJS) $(COMMON_OBJS)
 +ARCH_STAMP = .arch-$(ARCH)
 +
@@ -115,13 +112,17 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/Makefile src/Makefile
 +
 +%.o: $(ARCH_STAMP)
  
+ # riscv64-unknown-elf- or riscv64-linux-gnu-
+ # perhaps in /opt/riscv/bin
+@@ -36,6 +87,7 @@
+ 
  # Try to infer the correct TOOLPREFIX if not set
  ifndef TOOLPREFIX
 +ifeq ($(ARCH),riscv)
  TOOLPREFIX := $(shell if riscv64-unknown-elf-objdump -i 2>&1 | grep 'elf64-big' >/dev/null 2>&1; \
  	then echo 'riscv64-unknown-elf-'; \
  	elif riscv64-elf-objdump -i 2>&1 | grep 'elf64-big' >/dev/null 2>&1; \
-@@ -48,12 +96,32 @@
+@@ -48,12 +100,32 @@
  	echo "*** Error: Couldn't find a riscv64 version of GCC/binutils." 1>&2; \
  	echo "*** To turn off this error, run 'gmake TOOLPREFIX= ...'." 1>&2; \
  	echo "***" 1>&2; exit 1; fi)
@@ -155,7 +156,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/Makefile src/Makefile
  AS = $(TOOLPREFIX)gas
  LD = $(TOOLPREFIX)ld
  OBJCOPY = $(TOOLPREFIX)objcopy
-@@ -61,7 +129,7 @@
+@@ -61,7 +133,7 @@
  
  CFLAGS = -Wall -Werror -O -fno-omit-frame-pointer -ggdb -gdwarf-2
  CFLAGS += -MD
@@ -164,7 +165,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/Makefile src/Makefile
  CFLAGS += -ffreestanding
  CFLAGS += -fno-common -nostdlib
  CFLAGS += -fno-builtin-strncpy -fno-builtin-strncmp -fno-builtin-strlen -fno-builtin-memset
-@@ -83,21 +151,23 @@
+@@ -83,21 +155,23 @@
  
  LDFLAGS = -z max-page-size=4096
  
@@ -193,7 +194,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/Makefile src/Makefile
  	$(OBJDUMP) -S $@ > $*.asm
  	$(OBJDUMP) -t $@ | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > $*.sym
  
-@@ -116,6 +186,9 @@
+@@ -116,6 +190,9 @@
  mkfs/mkfs: mkfs/mkfs.c $K/fs.h $K/param.h
  	gcc -I. -o mkfs/mkfs mkfs/mkfs.c
  
@@ -203,7 +204,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/Makefile src/Makefile
  # Prevent deletion of intermediate files, e.g. cat.o, after first build, so
  # that disk image changes after first build are persistent until clean.  More
  # details:
-@@ -132,9 +205,18 @@
+@@ -132,9 +209,18 @@
  	$U/_ln\
  	$U/_ls\
  	$U/_mkdir\
@@ -222,7 +223,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/Makefile src/Makefile
  	$U/_usertests\
  	$U/_grind\
  	$U/_wc\
-@@ -143,16 +225,57 @@
+@@ -143,16 +229,52 @@
  	$U/_forphan\
  	$U/_dorphan\
  
@@ -233,8 +234,6 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/Makefile src/Makefile
 +FAT32IMG = fat32.img
  
 --include kernel/*.d user/*.d
-+# The on-disk layout constants (FSSIZE/EXT2SIZE/FAT32START) live in
-+# kernel/param.h; rebuild the images when they change.
 +$(EXT2IMG): hello.c $K/param.h
 +	@command -v mkfs.ext2 >/dev/null || { echo "missing mkfs.ext2 (install e2fsprogs)"; exit 1; }
 +	@command -v debugfs >/dev/null || { echo "missing debugfs (install e2fsprogs)"; exit 1; }
@@ -251,9 +250,6 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/Makefile src/Makefile
 +	rm -f $(FAT32IMG)
 +	mkfs/mkfat32 $(FAT32IMG)
 +
-+# Build-time symlinks that place the public VFS test binaries under
-+# /tests in the xv6 root file system, matching the upstream layout
-+# (tests/cmds.sh and tests/hello.c are checked in as regular files).
 +tests/test1: $U/_test1
 +	ln -sf ../user/_test1 $@
 +
@@ -285,7 +281,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/Makefile src/Makefile
          $U/usys.S \
  	$(UPROGS)
  
-@@ -166,10 +289,16 @@
+@@ -166,10 +288,16 @@
  CPUS := 3
  endif
  
@@ -302,7 +298,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/Makefile src/Makefile
  
  qemu: check-qemu-version $K/kernel fs.img
  	$(QEMU) $(QEMUOPTS)
-diff -ruN -d --strip-trailing-cr xv6-riscv-src/hello.c src/hello.c
+diff -ruN -d --strip-trailing-cr -B xv6-riscv-src/hello.c src/hello.c
 --- xv6-riscv-src/hello.c
 +++ src/hello.c
 @@ -0,0 +1,8 @@
@@ -314,19 +310,15 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/hello.c src/hello.c
 +{
 +  printf("Hello, world!\n");
 +}
-diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/apic.c src/kernel/arch/loongarch/apic.c
+diff -ruN -d --strip-trailing-cr -B xv6-riscv-src/kernel/arch/loongarch/apic.c src/kernel/arch/loongarch/apic.c
 --- xv6-riscv-src/kernel/arch/loongarch/apic.c
 +++ src/kernel/arch/loongarch/apic.c
-@@ -0,0 +1,38 @@
+@@ -0,0 +1,33 @@
 +#include "types.h"
 +#include "param.h"
 +#include "memlayout.h"
 +#include "loongarch.h"
 +#include "defs.h"
-+
-+//
-+// the loongarch 7A1000 I/O Interrupt Controller Registers.
-+//
 +
 +void
 +apic_init(void)
@@ -350,16 +342,15 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/apic.c src/
 +  apic_init();
 +}
 +
-+// tell the apic we've served this IRQ.
 +void
 +apic_complete(uint64 irq)
 +{
 +  *(volatile uint64*)(LS7A_INT_CLEAR_REG) = (irq);
 +}
-diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/asm.h src/kernel/arch/loongarch/asm.h
+diff -ruN -d --strip-trailing-cr -B xv6-riscv-src/kernel/arch/loongarch/asm.h src/kernel/arch/loongarch/asm.h
 --- xv6-riscv-src/kernel/arch/loongarch/asm.h
 +++ src/kernel/arch/loongarch/asm.h
-@@ -0,0 +1,18 @@
+@@ -0,0 +1,16 @@
 +#define LOONGARCH_CSR_CRMD		    0x0	    /* Current mode info */
 +#define LOONGARCH_CSR_CPUID		    0x20	/* CPU core id */
 +
@@ -376,18 +367,10 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/asm.h src/k
 +#define LOONGARCH_CSR_TLBRENTRY		0x88	/* TLB refill exception entry */
 +#define LOONGARCH_CSR_TLBRBADV		0x89	/* TLB refill badvaddr */
 +#define LOONGARCH_CSR_TLBRSAVE		0x8b	/* KScratch for TLB refill exception */
-+
-+/* Direct Map window 0/1 */
-\ No newline at end of file
-diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/entry.S src/kernel/arch/loongarch/entry.S
+diff -ruN -d --strip-trailing-cr -B xv6-riscv-src/kernel/arch/loongarch/entry.S src/kernel/arch/loongarch/entry.S
 --- xv6-riscv-src/kernel/arch/loongarch/entry.S
 +++ src/kernel/arch/loongarch/entry.S
-@@ -0,0 +1,38 @@
-+	# qemu -kernel loads the kernel at 0x00000000
-+        # and causes each CPU to jump there.
-+        # kernel.ld causes the following code to
-+        # be placed at 0x00000000.
-+
+@@ -0,0 +1,27 @@
 +#include "asm.h"
 +
 +.section .text
@@ -405,11 +388,6 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/entry.S src
 +        li.w	    $t0, 0xb0		      # PLV=0, IE=0, PG=1
 +	csrwr	    $t0, LOONGARCH_CSR_CRMD
 +        invtlb      0x0,$zero,$zero
-+	# set up a stack for C.
-+        # stack0 is declared in start.c,
-+        # with a 4096-byte stack per CPU.
-+        # sp = stack0 + (hartid * 4096)
-+     
 +        la          $sp, stack0
 +        li.d        $a0, 1024*4
 +	csrrd       $a1, LOONGARCH_CSR_CPUID
@@ -417,14 +395,13 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/entry.S src
 +        addi.d      $a1, $a1, 1
 +        mul.d       $a0, $a0, $a1
 +        add.d       $sp, $sp, $a0
-+	# jump to start() in start.c
 +        bl          main
 +spin:
 +        b           spin
-diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/extioi.c src/kernel/arch/loongarch/extioi.c
+diff -ruN -d --strip-trailing-cr -B xv6-riscv-src/kernel/arch/loongarch/extioi.c src/kernel/arch/loongarch/extioi.c
 --- xv6-riscv-src/kernel/arch/loongarch/extioi.c
 +++ src/kernel/arch/loongarch/extioi.c
-@@ -0,0 +1,35 @@
+@@ -0,0 +1,34 @@
 +#include "types.h"
 +#include "param.h"
 +#include "memlayout.h"
@@ -449,7 +426,6 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/extioi.c sr
 +    extioi_init();
 +}
 +
-+// ask the extioi what interrupt we should serve.
 +uint64
 +extioi_claim(void)
 +{
@@ -460,7 +436,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/extioi.c sr
 +{
 +    iocsr_writeq(irq, LOONGARCH_IOCSR_EXTIOI_ISR_BASE);
 +}
-diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/hal.c src/kernel/arch/loongarch/hal.c
+diff -ruN -d --strip-trailing-cr -B xv6-riscv-src/kernel/arch/loongarch/hal.c src/kernel/arch/loongarch/hal.c
 --- xv6-riscv-src/kernel/arch/loongarch/hal.c
 +++ src/kernel/arch/loongarch/hal.c
 @@ -0,0 +1,52 @@
@@ -516,7 +492,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/hal.c src/k
 +{
 +  virtio_disk_rw(b, write);
 +}
-diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/kernel.ld src/kernel/arch/loongarch/kernel.ld
+diff -ruN -d --strip-trailing-cr -B xv6-riscv-src/kernel/arch/loongarch/kernel.ld src/kernel/arch/loongarch/kernel.ld
 --- xv6-riscv-src/kernel/arch/loongarch/kernel.ld
 +++ src/kernel/arch/loongarch/kernel.ld
 @@ -0,0 +1,48 @@
@@ -568,23 +544,17 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/kernel.ld s
 +
 +  PROVIDE(end = .);
 +}
-diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/kernelvec.S src/kernel/arch/loongarch/kernelvec.S
+diff -ruN -d --strip-trailing-cr -B xv6-riscv-src/kernel/arch/loongarch/kernelvec.S src/kernel/arch/loongarch/kernelvec.S
 --- xv6-riscv-src/kernel/arch/loongarch/kernelvec.S
 +++ src/kernel/arch/loongarch/kernelvec.S
-@@ -0,0 +1,85 @@
-+	#
-+        # interrupts and exceptions while in privilege0
-+        # push all registers, call kerneltrap(), restore, return.
-+        #
+@@ -0,0 +1,75 @@
 +.section k_eentry
 +.globl kerneltrap
 +.globl kernelvec
 +.align 4
 +kernelvec:
-+        // make room to save registers.
 +        addi.d $sp, $sp, -256
 +
-+        // save the registers.
 +        st.d $ra, $sp, 0
 +        st.d $tp, $sp, 8
 +        st.d $sp, $sp, 16
@@ -617,12 +587,9 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/kernelvec.S
 +        st.d $s7, $sp, 232
 +        st.d $s8, $sp, 240
 +
-+	// call the C trap handler in trap.c
 +        bl kerneltrap
 +
-+        // restore register
 +        ld.d $ra, $sp, 0
-+        // not this, in case we moved CPUs: ld.d $tp, $sp, 8
 +        ld.d $sp, $sp, 16
 +        ld.d $a0, $sp, 24
 +        ld.d $a1, $sp, 32
@@ -655,12 +622,11 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/kernelvec.S
 +
 +        addi.d $sp, $sp, 256
 +
-+        // return to whatever we were doing in the kernel.
 +        ertn
-diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/loongarch.h src/kernel/arch/loongarch/loongarch.h
+diff -ruN -d --strip-trailing-cr -B xv6-riscv-src/kernel/arch/loongarch/loongarch.h src/kernel/arch/loongarch/loongarch.h
 --- xv6-riscv-src/kernel/arch/loongarch/loongarch.h
 +++ src/kernel/arch/loongarch/loongarch.h
-@@ -0,0 +1,332 @@
+@@ -0,0 +1,324 @@
 +#include <larchintrin.h>
 +
 +#define  CSR_CRMD_IE_SHIFT		    2
@@ -673,9 +639,6 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/loongarch.h
 +#define LOONGARCH_IOCSR_EXTIOI_MAP_BASE       0x14c0
 +#define LOONGARCH_IOCSR_EXTIOI_ROUTE_BASE	    0x1c00
 +#define LOONGARCH_IOCSR_EXRIOI_NODETYPE_BASE  0x14a0
-+
-+// read and write tp, the thread pointer, which holds
-+// this core's hartid (core number), the index into cpus[].
 +
 +static inline uint64
 +r_sp()
@@ -911,7 +874,6 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/loongarch.h
 +  return x;
 +}
 +
-+/* IOCSR */
 +static inline uint32 iocsr_readl(uint32 reg)
 +{
 +	return __iocsrrd_w(reg);
@@ -939,14 +901,12 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/loongarch.h
 +  return (x & CSR_CRMD_IE) != 0;
 +}
 +
-+// enable device interrupts
 +static inline void
 +intr_on()
 +{
 +  w_csr_crmd(r_csr_crmd() | CSR_CRMD_IE);
 +}
 +
-+// disable device interrupts
 +static inline void
 +intr_off()
 +{
@@ -980,11 +940,9 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/loongarch.h
 +
 +#define PAMASK          0xFFFFFFFFFUL << PGSHIFT
 +#define PTE2PA(pte) (pte & PAMASK)
-+// shift a physical address to the right place for a PTE.
 +#define PA2PTE(pa) (((uint64)pa) & PAMASK)
 +#define PTE_FLAGS(pte) ((pte) & 0xE0000000000001FFUL)
 +
-+// extract the three 9-bit page table indices from a virtual address.
 +#define PXMASK          0x1FF // 9 bits
 +#define PXSHIFT(level)  (PGSHIFT+(9*(level)))
 +#define PX(level, va) ((((uint64) (va)) >> PXSHIFT(level)) & PXMASK)
@@ -993,7 +951,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/loongarch.h
 +
 +typedef uint64 pte_t;
 +typedef uint64 *pagetable_t;
-diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/merror.S src/kernel/arch/loongarch/merror.S
+diff -ruN -d --strip-trailing-cr -B xv6-riscv-src/kernel/arch/loongarch/merror.S src/kernel/arch/loongarch/merror.S
 --- xv6-riscv-src/kernel/arch/loongarch/merror.S
 +++ src/kernel/arch/loongarch/merror.S
 @@ -0,0 +1,7 @@
@@ -1005,23 +963,17 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/merror.S sr
 +    bl machine_trap
 +    ertn
 \ No newline at end of file
-diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/start.c src/kernel/arch/loongarch/start.c
+diff -ruN -d --strip-trailing-cr -B xv6-riscv-src/kernel/arch/loongarch/start.c src/kernel/arch/loongarch/start.c
 --- xv6-riscv-src/kernel/arch/loongarch/start.c
 +++ src/kernel/arch/loongarch/start.c
 @@ -0,0 +1,3 @@
 +#include "param.h"
 +
 +__attribute__ ((aligned (16))) char stack0[4096 * NCPU];
-diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/swtch.S src/kernel/arch/loongarch/swtch.S
+diff -ruN -d --strip-trailing-cr -B xv6-riscv-src/kernel/arch/loongarch/swtch.S src/kernel/arch/loongarch/swtch.S
 --- xv6-riscv-src/kernel/arch/loongarch/swtch.S
 +++ src/kernel/arch/loongarch/swtch.S
-@@ -0,0 +1,37 @@
-+# Context switch
-+#
-+#   void swtch(struct context *old, struct context *new);
-+# # Save current registers in old. Load from new.	
-+
-+
+@@ -0,0 +1,31 @@
 +.globl swtch
 +swtch:
 +        st.d $ra, $a0, 0
@@ -1053,10 +1005,10 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/swtch.S src
 +        jirl $zero, $ra, 0
 +
 +	
-diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/tlbrefill.S src/kernel/arch/loongarch/tlbrefill.S
+diff -ruN -d --strip-trailing-cr -B xv6-riscv-src/kernel/arch/loongarch/tlbrefill.S src/kernel/arch/loongarch/tlbrefill.S
 --- xv6-riscv-src/kernel/arch/loongarch/tlbrefill.S
 +++ src/kernel/arch/loongarch/tlbrefill.S
-@@ -0,0 +1,26 @@
+@@ -0,0 +1,23 @@
 +#include "asm.h"
 +
 +.section tlbrentry
@@ -1065,9 +1017,6 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/tlbrefill.S
 +handle_tlbr:
 +	csrwr	$t0, LOONGARCH_CSR_TLBRSAVE
 +	csrrd	$t0, LOONGARCH_CSR_PGD
-+//	lddir	$t0, $t0, 4
-+//	srli.d	$t0, $t0, 12
-+//	slli.d	$t0, $t0, 12
 +	lddir	$t0, $t0, 3
 +	srli.d	$t0, $t0, 12
 +	slli.d	$t0, $t0, 12
@@ -1083,10 +1032,10 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/tlbrefill.S
 +	csrrd	$t0, LOONGARCH_CSR_TLBRSAVE
 +	ertn
 +	
-diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/trap.c src/kernel/arch/loongarch/trap.c
+diff -ruN -d --strip-trailing-cr -B xv6-riscv-src/kernel/arch/loongarch/trap.c src/kernel/arch/loongarch/trap.c
 --- xv6-riscv-src/kernel/arch/loongarch/trap.c
 +++ src/kernel/arch/loongarch/trap.c
-@@ -0,0 +1,277 @@
+@@ -0,0 +1,223 @@
 +#include "types.h"
 +#include "param.h"
 +#include "memlayout.h"
@@ -1098,7 +1047,6 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/trap.c src/
 +struct spinlock tickslock;
 +uint ticks;
 +
-+// in kernelvec.S, calls kerneltrap().
 +void kernelvec();
 +void uservec();
 +void handle_tlbr();
@@ -1154,10 +1102,6 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/trap.c src/
 +{
 +}
 +
-+//
-+// handle an interrupt, exception, or system call from user space.
-+// called from uservec.S
-+//
 +void
 +usertrap(void)
 +{
@@ -1168,36 +1112,25 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/trap.c src/
 +  if((r_csr_prmd() & PRMD_PPLV) == 0)
 +    panic("usertrap: not from user mode");
 +
-+  // send interrupts and exceptions to kerneltrap(),
-+  // since we're now in the kernel.
 +  w_csr_eentry((uint64)kernelvec);
 +
 +  struct proc *p = myproc();
 +  
-+  // save user program counter.
 +  p->trapframe->era = r_csr_era();
 +  ecode = (r_csr_estat() & CSR_ESTAT_ECODE) >> 16;
 +  
 +  if(ecode == LA_ECODE_SYS){
-+    // system call
-+
 +    if(p->killed)
 +      kexit(-1);
 +
-+    // sepc points to the ecall instruction,
-+    // but we want to return to the next instruction.
 +    p->trapframe->era += 4;
 +
-+    // an interrupt will change crmd & prmd registers,
-+    // so don't enable until done with those registers.
 +    intr_on();
 +
 +    syscall();
 +  } else if((which_dev = devintr()) != 0){
-+    // ok
 +  } else if(la_page_fault(ecode, &read) &&
 +            vmfault(p->pagetable, r_csr_badv(), read) != 0){
-+    // page fault on lazily-allocated page
 +  } else {
 +    printf("usertrap(): unexpected trapcause %x pid=%d\n", r_csr_estat(), p->pid);
 +    printf("            era=0x%lx badv=0x%lx badi=0x%x sp=0x%lx crmd=0x%x prmd=0x%x\n",
@@ -1209,59 +1142,38 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/trap.c src/
 +  if(p->killed)
 +    kexit(-1);
 +
-+  // give up the CPU if this is a timer interrupt.
 +  if(which_dev == 2)
 +    yield();
 +
 +  usertrapret();
 +}
 +
-+//
-+// return to user space
-+//
 +void
 +usertrapret(void)
 +{
 +  struct proc *p = myproc();
 +
-+  // we're about to switch the destination of traps from
-+  // kerneltrap() to usertrap(), so turn off interrupts until
-+  // we're back in user space, where usertrap() is correct.
 +  intr_off();
 +
-+  // send syscalls, interrupts, and exceptions to uservec.S
-+  w_csr_eentry((uint64)uservec);  //maybe todo
++  w_csr_eentry((uint64)uservec);
 +
-+  // set up trapframe values that uservec will need when
-+  // the process next re-enters the kernel.
 +  p->trapframe->kernel_pgdl = r_csr_pgdl();         // kernel page table
 +  p->trapframe->kernel_sp = p->kstack + PGSIZE; // process's kernel stack
 +  p->trapframe->kernel_trap = (uint64)usertrap;
 +  p->trapframe->kernel_hartid = r_tp();         // hartid for cpuid()
 +
-+  // set up the registers that uservec.S's ertn will use
-+  // to get to user space.
-+  
-+  // set Previous Privilege mode to User Privilege3.
 +  uint32 x = r_csr_prmd();
 +  x |= PRMD_PPLV; // set PPLV to 3 for user mode
 +  x |= PRMD_PIE; // enable interrupts in user mode
 +  w_csr_prmd(x);
 +
-+  // set S Exception Program Counter to the saved user pc.
 +  w_csr_era(p->trapframe->era);
 +
-+  // tell uservec.S the user page table to switch to.
 +  volatile uint64 pgdl = (uint64)(p->pagetable);
 +
-+  // jump to uservec.S at the top of memory, which 
-+  // switches to the user page table, restores user registers,
-+  // and switches to user mode with ertn.
 +  userret(TRAPFRAME, pgdl);
 +}
 +
-+// interrupts and exceptions from kernel code go here via kernelvec,
-+// on whatever the current kernel stack is.
 +void 
 +kerneltrap()
 +{
@@ -1281,12 +1193,9 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/trap.c src/
 +    panic("kerneltrap");
 +  }
 +
-+  // give up the CPU if this is a timer interrupt.
 +  if(which_dev == 2 && myproc() != 0 && myproc()->state == RUNNING)
 +    yield();
 +
-+  // the yield() may have caused some traps to occur,
-+  // so restore trap registers for use by kernelvec.S's instruction.
 +  w_csr_era(era);
 +  w_csr_prmd(prmd);
 +}
@@ -1306,11 +1215,6 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/trap.c src/
 +  release(&tickslock);
 +}
 +
-+// check if it's an external interrupt or software interrupt,
-+// and handle it.
-+// returns 2 if timer interrupt,
-+// 1 if other device,
-+// 0 if not recognized.
 +int
 +devintr()
 +{
@@ -1318,15 +1222,10 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/trap.c src/
 +  uint32 ecfg = r_csr_ecfg();
 +
 +  if(estat & ecfg & HWI_VEC) {
-+    // this is a hardware interrupt, via IOCR.
-+
-+    // irq indicates which devices interrupted, as a bitmask.
 +    uint64 irq = hal_irq_claim();
 +    if(irq & (1UL << UART0_IRQ)){
 +      uartintr();
 +
-+      // tell the interrupt controller the device is
-+      // now allowed to interrupt again.
 +      hal_irq_complete(1UL << UART0_IRQ);
 +    } else if(irq & (1UL << VIRTIO0_IRQ)){
 +      // With legacy INTx signalling, a completion that arrives while
@@ -1346,8 +1245,6 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/trap.c src/
 +
 +    return 1;
 +  } else if(estat & ecfg & TI_VEC){
-+    //timer interrupt,
-+
 +    if(cpuid() == 0){
 +      clockintr();
 +      // Backstop for lost virtio completion interrupts: the timer
@@ -1355,8 +1252,6 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/trap.c src/
 +      virtio_disk_watchdog();
 +    }
 +
-+    // acknowledge the timer interrupt by clearing
-+    // the TI bit in TICLR.
 +    w_csr_ticlr(r_csr_ticlr() | CSR_TICLR_CLR);
 +
 +    return 2;
@@ -1364,7 +1259,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/trap.c src/
 +    return 0;
 +  }
 +}
-diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/user.ld src/kernel/arch/loongarch/user.ld
+diff -ruN -d --strip-trailing-cr -B xv6-riscv-src/kernel/arch/loongarch/user.ld src/kernel/arch/loongarch/user.ld
 --- xv6-riscv-src/kernel/arch/loongarch/user.ld
 +++ src/kernel/arch/loongarch/user.ld
 @@ -0,0 +1,39 @@
@@ -1407,15 +1302,10 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/user.ld src
 +
 +  PROVIDE(end = .);
 +}
-diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/uservec.S src/kernel/arch/loongarch/uservec.S
+diff -ruN -d --strip-trailing-cr -B xv6-riscv-src/kernel/arch/loongarch/uservec.S src/kernel/arch/loongarch/uservec.S
 --- xv6-riscv-src/kernel/arch/loongarch/uservec.S
 +++ src/kernel/arch/loongarch/uservec.S
-@@ -0,0 +1,134 @@
-+# code to switch between user and kernel space.
-+
-+	# kernel.ld causes this to be aligned
-+        # to a page boundary.
-+        #
+@@ -0,0 +1,97 @@
 +#include "asm.h"
 +
 +.section u_eentry
@@ -1423,21 +1313,8 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/uservec.S s
 +.align 4
 +
 +uservec:    
-+	#
-+        # trap.c sets eentry to point here, so
-+        # traps from user space start here,
-+        # in privilege0, but with a
-+        # user page table.
-+        #
-+        # CSR.SAVE points to where the process's p->trapframe is
-+        # mapped into user space, at TRAPFRAME.
-+        #
-+        
-+	# swap a0 and SAVE
-+        # so that a0 is TRAPFRAME
 +        csrwr  $a0, LOONGARCH_CSR_SAVE0
 +
-+        # save the user registers in TRAPFRAME
 +        st.d   $ra, $a0, 0
 +        st.d   $tp, $a0, 8
 +        st.d   $sp, $a0, 16
@@ -1469,45 +1346,29 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/uservec.S s
 +        st.d   $s7, $a0, 232
 +        st.d   $s8, $a0, 240
 +
-+	# save the user a0 in p->trapframe->a0
 +        csrrd  $t0, LOONGARCH_CSR_SAVE0
 +        st.d   $t0, $a0, 24
 +
-+        # restore kernel stack pointer from p->trapframe->kernel_sp
 +        ld.d   $sp, $a0, 248
 +
-+        # make tp hold the current hartid, from p->trapframe->kernel_hartid
 +        ld.d   $tp, $a0, 272
 +
-+        # load the address of usertrap(), p->trapframe->kernel_trap
 +        ld.d   $t0, $a0, 256
 +
-+        # restore kernel page table from p->trapframe->kernel_pgdl
 +        ld.d   $t1, $a0, 280
 +        csrwr  $t1, LOONGARCH_CSR_PGDL
 +        invtlb 0x0,$zero,$zero
 +
-+        # jump to usertrap(), which does not return
 +        jirl   $zero ,$t0, 0
 +
 +.globl userret
 +userret:
-+        # userret(TRAPFRAME, pagetable)
-+        # switch from kernel to user.
-+        # usertrapret() calls here.
-+        # a0: TRAPFRAME, in user page table.
-+        # a1: user page table, for pgdl.
-+
-+        # switch to the user page table.
 +        csrwr  $a1, LOONGARCH_CSR_PGDL
 +        invtlb 0x0,$zero,$zero
 +
-+        # put the saved user a0 in SAVE0, so we
-+        # can swap it with our a0 (TRAPFRAME) in the last step.
 +        ld.d   $t0, $a0, 24
 +        csrwr  $t0, LOONGARCH_CSR_SAVE0
 +
-+        # restore all but a0 from TRAPFRAME
 +        ld.d   $ra, $a0, 0
 +        ld.d   $tp, $a0, 8
 +        ld.d   $sp, $a0, 16
@@ -1539,13 +1400,10 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/uservec.S s
 +        ld.d   $s7, $a0, 232
 +        ld.d   $s8, $a0, 240
 +
-+	# restore user a0, and save TRAPFRAME in SAVE0
 +        csrwr  $a0, LOONGARCH_CSR_SAVE0
 +        
-+        # return to user mode and user pc.
-+        # usertrapret() set up prmd and era.
 +        ertn
-diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/virtio_pci.c src/kernel/arch/loongarch/virtio_pci.c
+diff -ruN -d --strip-trailing-cr -B xv6-riscv-src/kernel/arch/loongarch/virtio_pci.c src/kernel/arch/loongarch/virtio_pci.c
 --- xv6-riscv-src/kernel/arch/loongarch/virtio_pci.c
 +++ src/kernel/arch/loongarch/virtio_pci.c
 @@ -0,0 +1,315 @@
@@ -1864,10 +1722,10 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/virtio_pci.
 +{
 +  (void)*isr_cfg;
 +}
-diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/vm.c src/kernel/arch/loongarch/vm.c
+diff -ruN -d --strip-trailing-cr -B xv6-riscv-src/kernel/arch/loongarch/vm.c src/kernel/arch/loongarch/vm.c
 --- xv6-riscv-src/kernel/arch/loongarch/vm.c
 +++ src/kernel/arch/loongarch/vm.c
-@@ -0,0 +1,461 @@
+@@ -0,0 +1,403 @@
 +#include "param.h"
 +#include "types.h"
 +#include "memlayout.h"
@@ -1883,7 +1741,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/vm.c src/ke
 +{
 +  asm volatile("invtlb  0x0,$zero,$zero");
 +  w_csr_stlbps(0xcU);
-+  w_csr_asid(0x0U);//todo
++  w_csr_asid(0x0U);
 +  w_csr_tlbrehi(0xcU);
 +}
 +
@@ -1917,19 +1775,6 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/vm.c src/ke
 +    panic("kvmmap");
 +}
 +
-+// Return the address of the PTE in page table pagetable
-+// that corresponds to virtual address va.  If alloc!=0,
-+// create any required page-table pages.
-+//
-+// The paging scheme has four levels of page-table
-+// pages. A page-table page contains 512 64-bit PTEs.
-+// A 64-bit virtual address is split into five fields:
-+//   48..63 -- must be zero.
-+//   39..47 -- 9 bits of level-3 index.
-+//   30..38 -- 9 bits of level-2 index.
-+//   21..29 -- 9 bits of level-1 index.
-+//   12..20 -- 9 bits of level-0 index.
-+//    0..11 -- 12 bits of byte offset within the page.
 +pte_t *
 +walk(pagetable_t pagetable, uint64 va, int alloc)
 +{
@@ -1950,9 +1795,6 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/vm.c src/ke
 +  return &pagetable[PX(0, va)];
 +}
 +
-+// Look up a virtual address, return the physical address,
-+// or 0 if not mapped.
-+// Can only be used to look up user pages.
 +uint64
 +walkaddr(pagetable_t pagetable, uint64 va)
 +{
@@ -1984,10 +1826,6 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/vm.c src/ke
 +  return pte != 0 && (*pte & PTE_V) != 0;
 +}
 +
-+// Create PTEs for virtual addresses starting at va that refer to
-+// physical addresses starting at pa. va and size might not
-+// be page-aligned. Returns 0 on success, -1 if walk() couldn't
-+// allocate a needed page-table page.
 +int
 +mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
 +{
@@ -2013,9 +1851,6 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/vm.c src/ke
 +  return 0;
 +}
 +
-+// Remove npages of mappings starting from va. va must be
-+// page-aligned. The mappings must exist.
-+// Optionally free the physical memory.
 +void
 +uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
 +{
@@ -2040,8 +1875,6 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/vm.c src/ke
 +  }
 +}
 +
-+// create an empty user page table.
-+// returns 0 if out of memory.
 +pagetable_t
 +uvmcreate()
 +{
@@ -2053,9 +1886,6 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/vm.c src/ke
 +  return pagetable;
 +}
 +
-+// Load the user initcode into address 0 of pagetable,
-+// for the very first process.
-+// sz must be less than a page.
 +void
 +uvminit(pagetable_t pagetable, uchar *src, uint sz)
 +{
@@ -2067,10 +1897,8 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/vm.c src/ke
 +  memset(mem, 0, PGSIZE);
 +  mappages(pagetable, 0, PGSIZE, (uint64)mem, PTE_P|PTE_W|PTE_PLV|PTE_MAT);
 +  memmove(mem, src, sz);
-+}//todo
++}
 +
-+// Allocate PTEs and physical memory to grow process from oldsz to
-+// newsz, which need not be page aligned.  Returns new size or 0 on error.
 +uint64
 +uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz, int xperm)
 +{
@@ -2130,10 +1958,6 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/vm.c src/ke
 +  return (uint64)mem;
 +}
 +
-+// Deallocate user pages to bring the process size from oldsz to
-+// newsz.  oldsz and newsz need not be page-aligned, nor does newsz
-+// need to be less than oldsz.  oldsz can be larger than the actual
-+// process size.  Returns the new process size.
 +uint64
 +uvmdealloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz)
 +{
@@ -2148,16 +1972,12 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/vm.c src/ke
 +  return newsz;
 +}
 +
-+// Recursively free page-table pages.
-+// All leaf mappings must already have been removed.
 +void
 +freewalk(pagetable_t pagetable)
 +{
-+  // there are 2^9 = 512 PTEs in a page table.
 +  for(int i = 0; i < 512; i++){
 +    pte_t pte = pagetable[i];
 +    if((pte & PTE_V) && (PTE_FLAGS(pte) == PTE_V)){
-+      // this PTE points to a lower-level page table.
 +      uint64 child = (PTE2PA(pte) | DMWIN_MASK);
 +      freewalk((pagetable_t)child);
 +      pagetable[i] = 0;
@@ -2168,8 +1988,6 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/vm.c src/ke
 +  kfree((void*)pagetable);
 +}
 +
-+// Free user memory pages,
-+// then free page-table pages.
 +void
 +uvmfree(pagetable_t pagetable, uint64 sz)
 +{
@@ -2178,12 +1996,6 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/vm.c src/ke
 +  freewalk(pagetable);
 +}
 +
-+// Given a parent process's page table, copy
-+// its memory into a child's page table.
-+// Copies both the page table and the
-+// physical memory.
-+// returns 0 on success, -1 on failure.
-+// frees any allocated pages on failure.
 +int
 +uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
 +{
@@ -2214,8 +2026,6 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/vm.c src/ke
 +  return -1;
 +}
 +
-+// mark a PTE invalid for user access.
-+// used by exec for the user stack guard page.
 +void
 +uvmclear(pagetable_t pagetable, uint64 va)
 +{
@@ -2227,9 +2037,6 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/vm.c src/ke
 +  *pte &= ~PTE_PLV;
 +}
 +
-+// Copy from kernel to user.
-+// Copy len bytes from src to virtual address dstva in a given page table.
-+// Return 0 on success, -1 on error.
 +int
 +copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 +{
@@ -2256,11 +2063,8 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/vm.c src/ke
 +    dstva = va0 + PGSIZE;
 +  }
 +  return 0;
-+}//todo
++}
 +
-+// Copy from user to kernel.
-+// Copy len bytes to dst from virtual address srcva in a given page table.
-+// Return 0 on success, -1 on error.
 +int
 +copyin(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len)
 +{
@@ -2283,12 +2087,8 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/vm.c src/ke
 +    srcva = va0 + PGSIZE;
 +  }
 +  return 0;
-+}//todo
++}
 +
-+// Copy a null-terminated string from user to kernel.
-+// Copy bytes to dst from virtual address srcva in a given page table,
-+// until a '\0', or max.
-+// Return 0 on success, -1 on error.
 +int
 +copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
 +{
@@ -2328,8 +2128,8 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/arch/loongarch/vm.c src/ke
 +  } else {
 +    return -1;
 +  }
-+}//todo
-diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/bio.c src/kernel/bio.c
++}
+diff -ruN -d --strip-trailing-cr -B xv6-riscv-src/kernel/bio.c src/kernel/bio.c
 --- xv6-riscv-src/kernel/bio.c
 +++ src/kernel/bio.c
 @@ -96,7 +96,7 @@
@@ -2350,12 +2150,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/bio.c src/kernel/bio.c
  }
  
  // Release a locked buffer.
-@@ -150,4 +150,3 @@
-   release(&bcache.lock);
- }
- 
--
-diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/block.c src/kernel/block.c
+diff -ruN -d --strip-trailing-cr -B xv6-riscv-src/kernel/block.c src/kernel/block.c
 --- xv6-riscv-src/kernel/block.c
 +++ src/kernel/block.c
 @@ -0,0 +1,53 @@
@@ -2412,7 +2207,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/block.c src/kernel/block.c
 +
 +  return tot;
 +}
-diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/block.h src/kernel/block.h
+diff -ruN -d --strip-trailing-cr -B xv6-riscv-src/kernel/block.h src/kernel/block.h
 --- xv6-riscv-src/kernel/block.h
 +++ src/kernel/block.h
 @@ -0,0 +1,10 @@
@@ -2426,7 +2221,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/block.h src/kernel/block.h
 +int block_write_bytes(uint dev, uint off, uchar *src, uint n);
 +
 +#endif
-diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/defs.h src/kernel/defs.h
+diff -ruN -d --strip-trailing-cr -B xv6-riscv-src/kernel/defs.h src/kernel/defs.h
 --- xv6-riscv-src/kernel/defs.h
 +++ src/kernel/defs.h
 @@ -2,6 +2,7 @@
@@ -2510,7 +2305,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/defs.h src/kernel/defs.h
  
  // number of elements in fixed-size array
  #define NELEM(x) (sizeof(x)/sizeof((x)[0]))
-diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/exec.c src/kernel/exec.c
+diff -ruN -d --strip-trailing-cr -B xv6-riscv-src/kernel/exec.c src/kernel/exec.c
 --- xv6-riscv-src/kernel/exec.c
 +++ src/kernel/exec.c
 @@ -38,14 +38,31 @@
@@ -2580,7 +2375,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/exec.c src/kernel/exec.c
        return -1;
    }
    
-diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/ext2.c src/kernel/ext2.c
+diff -ruN -d --strip-trailing-cr -B xv6-riscv-src/kernel/ext2.c src/kernel/ext2.c
 --- xv6-riscv-src/kernel/ext2.c
 +++ src/kernel/ext2.c
 @@ -0,0 +1,1216 @@
@@ -3800,7 +3595,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/ext2.c src/kernel/ext2.c
 +{
 +  return &ext2_fs_ops;
 +}
-diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/fat32.c src/kernel/fat32.c
+diff -ruN -d --strip-trailing-cr -B xv6-riscv-src/kernel/fat32.c src/kernel/fat32.c
 --- xv6-riscv-src/kernel/fat32.c
 +++ src/kernel/fat32.c
 @@ -0,0 +1,1183 @@
@@ -4987,7 +4782,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/fat32.c src/kernel/fat32.c
 +{
 +  return &fat32_fs_ops;
 +}
-diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/file.c src/kernel/file.c
+diff -ruN -d --strip-trailing-cr -B xv6-riscv-src/kernel/file.c src/kernel/file.c
 --- xv6-riscv-src/kernel/file.c
 +++ src/kernel/file.c
 @@ -92,7 +92,7 @@
@@ -5017,12 +4812,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/file.c src/kernel/file.c
          f->off += r;
        iunlock(f->ip);
        end_op();
-@@ -177,4 +177,3 @@
- 
-   return ret;
- }
--
-diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/file.h src/kernel/file.h
+diff -ruN -d --strip-trailing-cr -B xv6-riscv-src/kernel/file.h src/kernel/file.h
 --- xv6-riscv-src/kernel/file.h
 +++ src/kernel/file.h
 @@ -1,3 +1,5 @@
@@ -5049,7 +4839,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/file.h src/kernel/file.h
  };
  
  // map major device number to device functions.
-diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/fs.c src/kernel/fs.c
+diff -ruN -d --strip-trailing-cr -B xv6-riscv-src/kernel/fs.c src/kernel/fs.c
 --- xv6-riscv-src/kernel/fs.c
 +++ src/kernel/fs.c
 @@ -171,8 +171,9 @@
@@ -5216,7 +5006,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/fs.c src/kernel/fs.c
      ip = next;
    }
    if(nameiparent){
-diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/hal.c src/kernel/hal.c
+diff -ruN -d --strip-trailing-cr -B xv6-riscv-src/kernel/hal.c src/kernel/hal.c
 --- xv6-riscv-src/kernel/hal.c
 +++ src/kernel/hal.c
 @@ -0,0 +1,46 @@
@@ -5266,7 +5056,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/hal.c src/kernel/hal.c
 +{
 +  virtio_disk_rw(b, write);
 +}
-diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/kalloc.c src/kernel/kalloc.c
+diff -ruN -d --strip-trailing-cr -B xv6-riscv-src/kernel/kalloc.c src/kernel/kalloc.c
 --- xv6-riscv-src/kernel/kalloc.c
 +++ src/kernel/kalloc.c
 @@ -27,7 +27,11 @@
@@ -5281,7 +5071,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/kalloc.c src/kernel/kalloc
  }
  
  void
-diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/main.c src/kernel/main.c
+diff -ruN -d --strip-trailing-cr -B xv6-riscv-src/kernel/main.c src/kernel/main.c
 --- xv6-riscv-src/kernel/main.c
 +++ src/kernel/main.c
 @@ -22,12 +22,13 @@
@@ -5310,7 +5100,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/main.c src/kernel/main.c
    }
  
    scheduler();        
-diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/memlayout.h src/kernel/memlayout.h
+diff -ruN -d --strip-trailing-cr -B xv6-riscv-src/kernel/memlayout.h src/kernel/memlayout.h
 --- xv6-riscv-src/kernel/memlayout.h
 +++ src/kernel/memlayout.h
 @@ -1,3 +1,34 @@
@@ -5354,7 +5144,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/memlayout.h src/kernel/mem
  #define TRAPFRAME (TRAMPOLINE - PGSIZE)
 +
 +#endif
-diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/param.h src/kernel/param.h
+diff -ruN -d --strip-trailing-cr -B xv6-riscv-src/kernel/param.h src/kernel/param.h
 --- xv6-riscv-src/kernel/param.h
 +++ src/kernel/param.h
 @@ -5,11 +5,14 @@
@@ -5373,7 +5163,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/param.h src/kernel/param.h
  #define MAXPATH      128   // maximum file path name
  #define USERSTACK    1     // user stack pages
 -
-diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/proc.c src/kernel/proc.c
+diff -ruN -d --strip-trailing-cr -B xv6-riscv-src/kernel/proc.c src/kernel/proc.c
 --- xv6-riscv-src/kernel/proc.c
 +++ src/kernel/proc.c
 @@ -18,7 +18,9 @@
@@ -5461,7 +5251,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/proc.c src/kernel/proc.c
  }
  
  // Sleep on channel chan, releasing condition lock lk.
-diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/proc.h src/kernel/proc.h
+diff -ruN -d --strip-trailing-cr -B xv6-riscv-src/kernel/proc.h src/kernel/proc.h
 --- xv6-riscv-src/kernel/proc.h
 +++ src/kernel/proc.h
 @@ -13,9 +13,13 @@
@@ -5533,7 +5323,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/proc.h src/kernel/proc.h
  
  enum procstate { UNUSED, USED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
  
-diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/riscv.h src/kernel/riscv.h
+diff -ruN -d --strip-trailing-cr -B xv6-riscv-src/kernel/riscv.h src/kernel/riscv.h
 --- xv6-riscv-src/kernel/riscv.h
 +++ src/kernel/riscv.h
 @@ -1,3 +1,6 @@
@@ -5562,7 +5352,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/riscv.h src/kernel/riscv.h
  #define MAXVA (1L << (9 + 9 + 9 + 12 - 1))
 +
 +#endif
-diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/syscall.c src/kernel/syscall.c
+diff -ruN -d --strip-trailing-cr -B xv6-riscv-src/kernel/syscall.c src/kernel/syscall.c
 --- xv6-riscv-src/kernel/syscall.c
 +++ src/kernel/syscall.c
 @@ -101,6 +101,8 @@
@@ -5583,7 +5373,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/syscall.c src/kernel/sysca
  };
  
  void
-diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/syscall.h src/kernel/syscall.h
+diff -ruN -d --strip-trailing-cr -B xv6-riscv-src/kernel/syscall.h src/kernel/syscall.h
 --- xv6-riscv-src/kernel/syscall.h
 +++ src/kernel/syscall.h
 @@ -20,3 +20,5 @@
@@ -5592,7 +5382,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/syscall.h src/kernel/sysca
  #define SYS_close  21
 +#define SYS_mount  22
 +#define SYS_umount 23
-diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/sysfile.c src/kernel/sysfile.c
+diff -ruN -d --strip-trailing-cr -B xv6-riscv-src/kernel/sysfile.c src/kernel/sysfile.c
 --- xv6-riscv-src/kernel/sysfile.c
 +++ src/kernel/sysfile.c
 @@ -16,6 +16,30 @@
@@ -5749,7 +5539,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/sysfile.c src/kernel/sysfi
      end_op();
      return -1;
    }
-diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/trap.c src/kernel/trap.c
+diff -ruN -d --strip-trailing-cr -B xv6-riscv-src/kernel/trap.c src/kernel/trap.c
 --- xv6-riscv-src/kernel/trap.c
 +++ src/kernel/trap.c
 @@ -191,7 +191,7 @@
@@ -5770,12 +5560,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/trap.c src/kernel/trap.c
  
      return 1;
    } else if(scause == 0x8000000000000005L){
-@@ -216,4 +216,3 @@
-     return 0;
-   }
- }
--
-diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/vfs.c src/kernel/vfs.c
+diff -ruN -d --strip-trailing-cr -B xv6-riscv-src/kernel/vfs.c src/kernel/vfs.c
 --- xv6-riscv-src/kernel/vfs.c
 +++ src/kernel/vfs.c
 @@ -0,0 +1,507 @@
@@ -6286,7 +6071,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/vfs.c src/kernel/vfs.c
 +    return;
 +  ip->ops->trunc(ip);
 +}
-diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/vfs.h src/kernel/vfs.h
+diff -ruN -d --strip-trailing-cr -B xv6-riscv-src/kernel/vfs.h src/kernel/vfs.h
 --- xv6-riscv-src/kernel/vfs.h
 +++ src/kernel/vfs.h
 @@ -0,0 +1,57 @@
@@ -6347,7 +6132,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/vfs.h src/kernel/vfs.h
 +};
 +
 +#endif
-diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/virtio.h src/kernel/virtio.h
+diff -ruN -d --strip-trailing-cr -B xv6-riscv-src/kernel/virtio.h src/kernel/virtio.h
 --- xv6-riscv-src/kernel/virtio.h
 +++ src/kernel/virtio.h
 @@ -44,6 +44,8 @@
@@ -6359,7 +6144,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/virtio.h src/kernel/virtio
  
  // this many virtio descriptors.
  // must be a power of two.
-diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/virtio_disk.c src/kernel/virtio_disk.c
+diff -ruN -d --strip-trailing-cr -B xv6-riscv-src/kernel/virtio_disk.c src/kernel/virtio_disk.c
 --- xv6-riscv-src/kernel/virtio_disk.c
 +++ src/kernel/virtio_disk.c
 @@ -16,8 +16,157 @@
@@ -6723,7 +6508,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/kernel/virtio_disk.c src/kernel/v
 +    return;
 +  virtio_disk_intr();
 +}
-diff -ruN -d --strip-trailing-cr xv6-riscv-src/mkfs/mkfat32.c src/mkfs/mkfat32.c
+diff -ruN -d --strip-trailing-cr -B xv6-riscv-src/mkfs/mkfat32.c src/mkfs/mkfat32.c
 --- xv6-riscv-src/mkfs/mkfat32.c
 +++ src/mkfs/mkfat32.c
 @@ -0,0 +1,211 @@
@@ -6938,7 +6723,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/mkfs/mkfat32.c src/mkfs/mkfat32.c
 +  fclose(f);
 +  return 0;
 +}
-diff -ruN -d --strip-trailing-cr xv6-riscv-src/mkfs/mkfs.c src/mkfs/mkfs.c
+diff -ruN -d --strip-trailing-cr -B xv6-riscv-src/mkfs/mkfs.c src/mkfs/mkfs.c
 --- xv6-riscv-src/mkfs/mkfs.c
 +++ src/mkfs/mkfs.c
 @@ -32,6 +32,12 @@
@@ -7050,7 +6835,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/mkfs/mkfs.c src/mkfs/mkfs.c
  #define min(a, b) ((a) < (b) ? (a) : (b))
  
  void
-diff -ruN -d --strip-trailing-cr xv6-riscv-src/test-xv6.py src/test-xv6.py
+diff -ruN -d --strip-trailing-cr -B xv6-riscv-src/test-xv6.py src/test-xv6.py
 --- xv6-riscv-src/test-xv6.py
 +++ src/test-xv6.py
 @@ -28,7 +28,7 @@
@@ -7062,7 +6847,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/test-xv6.py src/test-xv6.py
  
      def reset_fs(self):
          try:
-diff -ruN -d --strip-trailing-cr xv6-riscv-src/tests/cmds.sh src/tests/cmds.sh
+diff -ruN -d --strip-trailing-cr -B xv6-riscv-src/tests/cmds.sh src/tests/cmds.sh
 --- xv6-riscv-src/tests/cmds.sh
 +++ src/tests/cmds.sh
 @@ -0,0 +1,5 @@
@@ -7071,7 +6856,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/tests/cmds.sh src/tests/cmds.sh
 +cat hello.c > /mnt/hello.c
 +test1
 +test2
-diff -ruN -d --strip-trailing-cr xv6-riscv-src/tests/hello.c src/tests/hello.c
+diff -ruN -d --strip-trailing-cr -B xv6-riscv-src/tests/hello.c src/tests/hello.c
 --- xv6-riscv-src/tests/hello.c
 +++ src/tests/hello.c
 @@ -0,0 +1,5 @@
@@ -7080,20 +6865,11 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/tests/hello.c src/tests/hello.c
 +void main () {
 +  printf ("Hello, world!\n");
 +}
-diff -ruN -d --strip-trailing-cr xv6-riscv-src/user/bigfile.c src/user/bigfile.c
+diff -ruN -d --strip-trailing-cr -B xv6-riscv-src/user/bigfile.c src/user/bigfile.c
 --- xv6-riscv-src/user/bigfile.c
 +++ src/user/bigfile.c
-@@ -0,0 +1,110 @@
+@@ -0,0 +1,101 @@
 +// SPDX-License-Identifier: BSD-2-Clause
-+// Large-file exercise for any writable VFS backend: writes 1 MiB of a
-+// deterministic pattern and verifies every byte. On ext2 this exceeds
-+// the 268 KiB direct+single-indirect limit and forces double-indirect
-+// allocation; on FAT32 it exercises a long cluster chain.
-+//
-+// Usage: bigfile [path] [mode]
-+//   mode "full" (default): write + verify + unlink
-+//   mode "keep":           write + verify, keep the file
-+//   mode "verify":         verify an existing file written by "keep"
 +#include "kernel/types.h"
 +#include "kernel/stat.h"
 +#include "user/user.h"
@@ -7194,7 +6970,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/user/bigfile.c src/user/bigfile.c
 +  printf("bigfile: ok (%d bytes, %s)\n", TOTAL, mode);
 +  exit(0);
 +}
-diff -ruN -d --strip-trailing-cr xv6-riscv-src/user/hello.c src/user/hello.c
+diff -ruN -d --strip-trailing-cr -B xv6-riscv-src/user/hello.c src/user/hello.c
 --- xv6-riscv-src/user/hello.c
 +++ src/user/hello.c
 @@ -0,0 +1,10 @@
@@ -7208,7 +6984,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/user/hello.c src/user/hello.c
 +  printf("Hello, world!\n");
 +  exit(0);
 +}
-diff -ruN -d --strip-trailing-cr xv6-riscv-src/user/mount.c src/user/mount.c
+diff -ruN -d --strip-trailing-cr -B xv6-riscv-src/user/mount.c src/user/mount.c
 --- xv6-riscv-src/user/mount.c
 +++ src/user/mount.c
 @@ -0,0 +1,40 @@
@@ -7252,10 +7028,10 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/user/mount.c src/user/mount.c
 +  printf("mount: %s on %s dev %d\n", argv[1], argv[2], dev);
 +  exit(0);
 +}
-diff -ruN -d --strip-trailing-cr xv6-riscv-src/user/test1.c src/user/test1.c
+diff -ruN -d --strip-trailing-cr -B xv6-riscv-src/user/test1.c src/user/test1.c
 --- xv6-riscv-src/user/test1.c
 +++ src/user/test1.c
-@@ -0,0 +1,67 @@
+@@ -0,0 +1,64 @@
 +#include "kernel/types.h"
 +#include "kernel/stat.h"
 +#include "user/user.h"
@@ -7264,8 +7040,6 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/user/test1.c src/user/test1.c
 +#define NULL 0
 +#define LEN 1024
 +
-+/* 文件拷贝测试。
-+   返回值：0表示成功，否则表示失败。*/
 +int test_copy_file(const char *src, const char *dst) {
 +  int inf, outf;
 +
@@ -7311,7 +7085,6 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/user/test1.c src/user/test1.c
 +  {"/tests/hello.c",  "/mnt/hello.c"}
 +};
 +
-+// number of elements in fixed-size array
 +#define NELEM(x) (sizeof(x)/sizeof((x)[0]))
 +#define NUM_TESTS NELEM(fnames)
 +
@@ -7323,10 +7096,10 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/user/test1.c src/user/test1.c
 +  printf("----------- %s: finished -----------------}\n", argv[0]);
 +  return 0;
 +}
-diff -ruN -d --strip-trailing-cr xv6-riscv-src/user/test2.c src/user/test2.c
+diff -ruN -d --strip-trailing-cr -B xv6-riscv-src/user/test2.c src/user/test2.c
 --- xv6-riscv-src/user/test2.c
 +++ src/user/test2.c
-@@ -0,0 +1,82 @@
+@@ -0,0 +1,77 @@
 +#include "kernel/types.h"
 +#include "kernel/stat.h"
 +#include "user/user.h"
@@ -7335,18 +7108,15 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/user/test2.c src/user/test2.c
 +#define SRC_FILENAME "hello.c"
 +#define DST_FILENAME "/mnt/hello.c"
 +
-+// 返回值：0表示成功，否则表示失败。
 +int test_cross_fs_copy() {
 +  printf("将从 xv6 文件系统复制文件到 EXT2 文件系统\n\n");
 +
-+  // 打开源文件 (用户创建的 test.txt)
 +  int src_fd = open(SRC_FILENAME, O_RDONLY);
 +  if(src_fd < 0) {
 +    printf("错误: 找不到源文件 %s\n", SRC_FILENAME);
 +    return 1;
 +  }
 +
-+  // 创建目标文件 (在 EXT2 文件系统中)
 +  int dst_fd = open(DST_FILENAME, O_WRONLY | O_CREATE);
 +  if(dst_fd < 0) {
 +    printf("错误: 无法创建目标文件 %s\n", DST_FILENAME);
@@ -7355,7 +7125,6 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/user/test2.c src/user/test2.c
 +    return 2;
 +  }
 +
-+  // 复制数据
 +  char copy_buf[512];
 +  int copy_n;
 +  while((copy_n = read(src_fd, copy_buf, sizeof(copy_buf))) > 0) {
@@ -7377,7 +7146,6 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/user/test2.c src/user/test2.c
 +
 +  printf("✓ 文件复制成功！\n\n");
 +
-+  // 验证复制的文件
 +  printf("验证复制结果:\n");
 +  int fd = open(DST_FILENAME, O_RDONLY);
 +  if(fd < 0) {
@@ -7409,7 +7177,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/user/test2.c src/user/test2.c
 +  printf("--------- %s: finished -------------------}\n", argv[0]);
 +  return 0;
 +}
-diff -ruN -d --strip-trailing-cr xv6-riscv-src/user/umount.c src/user/umount.c
+diff -ruN -d --strip-trailing-cr -B xv6-riscv-src/user/umount.c src/user/umount.c
 --- xv6-riscv-src/user/umount.c
 +++ src/user/umount.c
 @@ -0,0 +1,21 @@
@@ -7434,10 +7202,10 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/user/umount.c src/user/umount.c
 +  printf("umount: %s\n", argv[1]);
 +  exit(0);
 +}
-diff -ruN -d --strip-trailing-cr xv6-riscv-src/user/umountstress.c src/user/umountstress.c
+diff -ruN -d --strip-trailing-cr -B xv6-riscv-src/user/umountstress.c src/user/umountstress.c
 --- xv6-riscv-src/user/umountstress.c
 +++ src/user/umountstress.c
-@@ -0,0 +1,109 @@
+@@ -0,0 +1,108 @@
 +// SPDX-License-Identifier: BSD-2-Clause
 +#include "kernel/types.h"
 +#include "kernel/stat.h"
@@ -7504,7 +7272,6 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/user/umountstress.c src/user/umou
 +    }
 +  }
 +
-+  // An open inode must keep the mount busy.
 +  fd = open(probe, O_RDONLY);
 +  if(fd < 0 || umount(path) == 0){
 +    printf("umountstress: FAIL open busy\n");
@@ -7547,14 +7314,11 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/user/umountstress.c src/user/umou
 +  printf("umountstress: FAIL final state\n");
 +  exit(1);
 +}
-diff -ruN -d --strip-trailing-cr xv6-riscv-src/user/unlinkopen.c src/user/unlinkopen.c
+diff -ruN -d --strip-trailing-cr -B xv6-riscv-src/user/unlinkopen.c src/user/unlinkopen.c
 --- xv6-riscv-src/user/unlinkopen.c
 +++ src/user/unlinkopen.c
-@@ -0,0 +1,59 @@
+@@ -0,0 +1,54 @@
 +// SPDX-License-Identifier: BSD-2-Clause
-+// Regression test: an unlinked file that is still open must remain
-+// readable until the last close (POSIX unlink semantics).
-+// Usage: unlinkopen [path]   (default path: /mnt/uop.txt)
 +#include "kernel/types.h"
 +#include "kernel/stat.h"
 +#include "user/user.h"
@@ -7591,7 +7355,6 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/user/unlinkopen.c src/user/unlink
 +    exit(1);
 +  }
 +
-+  // The data must still be readable through the open descriptor.
 +  n = read(rfd, buf, 5);
 +  if(n != 5 || memcmp(buf, "hello", 5) != 0){
 +    printf("unlinkopen: FAIL (read %d bytes after unlink)\n", n);
@@ -7601,7 +7364,6 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/user/unlinkopen.c src/user/unlink
 +  close(wfd);
 +  close(rfd);
 +
-+  // The last close frees the inode; the name must stay gone.
 +  if(open(path, O_RDONLY) >= 0){
 +    printf("unlinkopen: FAIL (file resurrected after close)\n");
 +    exit(1);
@@ -7610,7 +7372,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/user/unlinkopen.c src/user/unlink
 +  printf("unlinkopen: ok\n");
 +  exit(0);
 +}
-diff -ruN -d --strip-trailing-cr xv6-riscv-src/user/user.h src/user/user.h
+diff -ruN -d --strip-trailing-cr -B xv6-riscv-src/user/user.h src/user/user.h
 --- xv6-riscv-src/user/user.h
 +++ src/user/user.h
 @@ -21,6 +21,8 @@
@@ -7622,7 +7384,7 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/user/user.h src/user/user.h
  char* sys_sbrk(int,int);
  int pause(int);
  int uptime(void);
-diff -ruN -d --strip-trailing-cr xv6-riscv-src/user/usys.pl src/user/usys.pl
+diff -ruN -d --strip-trailing-cr -B xv6-riscv-src/user/usys.pl src/user/usys.pl
 --- xv6-riscv-src/user/usys.pl
 +++ src/user/usys.pl
 @@ -16,9 +16,15 @@
@@ -7650,16 +7412,10 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/user/usys.pl src/user/usys.pl
  entry("sbrk");
  entry("pause");
  entry("uptime");
-diff -ruN -d --strip-trailing-cr xv6-riscv-src/user/vfsbench.c src/user/vfsbench.c
+diff -ruN -d --strip-trailing-cr -B xv6-riscv-src/user/vfsbench.c src/user/vfsbench.c
 --- xv6-riscv-src/user/vfsbench.c
 +++ src/user/vfsbench.c
-@@ -0,0 +1,85 @@
-+// vfsbench: minimal file I/O benchmark used for the performance
-+// numbers in the test report.  Writes TOTAL bytes to a file several
-+// times (create/write/close/unlink), then reads a prepared 1 MiB file
-+// several times, reporting wall time in ticks (10 ms per tick).
-+//
-+// Usage: vfsbench [path] [iters] [size_kb]
+@@ -0,0 +1,77 @@
 +#include "kernel/types.h"
 +#include "kernel/stat.h"
 +#include "user/user.h"
@@ -7687,7 +7443,6 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/user/vfsbench.c src/user/vfsbench
 +
 +  memset(buf, 'x', sizeof(buf));
 +
-+  // write phase: full create/write/close/unlink cycle per iteration
 +  t0 = uptime();
 +  for(i = 0; i < iters; i++){
 +    if((fd = open(path, O_WRONLY | O_CREATE | O_TRUNC)) < 0){
@@ -7706,7 +7461,6 @@ diff -ruN -d --strip-trailing-cr xv6-riscv-src/user/vfsbench.c src/user/vfsbench
 +  t1 = uptime();
 +  printf("vfsbench: write %d x %d bytes = %d ticks\n", iters, total, t1 - t0);
 +
-+  // read phase: one prepared file, read repeatedly
 +  if((fd = open(path, O_WRONLY | O_CREATE | O_TRUNC)) < 0){
 +    printf("vfsbench: prepare %s failed\n", path);
 +    exit(1);

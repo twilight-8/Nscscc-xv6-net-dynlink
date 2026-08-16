@@ -65,6 +65,7 @@ npm.cmd install
 npm.cmd run dev
 ```
 
+详细的ai教学网站操作指南见 `web/` 目录
 
 进入 shell 后可按官方参考流程挂载 ext2 并执行 VFS 测例：
 
@@ -152,8 +153,10 @@ umount /mnt            # 若文件仍打开或 cwd 位于该文件系统，则�
 
 ## 提交材料 `submit/`
 
-- `xv6-vfs-hal-final.diff`：最终版本与 xv6-riscv rev5 基线之间的完整 diff（生成方式见 `docs/contest/baseline.md`）。
-- `xv6-vfs-hal-final.diff.stat`：上述 diff 的统计摘要。
+- `xv6-vfs-hal-final.diff`：最终版本与 xv6-riscv rev5 基线之间的标准、可回放 diff（62 个文件，+6405/−113；生成方式见 `docs/contest/baseline.md`）。
+- `xv6-vfs-hal-final.diff.stat`：上述标准 diff 的统计摘要。
+- `xv6-vfs-hal-final.nonblank.diff`：排除纯空白新增/删除行的审计展示版（+5602/−106，共 5708 行）；该文件不具备补丁回放语义。
+- `xv6-vfs-hal-final.nonblank.diff.stat`：非空白文本变更的逐文件统计摘要。
 - `final_slides.pdf` / `final_slides.pptx`：汇报幻灯片。
 - `演示视频.mp4`：演示视频（脚本与分镜见 `docs/contest/video_script.md`）。
 - `test_report.md`、`diff.md`、`commit_history.md`：测试报告、diff 说明与提交历史快照。

@@ -9,7 +9,6 @@
 struct spinlock tickslock;
 uint ticks;
 
-// in kernelvec.S, calls kerneltrap().
 void kernelvec();
 void uservec();
 void handle_tlbr();
@@ -65,10 +64,6 @@ trapinithart(void)
 {
 }
 
-//
-// handle an interrupt, exception, or system call from user space.
-// called from uservec.S
-//
 void
 usertrap(void)
 {
@@ -79,36 +74,25 @@ usertrap(void)
   if((r_csr_prmd() & PRMD_PPLV) == 0)
     panic("usertrap: not from user mode");
 
-  // send interrupts and exceptions to kerneltrap(),
-  // since we're now in the kernel.
   w_csr_eentry((uint64)kernelvec);
 
   struct proc *p = myproc();
   
-  // save user program counter.
   p->trapframe->era = r_csr_era();
   ecode = (r_csr_estat() & CSR_ESTAT_ECODE) >> 16;
   
   if(ecode == LA_ECODE_SYS){
-    // system call
-
     if(p->killed)
       kexit(-1);
 
-    // sepc points to the ecall instruction,
-    // but we want to return to the next instruction.
     p->trapframe->era += 4;
 
-    // an interrupt will change crmd & prmd registers,
-    // so don't enable until done with those registers.
     intr_on();
 
     syscall();
   } else if((which_dev = devintr()) != 0){
-    // ok
   } else if(la_page_fault(ecode, &read) &&
             vmfault(p->pagetable, r_csr_badv(), read) != 0){
-    // page fault on lazily-allocated page
   } else {
     printf("usertrap(): unexpected trapcause %x pid=%d\n", r_csr_estat(), p->pid);
     printf("            era=0x%lx badv=0x%lx badi=0x%x sp=0x%lx crmd=0x%x prmd=0x%x\n",
@@ -120,59 +104,38 @@ usertrap(void)
   if(p->killed)
     kexit(-1);
 
-  // give up the CPU if this is a timer interrupt.
   if(which_dev == 2)
     yield();
 
   usertrapret();
 }
 
-//
-// return to user space
-//
 void
 usertrapret(void)
 {
   struct proc *p = myproc();
 
-  // we're about to switch the destination of traps from
-  // kerneltrap() to usertrap(), so turn off interrupts until
-  // we're back in user space, where usertrap() is correct.
   intr_off();
 
-  // send syscalls, interrupts, and exceptions to uservec.S
-  w_csr_eentry((uint64)uservec);  //maybe todo
+  w_csr_eentry((uint64)uservec);
 
-  // set up trapframe values that uservec will need when
-  // the process next re-enters the kernel.
   p->trapframe->kernel_pgdl = r_csr_pgdl();         // kernel page table
   p->trapframe->kernel_sp = p->kstack + PGSIZE; // process's kernel stack
   p->trapframe->kernel_trap = (uint64)usertrap;
   p->trapframe->kernel_hartid = r_tp();         // hartid for cpuid()
 
-  // set up the registers that uservec.S's ertn will use
-  // to get to user space.
-  
-  // set Previous Privilege mode to User Privilege3.
   uint32 x = r_csr_prmd();
   x |= PRMD_PPLV; // set PPLV to 3 for user mode
   x |= PRMD_PIE; // enable interrupts in user mode
   w_csr_prmd(x);
 
-  // set S Exception Program Counter to the saved user pc.
   w_csr_era(p->trapframe->era);
 
-  // tell uservec.S the user page table to switch to.
   volatile uint64 pgdl = (uint64)(p->pagetable);
 
-  // jump to uservec.S at the top of memory, which 
-  // switches to the user page table, restores user registers,
-  // and switches to user mode with ertn.
   userret(TRAPFRAME, pgdl);
 }
 
-// interrupts and exceptions from kernel code go here via kernelvec,
-// on whatever the current kernel stack is.
 void 
 kerneltrap()
 {
@@ -192,12 +155,9 @@ kerneltrap()
     panic("kerneltrap");
   }
 
-  // give up the CPU if this is a timer interrupt.
   if(which_dev == 2 && myproc() != 0 && myproc()->state == RUNNING)
     yield();
 
-  // the yield() may have caused some traps to occur,
-  // so restore trap registers for use by kernelvec.S's instruction.
   w_csr_era(era);
   w_csr_prmd(prmd);
 }
@@ -217,11 +177,6 @@ clockintr()
   release(&tickslock);
 }
 
-// check if it's an external interrupt or software interrupt,
-// and handle it.
-// returns 2 if timer interrupt,
-// 1 if other device,
-// 0 if not recognized.
 int
 devintr()
 {
@@ -229,15 +184,10 @@ devintr()
   uint32 ecfg = r_csr_ecfg();
 
   if(estat & ecfg & HWI_VEC) {
-    // this is a hardware interrupt, via IOCR.
-
-    // irq indicates which devices interrupted, as a bitmask.
     uint64 irq = hal_irq_claim();
     if(irq & (1UL << UART0_IRQ)){
       uartintr();
 
-      // tell the interrupt controller the device is
-      // now allowed to interrupt again.
       hal_irq_complete(1UL << UART0_IRQ);
     } else if(irq & (1UL << VIRTIO0_IRQ)){
       // With legacy INTx signalling, a completion that arrives while
@@ -257,8 +207,6 @@ devintr()
 
     return 1;
   } else if(estat & ecfg & TI_VEC){
-    //timer interrupt,
-
     if(cpuid() == 0){
       clockintr();
       // Backstop for lost virtio completion interrupts: the timer
@@ -266,8 +214,6 @@ devintr()
       virtio_disk_watchdog();
     }
 
-    // acknowledge the timer interrupt by clearing
-    // the TI bit in TICLR.
     w_csr_ticlr(r_csr_ticlr() | CSR_TICLR_CLR);
 
     return 2;

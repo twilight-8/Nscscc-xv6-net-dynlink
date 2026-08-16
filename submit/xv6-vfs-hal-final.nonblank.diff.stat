@@ -1,0 +1,71 @@
+Nonblank textual-change statistics (audit/reporting only)
+
+File                                               Insertions  Deletions      Total
+-----------------------------------------------------------------------------------
+src/.gitignore                                              6          1          7
+src/Makefile                                              135         21        156
+src/hello.c                                                 7          0          7
+src/kernel/arch/loongarch/apic.c                           25          0         25
+src/kernel/arch/loongarch/asm.h                            13          0         13
+src/kernel/arch/loongarch/entry.S                          26          0         26
+src/kernel/arch/loongarch/extioi.c                         27          0         27
+src/kernel/arch/loongarch/hal.c                            46          0         46
+src/kernel/arch/loongarch/kernel.ld                        42          0         42
+src/kernel/arch/loongarch/kernelvec.S                      70          0         70
+src/kernel/arch/loongarch/loongarch.h                     270          0        270
+src/kernel/arch/loongarch/merror.S                          7          0          7
+src/kernel/arch/loongarch/start.c                           2          0          2
+src/kernel/arch/loongarch/swtch.S                          27          0         27
+src/kernel/arch/loongarch/tlbrefill.S                      21          0         21
+src/kernel/arch/loongarch/trap.c                          183          0        183
+src/kernel/arch/loongarch/user.ld                          32          0         32
+src/kernel/arch/loongarch/uservec.S                        83          0         83
+src/kernel/arch/loongarch/virtio_pci.c                    269          0        269
+src/kernel/arch/loongarch/vm.c                            354          0        354
+src/kernel/bio.c                                            2          2          4
+src/kernel/block.c                                         44          0         44
+src/kernel/block.h                                          7          0          7
+src/kernel/defs.h                                          40          0         40
+src/kernel/exec.c                                          27          4         31
+src/kernel/ext2.c                                        1068          0       1068
+src/kernel/fat32.c                                       1050          0       1050
+src/kernel/file.c                                           3          3          6
+src/kernel/file.h                                           5          1          6
+src/kernel/fs.c                                            63          8         71
+src/kernel/hal.c                                           40          0         40
+src/kernel/kalloc.c                                         4          0          4
+src/kernel/main.c                                           5          4          9
+src/kernel/memlayout.h                                     24          0         24
+src/kernel/param.h                                          4          0          4
+src/kernel/proc.c                                          22          1         23
+src/kernel/proc.h                                          45          0         45
+src/kernel/riscv.h                                          9          0          9
+src/kernel/syscall.c                                        4          0          4
+src/kernel/syscall.h                                        2          0          2
+src/kernel/sysfile.c                                       51         25         76
+src/kernel/trap.c                                           2          2          4
+src/kernel/vfs.c                                          443          0        443
+src/kernel/vfs.h                                           48          0         48
+src/kernel/virtio.h                                         2          0          2
+src/kernel/virtio_disk.c                                  205         27        232
+src/mkfs/mkfat32.c                                        188          0        188
+src/mkfs/mkfs.c                                            54          6         60
+src/test-xv6.py                                             1          1          2
+src/tests/cmds.sh                                           5          0          5
+src/tests/hello.c                                           5          0          5
+src/user/bigfile.c                                         90          0         90
+src/user/hello.c                                            9          0          9
+src/user/mount.c                                           34          0         34
+src/user/test1.c                                           53          0         53
+src/user/test2.c                                           64          0         64
+src/user/umount.c                                          18          0         18
+src/user/umountstress.c                                    95          0         95
+src/user/unlinkopen.c                                      44          0         44
+src/user/user.h                                             2          0          2
+src/user/usys.pl                                            8          0          8
+src/user/vfsbench.c                                        68          0         68
+-----------------------------------------------------------------------------------
+62 files changed, 5602 insertions(+), 106 deletions(-)
+5708 nonblank changed lines total
+Excluded from the standard diff count: 803 blank insertions, 7 blank deletions
+Patch replay source: xv6-vfs-hal-final.diff
