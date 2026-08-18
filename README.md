@@ -25,6 +25,8 @@
 
 项目基于 MIT xv6-riscv rev5，在保持 xv6 小型教学系统风格的前提下，为其增加虚拟文件系统（VFS）与硬件抽象层（HAL）：系统同时支持 xv6、ext2、fat32 三种文件系统，并运行于 RISC-V 与 LoongArch64 两个平台。两个平台均通过 xv6-riscv rev5 自带测例与赛题指定的 VFS 测例，相对原始基线的全部改动以 diff 文件形式交付。
 
+> 演示视频：[百度网盘在线观看](https://pan.baidu.com/s/1t96v7KjAdIbT0HKPjjoLCQ?pwd=auan)（提取码 `auan`）。
+
 ## 项目亮点
 
 - **薄 VFS 分发层**：以操作表统一三种文件系统，通过挂载操作睡眠锁串行化 `mount/umount`，再用四态挂载表完成发布、失败回滚与安全卸载；busy 挂载立即拒绝卸载，对 xv6 原生路径保持最小侵入。
@@ -152,7 +154,7 @@ umount /mnt            # 若文件仍打开或 cwd 位于该文件系统，则�
 - `xv6-vfs-hal-final.nonblank.diff`：排除纯空白新增/删除行的审计展示版（+5602/−106，共 5708 行）；该文件不具备补丁回放语义。
 - `xv6-vfs-hal-final.nonblank.diff.stat`：非空白文本变更的逐文件统计摘要。
 - `final_slides.pdf` / `final_slides.pptx`：汇报幻灯片。
-- `演示视频.mp4`：演示视频（脚本与分镜见 `docs/contest/video_script.md`）。
+- `演示视频.mp4`：演示视频（脚本与分镜见 `docs/contest/video_script.md`；[百度网盘在线观看](https://pan.baidu.com/s/1t96v7KjAdIbT0HKPjjoLCQ?pwd=auan)，提取码 `auan`）。
 - `test_report.md`、`diff.md`、`commit_history.md`：测试报告、diff 说明与提交历史快照。
 
 ## 许可证与合规性说明

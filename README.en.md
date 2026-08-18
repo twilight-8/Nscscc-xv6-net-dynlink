@@ -25,6 +25,8 @@ This project is an entry to the 2026 National Undergraduate Computer System Abil
 
 Based on MIT xv6-riscv rev5, the project adds a virtual file system (VFS) and a hardware abstraction layer (HAL) while preserving xv6's character as a small teaching OS: the system supports the xv6, ext2 and FAT32 file systems simultaneously, and runs on both RISC-V and LoongArch64. Both platforms pass the xv6-riscv rev5 built-in test suite and the VFS tests designated by the problem statement; all changes relative to the original baseline are delivered as a diff file.
 
+> Demo video: [watch online (Baidu Netdisk)](https://pan.baidu.com/s/1t96v7KjAdIbT0HKPjjoLCQ?pwd=auan) (extraction code `auan`).
+
 ## Highlights
 
 - **Thin VFS dispatch layer**: operation tables unify three file systems; a sleep lock serializes `mount/umount`, while a four-state mount table handles publication, rollback and safe unmount. Busy mounts are rejected immediately, with minimal intrusion into the native xv6 path.
@@ -152,7 +154,7 @@ See the README in each directory for details: `docs/README.md`, `tests/README.md
 - `xv6-vfs-hal-final.nonblank.diff`: audit/reporting view with whitespace-only added/deleted lines excluded (+5602/−106, 5708 total); it is not a replayable patch.
 - `xv6-vfs-hal-final.nonblank.diff.stat`: per-file statistics for nonblank textual changes.
 - `final_slides.pdf` / `final_slides.pptx`: presentation slides.
-- `演示视频.mp4`: demo video (script and storyboard in `docs/contest/video_script.md`).
+- `演示视频.mp4`: demo video (script and storyboard in `docs/contest/video_script.md`; [watch online (Baidu Netdisk)](https://pan.baidu.com/s/1t96v7KjAdIbT0HKPjjoLCQ?pwd=auan), extraction code `auan`).
 - `test_report.md`, `diff.md`, `commit_history.md`: test report, diff notes and commit-history snapshot.
 
 ## License and Compliance

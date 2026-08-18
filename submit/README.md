@@ -16,7 +16,7 @@
 | `test_report.md` | 测试报告（权威版本 `docs/contest/test_report.md`，原始日志见 `tests/evidence/`） |
 | `commit_history.md` | 比赛过程中的重要进展，按阶段记录 |
 | `final_slides.pdf` / `final_slides.pptx` | 2026-06-30 旧进展汇报，仅作历史材料 |
-| `演示视频.mp4` | 演示视频（脚本与分镜见 `docs/contest/video_script.md`） |
+| `演示视频.mp4` | 演示视频（脚本与分镜见 `docs/contest/video_script.md`；[百度网盘在线观看](https://pan.baidu.com/s/1t96v7KjAdIbT0HKPjjoLCQ?pwd=auan)，提取码 `auan`） |
 
 ## 最终验证
 
