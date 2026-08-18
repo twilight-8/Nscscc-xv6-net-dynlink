@@ -153,9 +153,10 @@ umount /mnt            # 若文件仍打开或 cwd 位于该文件系统，则�
 - `xv6-vfs-hal-final.diff.stat`：上述标准 diff 的统计摘要。
 - `xv6-vfs-hal-final.nonblank.diff`：排除纯空白新增/删除行的审计展示版（+5602/−106，共 5708 行）；该文件不具备补丁回放语义。
 - `xv6-vfs-hal-final.nonblank.diff.stat`：非空白文本变更的逐文件统计摘要。
+- `xv6-vfs-hal-kernel.diff`：只统计 `kernel/` 目录的 diff 文件。
+- `xv6-vfs-hal-kernel.diff.stat`：只统计 `kernel/` 目录的 diff 文件的统计摘要。
 - `final_slides.pdf` / `final_slides.pptx`：初赛阶段汇报幻灯片（决赛版经大赛指定渠道另行提交）。
 - `演示视频.mp4`：演示视频（`submit/` 内为 2026-06-30 初赛阶段版本；决赛版经大赛指定渠道另行提交，亦可[百度网盘在线观看](https://pan.baidu.com/s/1joOCnowRV5-fe-JJlbZi7g?pwd=HMOS)，提取码 `HMOS`；脚本与分镜见 `docs/contest/video_script.md`）。
-- `演示视频.mp4`：演示视频（脚本与分镜见 `docs/contest/video_script.md`；[百度网盘在线观看](https://pan.baidu.com/s/1joOCnowRV5-fe-JJlbZi7g?pwd=HMOS)，提取码 `HMOS`）。
 - `test_report.md`、`diff.md`、`commit_history.md`：测试报告、diff 说明与提交历史快照。
 
 ## 许可证与合规性说明
