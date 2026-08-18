@@ -14,8 +14,8 @@ This directory holds the final contest submission materials. The authoritative v
 | `xv6-vfs-hal-final.nonblank.diff.stat` | Per-file statistics for nonblank textual changes |
 | `diff.md` | How the diff is generated, size statistics, and the HAL/VFS/common breakdown |
 | `test_report.md` | Test report (authoritative version `docs/contest/test_report.md`; raw logs in `tests/evidence/`) |
-| `commit_history.md` | Key progress during the contest, recorded by stage (authoritative version `docs/progress.md`) |
-| `final_slides.pdf` / `final_slides.pptx` | Historical progress deck dated 2026-06-30; not the final defense deck and must be replaced before submission |
+| `commit_history.md` | Key progress during the contest, recorded by stage |
+| `final_slides.pdf` / `final_slides.pptx` | Historical progress deck dated 2026-06-30 |
 | `演示视频.mp4` | Demo video (script and storyboard in `docs/contest/video_script.md`) |
 
 ## Final Verification

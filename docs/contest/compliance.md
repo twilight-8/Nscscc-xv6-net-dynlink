@@ -27,7 +27,7 @@
 | `src/kernel/vfs.c`、`vfs.h`、`ext2.c`、`fat32.c`、`block.c`、`block.h`、`hal.c` | 本队自有 | SPDX: BSD-2-Clause |
 | `src/mkfs/mkfat32.c`、`src/user/mount.c`、`unlinkopen.c`、`bigfile.c`、`vfsbench.c`、`hello.c` | 本队自有 | SPDX: BSD-2-Clause |
 | `src/kernel/arch/loongarch/` | 衍生自 xv6-loongarch-exp（xv6 系，MIT） | 移植参考后由本队大量修改：HAL 对称化、TLB refill 修复、virtio-pci 接入、中断看门狗等 |
-| `src/user/test1.c`、`test2.c`、`src/tests/hello.c`、`src/tests/cmds.sh` | 官方测例仓库 xv6-extend-vfs（GPL-3） | 逐字节引入；版本锚定见 `tests/VFS_TESTS_PIN.txt`（commit `21a6ac68`） |
+| `src/user/test1.c`、`test2.c`、`src/tests/hello.c`、`src/tests/cmds.sh` | 官方测例仓库 xv6-extend-vfs（GPL-3，见上游仓库 LICENSE 文件） | 逐字节引入；版本锚定见 `tests/VFS_TESTS_PIN.txt`（commit `21a6ac68`） |
 | 其余 `src/` 文件 | MIT xv6-riscv rev5 | 保留原许可证，见 `src/LICENSE` |
 
 ## 4. 第三方来源总表

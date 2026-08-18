@@ -35,7 +35,9 @@ git apply --stat -p0 submit/xv6-vfs-hal-final.diff > submit/xv6-vfs-hal-final.di
 sed -i -E 's/[[:space:]]+$//' submit/xv6-vfs-hal-final.diff.stat
 ```
 
-`-d`（`--minimal`）输出最小变更集，`-B`（`--ignore-blank-lines`）忽略完全由空白行变化构成的 hunk。`-B` 不会删除新增文件或代码与空白混合 hunk 中的空白 `+/-` 行，因此标准补丁仍完整保留可回放的 unified diff 结构。当前 Windows 检出会将基线 `mkfs/mkfs.c` 写成 CRLF；GNU `patch` 不会自动忽略该行尾差异。重放验证先规范这一文件，再应用补丁：
+`-d`（`--minimal`）输出最小变更集，`-B`（`--ignore-blank-lines`）忽略完全由空白行变化构成的 hunk。`-B` 不会删除新增文件或代码与空白混合 hunk 中的空白 `+/-` 行，因此标准补丁仍完整保留可回放的 unified diff 结构。
+
+当前 Windows 检出会将基线 `mkfs/mkfs.c` 写成 CRLF；GNU `patch` 不会自动忽略该行尾差异。重放验证先规范这一文件，再应用补丁：
 
 ```sh
 sed -i 's/\r$//' xv6-riscv-src/mkfs/mkfs.c  # 仅 CRLF 检出需要

@@ -49,7 +49,7 @@
 
 ### 第 7 段：稳定性演示（7:00–8:00）
 
-- **画面**：先演示打开文件时 `umount /mnt` 返回 busy，关闭后卸载并恢复下层目录，再重新挂载；随后运行 `make smp && make run`（或播放证据日志），展示三路并发写、stressfs 与 `UMOUNT_STRESS_OK`，最后展示 `tests/evidence/`。
+- **画面**：先演示打开文件时 `umount /mnt` 返回 busy，关闭后卸载并恢复下层目录，再重新挂载；随后现场运行 `make smp && make run`，耗时较长的并发压测段直接播放 `tests/evidence/` 归档日志，展示三路并发写、stressfs 与 `UMOUNT_STRESS_OK`，最后展示 `tests/evidence/` 目录本身。
 - **旁白**：“卸载先阻止新路径进入，并复用 inode 引用判断打开文件、工作目录和在途访问；多核下反复挂载、卸载与查询不会产生悬空引用。关键验收输出均保留原始日志。”
 - **关键帧**：busy 拒绝、底层目录恢复、UMOUNT_STRESS_OK、SMP_DONE。
 

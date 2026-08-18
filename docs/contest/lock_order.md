@@ -55,7 +55,7 @@ ip->lock                    （单个 inode，sleeplock）
 
 - 现象：完整 usertests 的 `manywrites` 在 LoongArch 确定性挂死；gdb 取证显示设备已投递完成而客户机未处理（used 环相差 2）。
 - 分析：INTx 链在确认窗口内到达的完成可能被控制器链吞没且不补报，等待者从此无人唤醒——锁无法解决“中断不来”的问题。
-- 修复：devintr 确认后循环重查 + 定时器看门狗兜底（规则 5）。
+- 修复：devintr 确认后循环重查 + 定时器看门狗兜底（规则 6）。
 - 复测：LoongArch 完整 usertests 首次全绿，双架构 SMP 套件通过。
 
 ### 案例 5：dinode 拷贝越界（决赛期间引入并修复）

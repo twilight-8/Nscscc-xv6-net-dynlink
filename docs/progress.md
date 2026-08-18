@@ -422,6 +422,25 @@ cat hello.c > /mnt/hello.c
 - 双架构 CPUS=3 SMP：打开文件 busy，以及 4 子进程交错 lookup 与反复 `mount/umount`，均到达 `UMOUNT_STRESS_OK`，无 panic/kerneltrap。
 - 双架构 16 项矩阵与完整 usertests 回归。
 
+## 阶段 R：mount 测试体系扩展与交付收敛
+
+主要目标：
+
+把 mount/umount 新语义的验证从单点用例扩展为成体系的测试点，完成教学展示载体建设，并在最终代码上重生成全部交付物。
+
+主要改动：
+
+- 新增三个测试点：`mount_lifecycle`（四态生命周期、失败回滚、挂载点保护、嵌套 busy、下层恢复）、`remount_io`（双后端 1 MiB 写入后三轮卸载/重挂载、6 次逐字节复验）、`mount_storm`（CPUS=3 下 lookup/open 与 mount/umount 竞争压测）。
+- `umountstress` 参数化：smp 套件保持默认 80 轮，mount_storm 提升为双后端各 4 worker × 256 轮，合计 2048 次迭代。
+- 回归矩阵由 8 测试点 × 2 架构扩展为 11 × 2 = 22 项，`tests/run_all.sh`、根 `Makefile`、`tests/MATRIX.md` 与测试报告同步更新。
+- 新增 `web/` 教学辅助网站：可交互 xv6 终端、命令执行链可视化与仓库源码上下文联动，支持真实 QEMU 与教学演示两种会话模式及可选 AI 分析。
+- 在最终代码上重新生成 `submit/xv6-vfs-hal-final.diff`（62 个文件，+6405/−113），并派生 nonblank 审计版；重复生成逐字节一致，以 SHA-256 锚定。
+
+验证结果：
+
+- 22/22 全量回归通过，双架构完整 usertests 均输出 `ALL TESTS PASSED`，证据归档于 `tests/evidence/`。
+- diff 套用回基线副本后所得源码树与 `src/` 逐文件一致，生成与验证命令固化在 `docs/contest/baseline.md`。
+
 ## 当前阶段总览
 
 ```mermaid
@@ -444,8 +463,9 @@ flowchart LR
     SO["阶段 O：合规落地与性能测量"]
     SP["阶段 P：VFS 并发发布与跨后端 exec"]
     SQ["阶段 Q：安全卸载生命周期"]
+    SR["阶段 R：mount 测试体系扩展与交付收敛"]
 
-    S0 --> SA --> SB --> SC --> SD --> SE --> SF --> SG --> SH --> SI --> SJ --> SK --> SL --> SM --> SN --> SO --> SP --> SQ
+    S0 --> SA --> SB --> SC --> SD --> SE --> SF --> SG --> SH --> SI --> SJ --> SK --> SL --> SM --> SN --> SO --> SP --> SQ --> SR
 ```
 
 - 阶段 0：建立项目基线，保留原 xv6 测试能力。
@@ -466,10 +486,11 @@ flowchart LR
 - 阶段 O：BSD-2-Clause 许可证与 SPDX 标注落地，基线副本补齐校验，vfsbench 性能测量，参照项目取证，tests/ 与 docs/ 体系规范化。
 - 阶段 P：冷 inode 有序发布、mount 操作锁、挂载三态及锁外 spinlock 初始化、同类型后端互斥，并补齐 ext2/fat32 ELF 的 VFS 读取路径。
 - 阶段 Q：实现非强制安全 `umount`，以四态、短期 reader pin 与 inode 引用 busy 检查闭合卸载并发生命周期。
+- 阶段 R：mount 测试点扩展为 11 × 2 = 22 项回归矩阵，上线 `web/` 教学辅助网站，在最终代码上重生成最终 diff 与 nonblank 审计版并完成交付聚合。
 
 ## 收尾事项
 
-- 演示视频录制（按 `docs/contest/video_script.md` 分镜）。
-- 汇报幻灯片与现场答辩 PPT 定稿（分工页待团队提供）。
-- 重新生成最终 diff 并复核 diff 统计（命令见 `docs/contest/baseline.md`）。
-- 提交材料聚合至 `submit/` 并完成提交。
+- 演示视频录制（按 `docs/contest/video_script.md` 分镜）：已完成，成品 `submit/演示视频.mp4`。
+- 汇报幻灯片与现场答辩 PPT 定稿：新版已定稿，待替换 `submit/` 旧版后收尾。
+- 重新生成最终 diff 并复核 diff 统计：已完成（62 个文件，+6405/−113，命令见 `docs/contest/baseline.md`）。
+- 提交材料聚合至 `submit/`：已完成。

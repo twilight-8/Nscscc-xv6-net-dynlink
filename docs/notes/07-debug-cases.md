@@ -35,5 +35,9 @@ SMP 测试连续两轮“红灯”其实是测试驱动自身的 typed-ahead 截
 | 中断丢失与看门狗（P5） | `../contest/lock_order.md` 案例 4 |
 | SMP 分配竞争（C1） | `../contest/lock_order.md` 案例 3 |
 | fat32 O(n²) 链漫游（P7） | `../contest/problems.md` |
-| runner 三处等待机制（P8） | `../contest/problems.md` |
+| runner 两处等待机制（P8） | `../contest/problems.md` |
 | 基线缺失文件（P9） | `../contest/baseline.md` |
+| 冷 inode 发布竞态（P10） | `../contest/problems.md` |
+| exec 走 readi 的 VFS 化（P11） | `../contest/problems.md` |
+| 挂载初始化与发布竞态（P12） | `../contest/lock_order.md` 案例 6 |
+| 卸载与路径引用竞态（P13） | `../contest/lock_order.md` 案例 7 |

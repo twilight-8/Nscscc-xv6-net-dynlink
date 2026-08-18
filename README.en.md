@@ -31,6 +31,7 @@ Based on MIT xv6-riscv rev5, the project adds a virtual file system (VFS) and a 
 - **Three file systems on a single disk**: one virtio disk carries the xv6, ext2 and FAT32 images side by side, mountable on demand after boot.
 - **Symmetric thin HAL for two platforms**: both platforms share the same kernel code; platform differences are confined to a separate porting layer, with interrupt-routing knowledge centralized at a single point.
 - **Mechanism-level stability fallback**: since the external interrupt chain cannot be guaranteed lossless, a virtio watchdog provides a mechanism-level fallback; SMP stress tests pass.
+- **Interactive teaching console**: the companion site in `web/` runs an xv6-style terminal in the browser and shows the source-level execution chain across system calls, the VFS, the file systems and the HAL as commands run, with real-QEMU and demo sessions plus optional AI analysis — a visual carrier for demos and the defense.
 - **Defect-driven testing**: 11 test points across 2 architectures, 22 regression runs all passing, including dedicated state-machine, repeated 1 MiB remount, and CPUS=3 dual-backend mount-storm tests. Functional regression is reproducible with one `make verify-all`.
 
 ## Quick Start
@@ -57,6 +58,8 @@ make qemu                           # RISC-V
 make ARCH=loongarch CPUS=1 qemu     # LoongArch64
 ```
 
+An interactive teaching console lives in `web/`: it runs an xv6-style terminal in the browser and shows the source-level execution chain across user space, system calls, the VFS, the concrete file system and the HAL as commands run. The site runs on Node.js; startup commands, the real-QEMU session and the AI assistant mode are documented in `web/README.md`.
+
 In the shell, mount ext2 and run the VFS tests following the official reference procedure:
 
 ```sh
@@ -76,9 +79,9 @@ Note: if pulling the `ubuntu:24.04` base image times out, configure `registry-mi
 |---|---|
 | Objectives | "Overview" above |
 | Problem analysis and related research | [notes](docs/notes) |
-| System architecture design | [design.md](docs/design.md)|
+| System architecture design | [design.md](docs/design.md) |
 | Development plan | [plan.md](docs/plan.md) |
-| Key progress during the contest  [progress.md](docs/progress.md) |
+| Key progress during the contest | [progress.md](docs/progress.md) |
 | System testing | [test_report.md](docs/contest/test_report.md) |
 | Major problems and solutions | [problems.md](docs/contest/problems.md) |
 | Division of labor and collaboration | [collaboration.md](docs/contest/collaboration.md) |
@@ -99,7 +102,7 @@ Development follows the principle of "baseline first, stage-by-stage progress, e
 
 ## Key Progress
 
-The project went through eighteen stages from baseline to delivery (Stage 0 through Stage Q), each recorded as "objectives, changes, verification": the thin VFS dispatch layer, the mount table and block-device interface, ext2 and FAT32 support, LoongArch64 boot and the virtio-pci block device, integration with the official VFS tests, ext2 double-indirect large files, FAT32 long file names, concurrency stability fixes, safe unmount, compliance and performance measurement, and more. Every stage is cross-checkable against the commit history and the test logs in `tests/evidence/`. See `docs/progress.md`.
+The project went through nineteen stages from baseline to delivery (Stage 0 through Stage R), each recorded as "objectives, changes, verification": the thin VFS dispatch layer, the mount table and block-device interface, ext2 and FAT32 support, LoongArch64 boot and the virtio-pci block device, integration with the official VFS tests, ext2 double-indirect large files, FAT32 long file names, concurrency stability fixes, safe unmount, the mount testing expansion, compliance and performance measurement, and more. Every stage is cross-checkable against the commit history and the test logs in `tests/evidence/`. See `docs/progress.md`.
 
 ## System Testing
 
@@ -121,7 +124,8 @@ Through this project the team gained end-to-end engineering practice in file-sys
 
 ```text
 .
-├── README.md                  # Project description
+├── README.md                  # Project description (Chinese)
+├── README.en.md               # Project description (English)
 ├── LICENSE                    # BSD-2-Clause
 ├── Makefile                   # Test orchestration: 11 test points × 2 architectures = 22 runs
 ├── Dockerfile                 # Containerized build and test environment
@@ -129,12 +133,13 @@ Through this project the team gained end-to-end engineering practice in file-sys
 │   ├── kernel/                # Kernel
 │   ├── mkfs/                  # Image tools
 │   ├── user/                  # User programs (incl. official test1/test2 and team test programs)
-│   └── tests/                 # Data files installed into the image's /tests 
+│   └── tests/                 # Data files installed into the image's /tests
 ├── xv6-riscv-src/             # Pristine xv6-riscv rev5 baseline copy
 ├── tests/                     # Host-side test orchestration
-├── docs/                      # Project documentation 
-│   ├── contest/               # Event Information
-│   ├── notes/                 # Study Notes
+├── docs/                      # Project documentation
+│   ├── contest/               # Contest documents
+│   └── notes/                 # Study notes
+├── web/                       # Teaching website: xv6 terminal, execution chains and source linkage
 └── submit/                    # Contest submission materials (final diff, reports, slides, demo video)
 ```
 
@@ -156,4 +161,4 @@ The original xv6 code remains under the MIT License (see `src/LICENSE`). Team-au
 
 ## AI Usage Disclosure
 
-AI tools were used for auxiliary work such as requirement analysis and code review on the premise of originality; every AI suggestion was understood, modified, verified and tested by team members before adoption. Details in `docs/contest/ai_usage.md`.
+The project uses AI tools in a "designed by humans, drafted by AI, verified by humans" workflow: AI assists with parts of the implementation, test cases and document drafts under design constraints set by the team; every output is reviewed line by line, modified, and verified on both architectures before being merged. Details in `docs/contest/ai_usage.md`.

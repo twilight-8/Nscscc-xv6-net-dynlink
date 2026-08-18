@@ -2,9 +2,11 @@
 
 [中文](README.md) | [English](README.en.md)
 
-Master index of the project documentation.  Documents are organized in three layers: project lifecycle documents (this directory's root), learning notes (`notes/`), and contest-requirement documents (`contest/`).  Packaged submission artifacts live in `submit/`.
+Master index of the project documentation. Documents are organized in three layers: main-thread documents (this directory's root), learning notes (`notes/`), and contest-requirement documents (`contest/`). Packaged submission artifacts live in `submit/`.
 
-## Lifecycle documents (root of this directory)
+## Main-thread documents (root of this directory)
+
+Design (`design.md`), plan (`plan.md`) and progress (`progress.md`) form the project's main thread — what to build, how to proceed, and what was actually achieved — and are updated continuously throughout the project.
 
 | Document | Contest-outline item |
 |---|---|
@@ -46,4 +48,9 @@ Each document maps to a submission requirement; the mapping table is in `contest
 | `contest/compliance.md` | Third-party source disclosure |
 | `contest/ai_usage.md` | AI tooling disclosure |
 | `contest/baseline.md` | Baseline anchor and diff generation |
-| `contest/lock_order.md` | Locking rules and concurrency cases  |
+| `contest/lock_order.md` | Locking rules and concurrency cases |
+
+## Others
+
+- Teaching website documentation: `../web/README.md` (maintained with the website code, outside the three-layer system).
+- Packaged submission artifacts: `../submit/`.

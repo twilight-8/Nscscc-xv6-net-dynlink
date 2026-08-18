@@ -6,8 +6,11 @@
 
 ```text
 entry.S → start.c: 机器态初始化，设置栈，跳 main
-main.c:   依次初始化 console/内存/页表/进程表/中断(PLIC)/缓冲/文件表/
-          inode 表/磁盘(virtio)/vfsinit，最后 userinit 创建 init 进程
+main.c:   依次初始化 console/内存/页表/进程表/中断(hal_intr_init，
+          RISC-V 侧转发 PLIC)/缓冲(binit)/inode 表(iinit)/
+          文件表(fileinit)/vfsinit/磁盘(hal_disk_init)，
+          最后 userinit 创建 init 进程
+          （vfsinit 与 hal_* 为本项目新增调用，其余为 rev5 原生步骤）
 proc.c:   scheduler() 接管，开始调度
 user/init.c: 第一个用户进程，打开 console，exec sh
 ```

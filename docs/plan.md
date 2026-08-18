@@ -17,7 +17,7 @@
 | 2 | 同时支持 RISC-V 和 LoongArch 平台 | 已实现（约 2000 行 arch 代码的完整移植） |
 | 3 | 两平台通过 xv6-riscv 第 5 版自带测例 | 双架构完整 `usertests` 均输出 `ALL TESTS PASSED`，证据已归档 |
 | 4 | 通过指定 VFS 测试用例（yanjun-wen/xv6-extend-vfs） | 官方测例已按锚定版本原样入库，双架构回归通过 |
-| 5 | 提交与原版 rev5 的 diff 文件 | 已在最终代码上重新生成：62 个文件，+6612/−119（见 `submit/diff.md`） |
+| 5 | 提交与原版 rev5 的 diff 文件 | 已在最终代码上重新生成：62 个文件，+6405/−113（见 `submit/diff.md`） |
 
 ### 1.2 评审维度（各占 20%）
 
@@ -163,7 +163,7 @@
 - 本机 LoongArch 交叉工具链为 `loongarch64-linux-gnu-gcc-14`（带版本后缀），需在干净环境确认 Makefile 前缀解析正常，保证评审环境可复现。
 - 修复方法：补充依赖关系与工具检查；提供工具链检查脚本。
 
-**E4. 锁安全工程未文档化**（严重度：低，已文档化：docs/contest/lock-order.md）
+**E4. 锁安全工程未文档化**（严重度：低，已文档化：docs/contest/lock_order.md）
 - 现状：锁规则与 B1/B2 等缺陷修复仅存在于代码与计划中，未沉淀为工程文档。
 - 修复方法：新增 `docs/LOCK-ORDER.md`，定义锁层级与持有规则（如 itable.lock → ip->lock → bcache.lock → b->lock 的获取顺序、持 spinlock 不得睡眠等）；将 B1/B2 修复按“失败—分析—修复—复测”格式记录，形成“规则—案例—文档”闭环，同步转化为创新性分析素材。
 
@@ -171,7 +171,7 @@
 
 | # | 问题 | 位置 |
 |---|------|------|
-| F1 | “目前包括”一节仅列 2 个测试点，与上方 7 套件表矛盾（已修复：测试点列表已补齐为 8 项） | `README.md:90-93` 对比 `:72-78` |
+| F1 | “目前包括”一节仅列 2 个测试点，与上方 7 套件表矛盾（已修复：测试点列表已补齐，现为 11 项） | `README.md:90-93` 对比 `:72-78` |
 | F2 | 仓库结构清单遗漏 `xv6-riscv-src/`（diff 基线）（已修复：仓库结构已含完整描述） | `README.md:31-39` |
 | F3 | mount 用法不统一，未说明 dev 可省略（已修复：统一为 `mount ext2 /mnt` 并注明 dev 可省略） | `README.md:122` 对比 `docs/contest/test_report.md:165,210,323` |
 | F4 | 文件名缺少 `.md` 后缀（已修复：已补后缀，commit_history 更名 progress.md） | `submit/README.md:13-14`、`README.md:62-63` |
@@ -210,7 +210,7 @@
 
 ### 4.2 测试结果分析（需重点扩充）
 
-- 功能分析：7 测试点 × 2 架构矩阵、官方测例映射表、完整 usertests 结果；
+- 功能分析：11 测试点 × 2 架构矩阵、官方测例映射表、完整 usertests 结果；
 - **需求跟踪矩阵**：需求编号—需求描述—设计文档—实现文件—测试状态五列追溯，覆盖赛题功能需求与派生设计需求，使评审可按行抽查“需求—设计—实现—测试”一致性；
 - 性能分析：ext2/fat32 顺序读写吞吐（大文件拷贝计时）、fat32 簇分配优化前后对比、**VFS 开销量化**（同一文件操作在原生 xv6 路径与 VFS 分发路径的对比计时，预先回答“VFS 引入多少开销”）；双架构编译、启动时间与内核镜像大小仅在最终源码完成可复核采集后引用；
 - 创新性分析：提炼编号创新点，按“创新内容/实现手段/创新价值”三段展开。候选：逻辑设备号偏移复用单一 virtio 盘、薄 VFS ops 分发表、HAL 双平台对称中断抽象、B1/B2 缺陷的根因分析与修复工程、双平台一致性验证方法；
@@ -241,9 +241,9 @@
 
 安排原则：**前期（Day 1–5）集中完成赛题工程性任务与代码实现优化，后期（Day 6–8）集中进行文档体系建设与展示材料制作**，构建“得分点—承接物”的完整映射。
 
-每日回归基线：当天结束时双架构 7 测试点必须全部通过；不达标当晚修复，不积压。
+每日回归基线：当天结束时双架构全部测试点必须全部通过；不达标当晚修复，不积压。
 
-### 进度速览（8.9 更新）
+### 进度速览（8.18 更新）
 
 | 日 | 状态 | 门禁结果 |
 |---|---|---|
@@ -253,9 +253,11 @@
 | Day 4 fat32 LFN 读支持 | 已完成 | 14/14 回归 PASS；完整 usertests 双架构 PASS；已推送（3 笔提交） |
 | Day 5 稳定性证据与一键复现 | 已完成 | 16/16 回归 PASS（新增 smp 双架构）；完整 usertests 双架构 PASS；SMP 压测后 e2fsck 零错误；证据入库 tests/evidence/；已推送（3 笔提交） |
 | Day 6 合规落地与性能测量 | 已完成 | LICENSE/SPDX 落地；基线副本补齐并与官方 rev5 逐文件校验一致；vfsbench 全量测量与证据归档；参照项目取证完成；16/16 回归 + 完整 usertests 双架构全绿；已推送（3 笔提交） |
-| Day 7 文档体系建设 | 进行中 | tests/ 体系规范化（1 笔）与 docs/notes 八篇（1 笔）已提交；contest/ 六篇、baseline/lock-order、docs 三层索引、progress.md 改写、三文档重写完成（工作区，待提交）；演示视频与双 PPT 顺延至 Day 8 |
+| Day 7 文档体系建设 | 已完成 | tests/ 体系规范化、docs/notes 八篇、contest/ 六篇、baseline/lock_order、docs 三层索引、progress.md 改写、三文档重写全部入库；演示视频与双 PPT 顺延至 Day 8 |
+| Day 8 交付态收敛 | 已完成 | test_report.md 重写（含 mount 测试点与 22/22 口径）；最终 diff 重生成；submit/ 材料聚合完成；演示视频就位 |
+| 8.13–8.16 收尾增补（计划外迭代） | 已完成 | mount 三态/四态锁与 umount 落地（阶段 P/Q）；mount_lifecycle/remount_io/mount_storm 三测试点（16→22 项）；web 教学辅助网站上线；最终 diff 与 nonblank 审计版重生成（62 个文件，+6405/−113） |
 
-推送前门禁（自 Day 3 起强制执行）：`tests/run_all.sh` 16/16 + `tests/full_usertests.sh` 双架构全绿，缺一不推。
+推送前门禁（自 Day 3 起强制执行）：`tests/run_all.sh` 全量 + `tests/full_usertests.sh` 双架构全绿，缺一不推。（测试点两次扩展：Day 5 起 16/16，8.16 mount 扩展后 22/22。）
 
 ### 第一阶段：代码实现优化（Day 1–5）
 
@@ -309,16 +311,16 @@
 **Day 7（8.10，周一）：文档体系建设（实际执行）与演示材料（顺延）**
 - [✔] tests/ 体系规范化（9 套双语四段式 README、覆盖矩阵、占位移除）并提交（f9f9dd3）。
 - [✔] docs/notes 学习笔记 8 篇（赛题分析至调试案例，编号成序）并提交（8aa9440）。
-- [✔] docs/contest/ 六篇（problems/innovation/comparison/performance/video-script/README 映射）、baseline.md、lock-order.md、docs 三层索引完成。
+- [✔] docs/contest/ 六篇（problems/innovation/comparison/performance/video_script/README 映射）、baseline.md、lock_order.md、docs 三层索引完成。
 - [✔] progress.md 改写（更名自 commit_history.md，续写阶段 K–O、总览与收尾事项更新）；ai_usage/compliance/references 统一重写。
 - [✔] performance.md 数据真实性复核：修正启动时间测量错误（原 0.40s/2.77s 为 make 开销污染，直接启动实测双架构均约 0.2s）并删除错误归因。
 - [ ] 演示视频录制与双 PPT 制作：顺延至 Day 8（素材已备：video-script.md、comparison.md、progress.md）。
 
 **Day 8（8.11，周二）：交付态收敛与最终打包（预留缓冲）**
-- [ ] test_report.md 重写（F6：与官方原版测例及当前测试体系同步）；design.md 最终同步（F8 余项）。
-- [ ] 演示视频按 `video-script.md` 分镜录制；汇报幻灯片与答辩 PPT 定稿（分工页待团队提供）。
-- [ ] 仓库交付态清理：移除临时文件、过程性 TODO、调试残留，评审所见即最终叙事。
-- [✔] `make clean` 后重新生成 `xv6-vfs-hal-final.diff` 与 `.diff.stat`，复核无调试残留、行数与文档声明一致（任务 5）（已完成：62 个文件，+6612/−119，套用回基线验证逐文件一致）。
+- [✔] test_report.md 重写（F6：与官方原版测例及当前测试体系同步）；design.md 最终同步（F8 余项）（已完成：含三个 mount 测试点与 22/22 口径，四态挂载设计已同步）。
+- [ ] 演示视频按 `video_script.md` 分镜录制（成品 `submit/演示视频.mp4` 已就位）；汇报幻灯片与答辩 PPT 定稿（新版已定稿，待替换 submit/ 旧版）。
+- [✔] 仓库交付态清理：移除临时文件、过程性 TODO、调试残留，评审所见即最终叙事。
+- [✔] `make clean` 后重新生成 `xv6-vfs-hal-final.diff` 与 `.diff.stat`，复核无调试残留、行数与文档声明一致（任务 5）（已完成：62 个文件，+6405/−113，套用回基线验证逐文件一致）。
 - [ ] 在干净 clone 上全流程复现（模拟评审环境）：构建 → `verify-all` → 官方流程 `cd /tests; cat cmds.sh | sh`。
 - [ ] 按 §6 清单更新核对 `submit/` 全部材料；预留半天缓冲；答辩 PPT 二次打磨。
 
@@ -330,30 +332,30 @@
 ## 6. 提交物核对清单
 
 **代码与 diff**
-- [✔] `xv6-vfs-hal-final.diff` 与 `.diff.stat`（干净源码树重新生成，62 个文件，+6612/−119）
+- [✔] `xv6-vfs-hal-final.diff` 与 `.diff.stat`（干净源码树重新生成，62 个文件，+6405/−113）
 - [✔] B1–B5、E1–E3、D1–D4 修复全部合入并回归通过
 - [✔] 官方测例逐字节入库 + `VFS_TESTS_PIN.txt` 填写完整 + `/tests` 布局（手动挂载，与官方流程一致；自动挂载项经实证放弃）
-- [ ] 无调试残留、无死代码（ramdisk.c）、无 TODO/FIXME；仓库交付态收敛
+- [✔] 无调试残留、无死代码（ramdisk.c）、无 TODO/FIXME；仓库交付态收敛
 
 **测试证据**
 - [✔] 官方流程（手动挂载后执行 `cd /tests; cat cmds.sh | sh`）双架构通过并纳入回归
 - [✔] 完整版 `usertests` 双架构通过日志入库（任务 3）
-- [✔] 8 个测试点 × 2 架构汇总证据入库
-- [✔] `make verify-all` 可用且 16/16 通过
+- [✔] 11 个测试点 × 2 架构汇总证据入库
+- [✔] `make verify-all` 可用且 22/22 通过
 - [✔] SMP（CPUS=3）与 stressfs 压力测试记录
-- [ ] 冲刺期缺陷的“失败—分析—修复—复测”记录入库
+- [✔] 冲刺期缺陷的“失败—分析—修复—复测”记录入库（`docs/contest/problems.md` P1–P13 与 `lock_order.md` 案例）
 
 **文档包**
-- [ ] design.md 定稿（HAL 对称、双重间接、LFN 读、研发问题与解决专题）
-- [ ] test_report.md 扩充版（需求跟踪矩阵、官方测例映射表、功能/性能/创新性分析、VFS 开销量化、六维对比分析）
-- [ ] compliance.md 更新（官方测例引入与锚定说明、非本队来源完整）
-- [ ] BASELINE.md（基线锚定）、LOCK-ORDER.md（锁安全工程）
-- [ ] LICENSE（BSD-2-Clause）与新增文件 SPDX 头
-- [ ] README.md 与 submit/README.md 全部陈旧项修复（F1–F4）
+- [✔] design.md 定稿（HAL 对称、双重间接、LFN 读、四态挂载与研发问题专题）
+- [✔] test_report.md 扩充版（需求矩阵见 `tests/MATRIX.md`，性能/创新性/对比分析分篇落地，VFS 开销量化见 performance.md）
+- [✔] compliance.md 更新（官方测例引入与锚定说明、非本队来源完整）
+- [✔] baseline.md（基线锚定）、lock_order.md（锁安全工程）（落地于 `docs/contest/`）
+- [✔] LICENSE（BSD-2-Clause）与新增文件 SPDX 头
+- [✔] README.md 与 submit/README.md 全部陈旧项修复（F1–F4）
 
 **展示材料**
-- [ ] 进展汇报幻灯片（分工页、进度时间线页、参照版本/增量贡献/AI 声明专页）
-- [ ] 演示视频（脚本与关键帧文档 + 按分镜录制成品）
+- [ ] 进展汇报幻灯片（分工页、进度时间线页、参照版本/增量贡献/AI 声明专页）（新版已定稿，待替换 submit/ 旧版）
+- [✔] 演示视频（脚本与关键帧文档 + 按分镜录制成品）
 - [ ] 现场答辩 PPT（12–15 页）与质询应答库
 
 ---
@@ -375,13 +377,13 @@
 
 ## 附录：关键文件位置索引
 
-- VFS 层：`src/kernel/vfs.c`（406 行）、`vfs.h`（54 行）；挂载发布见 `vfs_mount()`，路径切换见 `fs.c:namex()`
-- ext2：`src/kernel/ext2.c`（1208 行）；冷 inode 加载见 `ext2_iget()`，延迟释放见 `ext2_unlink()`/`ext2_itrunc()`，双重间接见 `ext2_bmap()`
-- fat32：`src/kernel/fat32.c`（1175 行）；冷 inode 加载见 `fat32_iget()`，并发分配与链遍历见后端锁及 FAT 链操作，LFN 读取见 `fat32_lookup_lfn()`
+- VFS 层：`src/kernel/vfs.c`（507 行）、`vfs.h`（57 行）；挂载发布见 `vfs_mount()`，路径切换见 `fs.c:namex()`
+- ext2：`src/kernel/ext2.c`（1216 行）；冷 inode 加载见 `ext2_iget()`，延迟释放见 `ext2_unlink()`/`ext2_itrunc()`，双重间接见 `ext2_bmap()`
+- fat32：`src/kernel/fat32.c`（1183 行）；冷 inode 加载见 `fat32_iget()`，并发分配与链遍历见后端锁及 FAT 链操作，LFN 读取见 `fat32_lookup_lfn()`
 - HAL：`src/kernel/hal.c`（46 行）、`src/kernel/arch/loongarch/hal.c`（52 行）、`arch/loongarch/trap.c`（中断入口）
 - 启动与挂载：`src/kernel/vfs.c:vfsinit()` 初始化根挂载；用户按官方流程执行 `mount ext2 /mnt`
 - 设备偏移：`src/kernel/virtio_disk.c:377-380`；常量定义 `src/kernel/param.h:7-16`
-- 构建：`src/Makefile`（ARCH 分支 29-69，镜像构建 230-247，E3 见 230-238）；根 `Makefile`（测试目标 290-309）
+- 构建：`src/Makefile`（ARCH 分支 29-69，镜像构建 230-247，E3 见 230-238）；根 `Makefile`（测试目标 290-410，`verify-all` 见 409-414）
 - 测试：`tests/runner/run_qemu_case.py`（提示符等待与精确计数断言）；各 `tests/*/run.sh`、`cmds.sh`
 - 官方测例：https://github.com/yanjun-wen/xv6-extend-vfs/tree/main/tests （4 个文件：cmds.sh、hello.c、test1.c、test2.c）
 - 参考项目：静春山 https://gitlab.eduxiji.net/educg-group-36002-2710490/T202510558995330-264 ；RuOK https://gitlab.eduxiji.net/educg-group-36002-2710490/T202510486995232-2402

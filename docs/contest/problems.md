@@ -83,7 +83,7 @@
 
 - **现象与取证**：原表项只有 `used`，无法区分后端正在初始化还是已经可遍历；挂载点类型检查后先解锁 inode，再登记表项，并发 unlink 可在此窗口删除目标；同类型挂载还会争用后端静态单实例状态。
 - **根因**：表项占用、后端 I/O 和路径可见性缺少分阶段发布协议，两次挂载的路径解析与发布也没有统一顺序。把 `mtable.lock` 跨磁盘 I/O 持有会违反 spinlock 不可睡眠规则。
-- **修复**：新增可睡眠的 `mtable.oplock` 串行化整次 `vfs_mount()`；`mtable.lock` 仍只短持有。挂载点在 `ip->lock → mtable.lock` 顺序下预留为 `MOUNTING`，后端 I/O 在 spinlock 外执行，成功后发布 `MOUNTED`，失败则回收为 `MOUNT_FREE` 后再释放引用。三态负责让 unlink 看见正在初始化的挂载点，并保证路径只跳转到完整发布的根 inode。
+- **修复**：新增可睡眠的 `mtable.oplock` 串行化整次 `vfs_mount()`；`mtable.lock` 仍只短持有。挂载点在 `ip->lock → mtable.lock` 顺序下预留为 `MOUNTING`，后端 I/O 在 spinlock 外执行，成功后发布 `MOUNTED`，失败则回收为 `MOUNT_FREE` 后再释放引用。四态挂载表负责让 unlink 看见正在初始化的挂载点，并保证路径只跳转到完整发布的根 inode。
 - **验证**：双架构 error 在 CPUS=3 下向每个挂载点发起后台/前台请求，精确得到每组 1 次成功、1 次失败；semantics 验证正常路径跳转，SMP 验证挂载后的并发 I/O。该回归验证最终串行互斥语义，不宣称确定性命中 `MOUNTING` 窗口；发布、失败回滚及 mount/unlink 可见性由锁序与状态转换审查闭环。
 - **保留边界**：`oplock` 不维护祖先/后代拓扑。顺序执行“先挂 `/a/b`、再挂 `/a`”仍会使前一挂载不可达；后续安全 `umount` 可解除可达挂载，但不自动修复已经被祖先挂载遮蔽的拓扑，因此反向祖先覆盖仍列为 P1 限制。
 

@@ -1,5 +1,7 @@
 # HandsomeOS 教学控制台
 
+[中文](README.md) | [English](README.en.md)
+
 这是参赛内核的配套教学网站。页面把可交互的 xv6 终端、命令执行链、节点参数释义和当前仓库源码上下文放在同一个工作台中。
 
 ## 功能
@@ -24,21 +26,20 @@
 cd ./web
 npm.cmd install
 npm.cmd run build
-$env:PORT = "4187"
 npm.cmd start
 ```
 
-看到下面的信息表示服务器已经启动：
+看到下面的信息表示服务器已经启动（默认端口 4182）：
 
 ```text
-HandsomeOS teaching server: http://localhost:4187
+HandsomeOS teaching server: http://localhost:4182
 ```
 
 保持这个 PowerShell 窗口开启，然后在浏览器访问 <http://localhost:4182>。PowerShell 停留在运行状态是正常现象，网页中的 xv6 命令应输入右侧教学终端，而不是继续输入到 PowerShell。
 
 关闭网站时，回到运行 `npm.cmd start` 的 PowerShell 窗口并按 `Ctrl+C`。关闭浏览器标签页不会停止网站服务器。
 
-如果出现 `EADDRINUSE`，表示该端口已经有网站进程在运行。可以直接访问对应地址，也可以换一个端口重新启动：
+如果出现 `EADDRINUSE`，表示该端口已经有网站进程在运行。可以直接访问对应地址，也可以换一个端口（例如 4187）重新启动：
 
 ```powershell
 $env:PORT = "4187"
@@ -125,7 +126,6 @@ npm.cmd test
 ```powershell
 $env:XV6_WSL_DISTRO = "Ubuntu-24.04"
 $env:XV6_PROBE_TIMEOUT_MS = "10000"
-$env:PORT = "4182"
 npm.cmd start
 ```
 
@@ -147,4 +147,4 @@ umount /fat
 umount /mnt
 ```
 
-执行每条命令后，观察左侧的后端标识变化并点击 VFS、文件系统或 HAL 节点。最后一条命令会展示 FAT32 不支持硬链接时的拒绝链路。
+执行每条命令后，观察左侧的后端标识变化并点击 VFS、文件系统或 HAL 节点。其中 `ln /fat/HELLO.TXT /fat/LINK.TXT` 会展示 FAT32 不支持硬链接时的拒绝链路。

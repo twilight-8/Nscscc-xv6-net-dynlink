@@ -26,7 +26,7 @@
 | 资料 | 链接 | 用途 |
 |---|---|---|
 | The Second Extended File System (ext2-doc) | https://www.nongnu.org/ext2-doc/ext2.html | ext2 后端实现（superblock、组描述符、dinode、间接块、目录项） |
-| Microsoft FAT Specification (fatgen103) | https://download.microsoft.com/download/1/6/1/161ba512-40e2-4cc9-843a-923143f3456c/fatgen103.doc | fat32 后端实现（BPB、FAT 链、8.3 目录项、LFN 长名） |
+| Microsoft FAT Specification (fatgen103) | https://download.microsoft.com/download/1/6/1/161ba512-40e2-4cc9-843a-923143f3456c/fatgen103.doc | fat32 后端实现（BPB、FAT 链、8.3 目录项、LFN 长名；若短链失效可检索 fatgen103.doc） |
 
 ## 5. 官方测例
 

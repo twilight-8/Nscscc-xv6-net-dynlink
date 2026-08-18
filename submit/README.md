@@ -14,8 +14,8 @@
 | `xv6-vfs-hal-final.nonblank.diff.stat` | 非空白文本变更的逐文件统计摘要 |
 | `diff.md` | diff 生成方式、规模统计与 HAL/VFS/公共三分类拆分 |
 | `test_report.md` | 测试报告（权威版本 `docs/contest/test_report.md`，原始日志见 `tests/evidence/`） |
-| `commit_history.md` | 比赛过程中的重要进展，按阶段记录（权威版本 `docs/progress.md`） |
-| `final_slides.pdf` / `final_slides.pptx` | 2026-06-30 旧进展汇报，仅作历史材料；不是决赛最终答辩稿，提交前必须替换 |
+| `commit_history.md` | 比赛过程中的重要进展，按阶段记录 |
+| `final_slides.pdf` / `final_slides.pptx` | 2026-06-30 旧进展汇报，仅作历史材料 |
 | `演示视频.mp4` | 演示视频（脚本与分镜见 `docs/contest/video_script.md`） |
 
 ## 最终验证

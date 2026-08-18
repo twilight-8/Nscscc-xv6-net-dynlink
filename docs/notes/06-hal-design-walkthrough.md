@@ -10,9 +10,9 @@
 
 ## 关键决策推导
 
-**决策 1：抽象哪些操作？** 分析两平台的差异面：中断初始化/申领/完成、磁盘初始化与读写、启动与页表建立。前三项进 HAL 接口（`hal_intr_init/hal_irq_claim/ hal_irq_complete/hal_disk_init/hal_disk_rw`）；启动与页表差异大且彼此无共性代码，不进接口，直接放 `arch/loongarch/`。
+**决策 1：抽象哪些操作？** 分析两平台的差异面：中断初始化/申领/完成、磁盘初始化与读写、启动与页表建立。前三项进 HAL 接口（`hal_intr_init/hal_intr_inithart/hal_irq_claim/hal_irq_complete/hal_disk_init/hal_disk_rw`）；启动与页表差异大且彼此无共性代码，不进接口，直接放 `arch/loongarch/`。
 
-**决策 2：接口多薄？** 每平台 `hal.c` 只有 45 行：RISC-V 侧直接转 PLIC/virtio-mmio；LoongArch 侧转 EXTIOI/LS7A APIC/virtio-pci。接口只是“换一层名字”——它的价值不在代码量，在于**调用点唯一**：评审读 trap.c 时两端完全同构。
+**决策 2：接口多薄？** 每平台 `hal.c` 不足 60 行（RISC-V 46 行、LoongArch 52 行）：RISC-V 侧直接转 PLIC/virtio-mmio；LoongArch 侧转 EXTIOI/LS7A APIC/virtio-pci。接口只是“换一层名字”——它的价值不在代码量，在于**调用点唯一**：评审读 trap.c 时两端完全同构。
 
 **决策 3：平台语义差异放哪里？** LoongArch 的中断是**位掩码**语义（EXTIOI 一次报多个挂起位），且不同设备的完成路径不同（virtio 电平触发要清 APIC，UART 边沿触发不用）。这些知识全部收进 `arch/loongarch/hal.c` 的 `hal_irq_complete` 里—— trap.c 只管“哪个设备、处理、完成”，不知道控制器细节。这就是“路由知识收敛”原则：差异只能住在离硬件最近的那个文件。
 

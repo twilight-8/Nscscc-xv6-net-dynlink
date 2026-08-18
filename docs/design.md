@@ -144,7 +144,7 @@ BPB 校验与挂载、8.3 短名目录项查找/创建/删除、普通文件 rea
 
 ### 7.1 薄 HAL 接口
 
-每平台 `hal.c` 仅 45 行，提供 `hal_intr_init`、`hal_intr_inithart`、`hal_irq_claim`、`hal_irq_complete`、`hal_disk_init`、`hal_disk_rw` 六个入口。RISC-V 侧转发 PLIC 与 virtio-mmio；LoongArch 侧转发 EXTIOI/LS7A APIC 与 virtio-pci。接口的价值不在代码量，在于**调用点唯一**：两端 `trap.c`、`bio.c` 完全同构。
+每平台 `hal.c` 不足 60 行（RISC-V 46 行、LoongArch 52 行），提供 `hal_intr_init`、`hal_intr_inithart`、`hal_irq_claim`、`hal_irq_complete`、`hal_disk_init`、`hal_disk_rw` 六个入口。RISC-V 侧转发 PLIC 与 virtio-mmio；LoongArch 侧转发 EXTIOI/LS7A APIC 与 virtio-pci。接口的价值不在代码量，在于**调用点唯一**：两端 `trap.c`、`bio.c` 完全同构。
 
 ### 7.2 中断路由知识收敛
 
@@ -242,4 +242,4 @@ sequenceDiagram
 
 ## 13. 验证方式
 
-关键功能与主要稳定性路径均有对应测试：三系统共存与官方流程（`public_vfs`）、后端功能面（`ext2`/`fat32`）、语义边界（`semantics`/`error`）、持久化（`persist`）、并发（`smp`）、原生回归与完整 usertests（`test_baseline`/`full_usertests.sh`），以及 `e2fsck` 对 ext2 镜像的五阶段离线校验。冷 inode 首访和 `MOUNTING` 发布窗口没有带屏障的确定性触发测试，其正确性依据锁序/内存序审查，自动化回归用于确认修复没有引入功能退化。结果汇总见 `contest/test_report.md` 与 `tests/MATRIX.md`。
+关键功能与主要稳定性路径均有对应测试：三系统共存与官方流程（`public_vfs`）、后端功能面（`ext2`/`fat32`）、语义边界（`semantics`/`error`）、持久化（`persist`）、并发（`smp`）、挂载生命周期与卸载并发（`mount_lifecycle`/`remount_io`/`mount_storm`）、原生回归与完整 usertests（`test_baseline`/`full_usertests.sh`），以及 `e2fsck` 对 ext2 镜像的五阶段离线校验。四态挂载表的状态转换由 `mount_lifecycle` 的确定性时间线覆盖；冷 inode 首访和 `MOUNTING` 竞态窗口没有带屏障的确定性并发触发测试，其正确性依据锁序/内存序审查，自动化回归用于确认修复没有引入功能退化。结果汇总见 `contest/test_report.md` 与 `tests/MATRIX.md`。

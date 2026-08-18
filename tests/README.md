@@ -30,7 +30,7 @@ tests/
 `-- mount_storm/                 CPUS=3 双后端挂卸载风暴
 ```
 
-每个测试点目录为统一三件套：`README.md + `*.cmds.sh`（喂给 xv6 shell 的命令）+ `run.sh`（expect/reject 断言）+ `logs/`（运行产物，不入库）。
+每个测试点目录为统一四件套：`README.md`、`*.cmds.sh`（喂给 xv6 shell 的命令）、`run.sh`（expect/reject 断言）、`logs/`（运行产物，不入库）。
 
 ## 测试点
 
