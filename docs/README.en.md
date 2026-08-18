@@ -10,7 +10,7 @@ Design (`design.md`), plan (`plan.md`) and progress (`progress.md`) form the pro
 
 | Document | Contest-outline item |
 |---|---|
-| `design.md` | System architecture design: three-layer architecture, per-stage decisions and scope boundaries |
+| `design.md` | System architecture design: three-layer architecture, per-subsystem decisions and scope boundaries |
 | `plan.md` | Development plan: task breakdown, schedule, and progress checkmarks |
 | `progress.md` | Progress during the contest |
 

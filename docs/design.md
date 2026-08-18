@@ -9,7 +9,7 @@
 1. **原行为不变**：xv6 原生文件系统及其测例是回归基准，任何改动不得破坏既有行为。
 2. **接口要薄**：VFS 与 HAL 只抽象当前真正需要的操作，不为假想需求预留框架。
 3. **后端集中**：每种文件系统集中在一个文件中实现，不污染原 xv6 代码路径。
-4. **可验证**：关键功能与主要稳定性路径有自动化回归和日志证据；难以确定触发的并发发布协议由锁序、内存序审查补充，磁盘状态可由第三方工具（e2fsck）复核。
+4. **可验证**：关键功能与主要稳定性路径有自动化回归和日志证据；难以确定性触发的并发发布协议由锁序、内存序审查补充，磁盘状态可由第三方工具（e2fsck）复核。
 
 ## 2. 总体结构
 
@@ -67,7 +67,7 @@ inode 操作表是 VFS 的分发点，`ip->ops` 决定该 inode 的全部文件�
 
 ### 3.2 `struct mount` 与后端实例
 
-`mount` 描述一次挂载实例，关键字段：`state`、`fstype`、`dev`、`mountpoint`（被覆盖的目录 inode）、`parent`（挂载点父目录）、`root`（被挂载文件系统的根 inode）、`fsops`、`fs_private`。`state` 采用四态：`MOUNT_FREE` 表示空槽，`MOUNTING` 表示后端正在初始化，`MOUNTED` 表示可参与路径跳转，`MOUNT_UNMOUNTING` 表示已禁止新路径进入、正在检查和回收引用。
+`mount` 描述一次挂载实例，关键字段：`state`、`fstype`、`dev`、`mountpoint`（被覆盖的目录 inode）、`parent`（挂载点父目录）、`root`（被挂载文件系统的根 inode）、`readers`（短期引用 pin，保护锁外 `idup()` 窗口）、`fsops`、`fs_private`。`state` 采用四态：`MOUNT_FREE` 表示空槽，`MOUNTING` 表示后端正在初始化，`MOUNTED` 表示可参与路径跳转，`MOUNT_UNMOUNTING` 表示已禁止新路径进入、正在检查和回收引用。
 
 文件系统级状态（ext2 的超级块/组描述符、fat32 的 BPB 解析结果与 `next_free` 提示）集中存放在各后端的单例结构 `ext2_fs`/`fat32_fs` 中，通过 `mnt->fs_private` 访问。每个后端实例另持有一把 sleeplock，用于分配/释放路径的串行化（见第 8 节）。
 
@@ -84,7 +84,7 @@ inode 操作表是 VFS 的分发点，`ip->ops` 决定该 inode 的全部文件�
 
 ### 4.1 分发而非改写
 
-VFS 只有两张操作表（`inode_ops`、`fs_ops`）和一个挂载表（`NMOUNT` 槽）。xv6 原生文件系统注册为默认后端（`xv6_inode_ops` 指向原有函数），根挂载在 `vfsinit()` 建立。所有路径解析统一经过 VFS，但原生路径的函数一个不改——“行为不变”是结构性事实，而非测试巧合。
+VFS 只有两张操作表（`inode_ops`、`fs_ops`）和一个挂载表（`NMOUNT` 槽）。xv6 原生文件系统注册为默认后端（`xv6_inode_ops` 指向原有函数），根挂载在 `vfsinit()` 建立。所有路径解析统一经过 VFS，对原生路径只追加挂载点切换与延迟释放分支，既有函数的行为不变——“行为不变”是结构性事实，而非测试巧合。
 
 ### 4.2 挂载与卸载语义
 
@@ -116,7 +116,7 @@ ELF 加载也必须服从 inode 的 VFS 操作表：`kexec()` 读取 ELF 文件�
 
 ### 5.2 双重间接的实现形态
 
-`ext2_bmap` 在单间接分支之后接入独立的两级查找函数 `ext2_bmap_double`：外层表位于 `addrs[NDIRECT+1]`，按需分配外层表、内层表与数据块（新块由分配器保证清零）；`ext2_itrunc` 对称释放（内层表逐块→内层表→外层表）；`ext2_sync_inode` 回写 `i_block[13]` 并把间接表计入 `i_blocks`（e2fsck 校验一致）。既有直接/单间接代码零改动。
+`ext2_bmap` 在单间接分支之后接入独立的两级查找函数 `ext2_bmap_double`：外层表位于 `addrs[NDIRECT+1]`，按需分配外层表、内层表与数据块（新块由分配器保证清零）；`ext2_itrunc` 对称释放（内层数据块→内层表→外层表）；`ext2_sync_inode` 回写 `i_block[13]` 并把间接表计入 `i_blocks`（e2fsck 校验一致）。既有直接/单间接代码零改动。
 
 ### 5.3 分配与查找的健壮性
 
@@ -237,6 +237,7 @@ sequenceDiagram
 - 完整挂载拓扑与祖先覆盖检测：`oplock` 只串行拓扑修改，顺序执行“先挂 `/a/b`、再挂 `/a`”仍会遮蔽前一挂载，该反向祖先覆盖是当前 P1 限制；
 - ext2 三重间接（`i_block[14]` 维持拒读）、多 block group；
 - ext2/fat32 的日志与崩溃一致性（写直达换取简单性，取舍已在本文件说明）；
+- fat32 只读簇链遍历未设环防护：簇链读取假定镜像合法（本项目镜像由自研 mkfat32 生成并通过 e2fsck 与实测校验），畸形或恶意构造的镜像不在威胁模型内；
 - procfs/tmpfs 等额外后端，VFS 对象模型与错误码体系的重构；
 - 通用 PCI 总线管理器（LoongArch virtio-pci 面向 QEMU virt 单磁盘场景）。
 

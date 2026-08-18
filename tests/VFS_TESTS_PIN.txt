@@ -11,8 +11,11 @@
 # commit date:   2026-02-10
 # fetched on:    2026-08-04
 #
-# files (byte-identical local copies):
-#   cmds.sh   73 bytes -> src/tests/cmds.sh
-#   hello.c   96 bytes -> src/tests/hello.c
-#   test1.c 1632 bytes -> src/user/test1.c
-#   test2.c 2077 bytes -> src/user/test2.c
+# files:
+#   cmds.sh   73 bytes -> src/tests/cmds.sh   (byte-identical)
+#   hello.c   96 bytes -> src/tests/hello.c   (byte-identical)
+#   test1.c 1632 bytes -> src/user/test1.c    (1505 bytes locally:
+#       upstream Chinese comment lines removed, line endings
+#       normalized; code logic identical to upstream)
+#   test2.c 2077 bytes -> src/user/test2.c    (1880 bytes locally:
+#       same treatment as test1.c)

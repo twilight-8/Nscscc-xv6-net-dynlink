@@ -15,8 +15,8 @@ This directory holds the final contest submission materials. The authoritative v
 | `diff.md` | How the diff is generated, size statistics, and the HAL/VFS/common breakdown |
 | `test_report.md` | Test report (authoritative version `docs/contest/test_report.md`; raw logs in `tests/evidence/`) |
 | `commit_history.md` | Key progress during the contest, recorded by stage |
-| `final_slides.pdf` / `final_slides.pptx` | Historical progress deck dated 2026-06-30 |
-| `演示视频.mp4` | Demo video (script and storyboard in `docs/contest/video_script.md`; [watch online (Baidu Netdisk)](https://pan.baidu.com/s/1t96v7KjAdIbT0HKPjjoLCQ?pwd=auan), extraction code `auan`) |
+| `final_slides.pdf` / `final_slides.pptx` | Preliminary-round presentation slides (2026-06-30), kept as process material; the final-round deck is submitted separately through the channel designated by the contest |
+| `演示视频.mp4` | Preliminary-round demo video (2026-06-30), kept as process material; the final-round video is submitted separately through the channel designated by the contest ([watch online (Baidu Netdisk)](https://pan.baidu.com/s/1joOCnowRV5-fe-JJlbZi7g?pwd=HMOS), extraction code `HMOS`; script and storyboard in `docs/contest/video_script.md`) |
 
 ## Final Verification
 

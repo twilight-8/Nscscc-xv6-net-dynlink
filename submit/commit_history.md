@@ -493,6 +493,6 @@ flowchart LR
 ## 收尾事项
 
 - 演示视频录制（按 `docs/contest/video_script.md` 分镜）：已完成，成品 `submit/演示视频.mp4`。
-- 汇报幻灯片与现场答辩 PPT 定稿：新版已定稿，待替换 `submit/` 旧版后收尾。
+- 汇报幻灯片与现场答辩 PPT 定稿：决赛版经大赛指定渠道另行提交，`submit/` 内保留 2026-06-30 初赛版本作过程材料。
 - 重新生成最终 diff 并复核 diff 统计：已完成（62 个文件，+6405/−113，命令见 `docs/contest/baseline.md`）。
 - 提交材料聚合至 `submit/`：已完成。

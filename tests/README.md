@@ -80,4 +80,4 @@ bash tests/full_usertests.sh loongarch
 2. 断言模式：`--expect` 只写“成功才出现的串”；`--expect-count` 验证次数和状态转换；`--reject` 只写“失败/异常串”；每个测试点必须含 `panic:`/`kerneltrap` 负断言。
 3. 使用 `--prompt-wait` 的用例会在首条和后续命令前等待 shell 提示符稳定，命令超时直接失败，避免串口丢字符被误判为内核缺陷。
 4. `logs/` 为本地运行产物，不入库；最终通过证据归 `evidence/`。
-5. 新增测试点 = 新建同名目录（三件套）+ 根 Makefile 目标 + `run_all.sh` 登记 + `MATRIX.md` 增行。
+5. 新增测试点 = 新建同名目录（四件套；`test_baseline` 无 cmds.sh，`run.sh` 直接调官方入口 `test-xv6.py`，为唯一例外）+ 根 Makefile 目标 + `run_all.sh` 登记 + `MATRIX.md` 增行。

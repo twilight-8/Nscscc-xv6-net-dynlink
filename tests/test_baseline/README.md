@@ -10,7 +10,7 @@
 
 - `usertests -q` 全部快速测试项（进程/内存/文件系统/系统调用等 60+ 项）。
 - 双架构执行：RISC-V 与 LoongArch64，CPUS=3（经官方入口 `test-xv6.py`）。
-- 完整版（不带 `-q`，另含 bigdir/manywrites/badwrite/execout/diskfull/ outofinodes 六项慢测试）由 `tests/full_usertests.sh` 承担。
+- 完整版（不带 `-q`，另含 bigdir/manywrites/badwrite/execout/diskfull/outofinodes 六项慢测试）由 `tests/full_usertests.sh` 承担。
 
 ## 关键断言
 

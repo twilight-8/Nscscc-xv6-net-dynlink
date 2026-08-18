@@ -25,16 +25,16 @@ This project is an entry to the 2026 National Undergraduate Computer System Abil
 
 Based on MIT xv6-riscv rev5, the project adds a virtual file system (VFS) and a hardware abstraction layer (HAL) while preserving xv6's character as a small teaching OS: the system supports the xv6, ext2 and FAT32 file systems simultaneously, and runs on both RISC-V and LoongArch64. Both platforms pass the xv6-riscv rev5 built-in test suite and the VFS tests designated by the problem statement; all changes relative to the original baseline are delivered as a diff file.
 
-> Demo video: [watch online (Baidu Netdisk)](https://pan.baidu.com/s/1t96v7KjAdIbT0HKPjjoLCQ?pwd=auan) (extraction code `auan`).
+> Demo video: [watch online (Baidu Netdisk)](https://pan.baidu.com/s/1joOCnowRV5-fe-JJlbZi7g?pwd=HMOS) (extraction code `HMOS`).
 
 ## Highlights
 
-- **Thin VFS dispatch layer**: operation tables unify three file systems; a sleep lock serializes `mount/umount`, while a four-state mount table handles publication, rollback and safe unmount. Busy mounts are rejected immediately, with minimal intrusion into the native xv6 path.
+- **Thin VFS dispatch layer**: operation tables unify three file systems; a sleep lock serializes `mount/umount`, while a four-state mount table handles publication, rollback and safe unmount. Unmounting a busy mount is rejected immediately, with minimal intrusion into the native xv6 path.
 - **Three file systems on a single disk**: one virtio disk carries the xv6, ext2 and FAT32 images side by side, mountable on demand after boot.
 - **Symmetric thin HAL for two platforms**: both platforms share the same kernel code; platform differences are confined to a separate porting layer, with interrupt-routing knowledge centralized at a single point.
 - **Mechanism-level stability fallback**: since the external interrupt chain cannot be guaranteed lossless, a virtio watchdog provides a mechanism-level fallback; SMP stress tests pass.
 - **Interactive teaching console**: the companion site in `web/` runs an xv6-style terminal in the browser and shows the source-level execution chain across system calls, the VFS, the file systems and the HAL as commands run, with real-QEMU and demo sessions plus optional AI analysis — a visual carrier for demos and the defense.
-- **Defect-driven testing**: 11 test points across 2 architectures, 22 regression runs all passing, including dedicated state-machine, repeated 1 MiB remount, and CPUS=3 dual-backend mount-storm tests. Functional regression is reproducible with one `make verify-all`.
+- **Defect-driven testing**: 11 test points across 2 architectures, 22 regression runs all passing, including dedicated mount state-machine, dual-backend 1 MiB remount, and CPUS=3 mount-storm tests. Functional regression is reproducible with one `make verify-all`.
 
 ## Quick Start
 
@@ -104,11 +104,11 @@ Development follows the principle of "baseline first, stage-by-stage progress, e
 
 ## Key Progress
 
-The project went through nineteen stages from baseline to delivery (Stage 0 through Stage R), each recorded as "objectives, changes, verification": the thin VFS dispatch layer, the mount table and block-device interface, ext2 and FAT32 support, LoongArch64 boot and the virtio-pci block device, integration with the official VFS tests, ext2 double-indirect large files, FAT32 long file names, concurrency stability fixes, safe unmount, the mount testing expansion, compliance and performance measurement, and more. Every stage is cross-checkable against the commit history and the test logs in `tests/evidence/`. See `docs/progress.md`.
+The project went through nineteen stages from baseline to delivery (Stage 0 through Stage R, plus the D4 wrap-up review), each recorded as "objectives, changes, verification": the thin VFS dispatch layer, the mount table and block-device interface, ext2 and FAT32 support, LoongArch64 boot and the virtio-pci block device, integration with the official VFS tests, ext2 double-indirect large files, FAT32 long file names, concurrency stability fixes, safe unmount, the mount testing expansion, compliance and performance measurement, and more. Every stage is cross-checkable against the commit history and the test logs in `tests/evidence/`. See `docs/progress.md`.
 
 ## System Testing
 
-The testing system has three layers: the xv6 built-in suite (`usertests`, with quick and full runs on both architectures; each full run contains 69 named tests, 63 quick + 6 slow, and ends with `ALL TESTS PASSED`), the designated VFS tests, and 11 uniformly orchestrated test points covering filesystem behavior, error semantics, persistence, SMP I/O, mount lifecycle, repeated 1 MiB remount verification, and a dual-backend mount storm. All 11 × 2 = 22 runs pass, and the ext2 image passes e2fsck with zero errors. See `docs/contest/test_report.md` and `tests/README.md`; performance evidence boundaries are documented in `docs/contest/performance.md`.
+The testing system has three layers: the xv6 built-in suite (`usertests`, with quick and full runs on both architectures; each full run contains 69 named tests, 63 quick + 6 slow, and ends with `ALL TESTS PASSED`), the designated VFS tests (test1/test2 pass following the official reference procedure, with an image layout identical to the official one), and 11 uniformly orchestrated test points covering filesystem behavior, error semantics, persistence, SMP I/O, mount lifecycle, repeated 1 MiB remount verification, and a dual-backend mount storm. All 11 × 2 = 22 runs pass, and the ext2 image passes e2fsck with zero errors. See `docs/contest/test_report.md` and `tests/README.md`; performance evidence boundaries are documented in `docs/contest/performance.md`.
 
 ## Major Problems and Solutions
 
@@ -153,8 +153,8 @@ See the README in each directory for details: `docs/README.md`, `tests/README.md
 - `xv6-vfs-hal-final.diff.stat`: statistics summary of the standard diff.
 - `xv6-vfs-hal-final.nonblank.diff`: audit/reporting view with whitespace-only added/deleted lines excluded (+5602/−106, 5708 total); it is not a replayable patch.
 - `xv6-vfs-hal-final.nonblank.diff.stat`: per-file statistics for nonblank textual changes.
-- `final_slides.pdf` / `final_slides.pptx`: presentation slides.
-- `演示视频.mp4`: demo video (script and storyboard in `docs/contest/video_script.md`; [watch online (Baidu Netdisk)](https://pan.baidu.com/s/1t96v7KjAdIbT0HKPjjoLCQ?pwd=auan), extraction code `auan`).
+- `final_slides.pdf` / `final_slides.pptx`: preliminary-round presentation slides (the final-round deck is submitted separately through the channel designated by the contest).
+- `演示视频.mp4`: demo video (the copy in `submit/` is the 2026-06-30 preliminary-round version; the final-round video is submitted separately through the channel designated by the contest — also available [online (Baidu Netdisk)](https://pan.baidu.com/s/1joOCnowRV5-fe-JJlbZi7g?pwd=HMOS), extraction code `HMOS`; script and storyboard in `docs/contest/video_script.md`).
 - `test_report.md`, `diff.md`, `commit_history.md`: test report, diff notes and commit-history snapshot.
 
 ## License and Compliance

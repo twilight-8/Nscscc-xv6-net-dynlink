@@ -14,7 +14,7 @@
 
 **决策 2：接口多薄？** 每平台 `hal.c` 不足 60 行（RISC-V 46 行、LoongArch 52 行）：RISC-V 侧直接转 PLIC/virtio-mmio；LoongArch 侧转 EXTIOI/LS7A APIC/virtio-pci。接口只是“换一层名字”——它的价值不在代码量，在于**调用点唯一**：评审读 trap.c 时两端完全同构。
 
-**决策 3：平台语义差异放哪里？** LoongArch 的中断是**位掩码**语义（EXTIOI 一次报多个挂起位），且不同设备的完成路径不同（virtio 电平触发要清 APIC，UART 边沿触发不用）。这些知识全部收进 `arch/loongarch/hal.c` 的 `hal_irq_complete` 里—— trap.c 只管“哪个设备、处理、完成”，不知道控制器细节。这就是“路由知识收敛”原则：差异只能住在离硬件最近的那个文件。
+**决策 3：平台语义差异放哪里？** LoongArch 的中断是**位掩码**语义（EXTIOI 一次报多个挂起位），且不同设备的完成路径不同（virtio 电平触发要清 APIC，UART 边沿触发不用）。这些知识全部收进 `arch/loongarch/hal.c` 的 `hal_irq_complete` 里——trap.c 只管“哪个设备、处理、完成”，不知道控制器细节。这就是“路由知识收敛”原则：差异只能住在离硬件最近的那个文件。
 
 **决策 4：中断不可靠怎么办？** 实测发现 LoongArch 传统 INTx 链会在确认窗口吞掉完成中断（P5 案例）。修不了控制器语义，就改依赖关系：处理循环重查 + 定时器看门狗兜底，把“中断必达”假设从正确性路径上撤下来。
 

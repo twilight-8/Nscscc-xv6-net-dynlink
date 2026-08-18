@@ -25,7 +25,7 @@
 
 项目基于 MIT xv6-riscv rev5，在保持 xv6 小型教学系统风格的前提下，为其增加虚拟文件系统（VFS）与硬件抽象层（HAL）：系统同时支持 xv6、ext2、fat32 三种文件系统，并运行于 RISC-V 与 LoongArch64 两个平台。两个平台均通过 xv6-riscv rev5 自带测例与赛题指定的 VFS 测例，相对原始基线的全部改动以 diff 文件形式交付。
 
-> 演示视频：[百度网盘在线观看](https://pan.baidu.com/s/1t96v7KjAdIbT0HKPjjoLCQ?pwd=auan)（提取码 `auan`）。
+> 演示视频：[百度网盘在线观看](https://pan.baidu.com/s/1joOCnowRV5-fe-JJlbZi7g?pwd=HMOS)（提取码 `HMOS`）。
 
 ## 项目亮点
 
@@ -104,7 +104,7 @@ umount /mnt            # 若文件仍打开或 cwd 位于该文件系统，则�
 
 ## 比赛过程中的重要进展
 
-项目从基线建立到交付共经历十九个阶段（阶段 0 至阶段 R），每阶段按“主要目标、主要改动、验证结果”记录：薄 VFS 分发层、挂载表与块设备接口、ext2 与 fat32 支持、LoongArch64 启动与 virtio-pci 块设备、官方 VFS 测例对接、ext2 双重间接大文件、fat32 长文件名、并发稳定性修复、安全卸载、mount 测试体系扩展、合规与性能测量等。每阶段均可与提交历史及 `tests/evidence/` 的测试日志互相印证。详见 `docs/progress.md`。
+项目从基线建立到交付共经历十九个阶段（阶段 0 至阶段 R，另含 D4 收口审查一节），每阶段按“主要目标、主要改动、验证结果”记录：薄 VFS 分发层、挂载表与块设备接口、ext2 与 fat32 支持、LoongArch64 启动与 virtio-pci 块设备、官方 VFS 测例对接、ext2 双重间接大文件、fat32 长文件名、并发稳定性修复、安全卸载、mount 测试体系扩展、合规与性能测量等。每阶段均可与提交历史及 `tests/evidence/` 的测试日志互相印证。详见 `docs/progress.md`。
 
 ## 系统测试情况
 
@@ -153,8 +153,9 @@ umount /mnt            # 若文件仍打开或 cwd 位于该文件系统，则�
 - `xv6-vfs-hal-final.diff.stat`：上述标准 diff 的统计摘要。
 - `xv6-vfs-hal-final.nonblank.diff`：排除纯空白新增/删除行的审计展示版（+5602/−106，共 5708 行）；该文件不具备补丁回放语义。
 - `xv6-vfs-hal-final.nonblank.diff.stat`：非空白文本变更的逐文件统计摘要。
-- `final_slides.pdf` / `final_slides.pptx`：汇报幻灯片。
-- `演示视频.mp4`：演示视频（脚本与分镜见 `docs/contest/video_script.md`；[百度网盘在线观看](https://pan.baidu.com/s/1t96v7KjAdIbT0HKPjjoLCQ?pwd=auan)，提取码 `auan`）。
+- `final_slides.pdf` / `final_slides.pptx`：初赛阶段汇报幻灯片（决赛版经大赛指定渠道另行提交）。
+- `演示视频.mp4`：演示视频（`submit/` 内为 2026-06-30 初赛阶段版本；决赛版经大赛指定渠道另行提交，亦可[百度网盘在线观看](https://pan.baidu.com/s/1joOCnowRV5-fe-JJlbZi7g?pwd=HMOS)，提取码 `HMOS`；脚本与分镜见 `docs/contest/video_script.md`）。
+- `演示视频.mp4`：演示视频（脚本与分镜见 `docs/contest/video_script.md`；[百度网盘在线观看](https://pan.baidu.com/s/1joOCnowRV5-fe-JJlbZi7g?pwd=HMOS)，提取码 `HMOS`）。
 - `test_report.md`、`diff.md`、`commit_history.md`：测试报告、diff 说明与提交历史快照。
 
 ## 许可证与合规性说明

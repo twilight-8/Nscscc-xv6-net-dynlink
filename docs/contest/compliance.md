@@ -17,7 +17,7 @@
 
 本队新增代码采用 **BSD-2-Clause License**（全文见仓库根目录 `LICENSE`）。
 
-- 自有新增源文件首行统一标注 `SPDX-License-Identifier: BSD-2-Clause`；
+- 自有新增源文件首行以 `SPDX-License-Identifier: BSD-2-Clause` 单行标注（共 14 个文件；`src/hello.c`、`src/user/vfsbench.c` 及 `arch/loongarch/` 移植层文件未加行内标注，其许可证由仓库根 `LICENSE` 统一覆盖）；
 - 技术文档、汇报幻灯片与演示视频说明采用 CC-BY-SA 4.0。
 
 ## 3. 逐文件来源清单
@@ -25,9 +25,10 @@
 | 文件/目录 | 来源 | 说明 |
 |---|---|---|
 | `src/kernel/vfs.c`、`vfs.h`、`ext2.c`、`fat32.c`、`block.c`、`block.h`、`hal.c` | 本队自有 | SPDX: BSD-2-Clause |
-| `src/mkfs/mkfat32.c`、`src/user/mount.c`、`unlinkopen.c`、`bigfile.c`、`vfsbench.c`、`hello.c` | 本队自有 | SPDX: BSD-2-Clause |
+| `src/mkfs/mkfat32.c`、`src/user/mount.c`、`umount.c`、`umountstress.c`、`unlinkopen.c`、`bigfile.c`、`hello.c` | 本队自有 | SPDX: BSD-2-Clause |
+| `src/user/vfsbench.c`、`src/hello.c` | 本队自有 | 许可证由根 `LICENSE` 覆盖 |
 | `src/kernel/arch/loongarch/` | 衍生自 xv6-loongarch-exp（xv6 系，MIT） | 移植参考后由本队大量修改：HAL 对称化、TLB refill 修复、virtio-pci 接入、中断看门狗等 |
-| `src/user/test1.c`、`test2.c`、`src/tests/hello.c`、`src/tests/cmds.sh` | 官方测例仓库 xv6-extend-vfs（GPL-3，见上游仓库 LICENSE 文件） | 逐字节引入；版本锚定见 `tests/VFS_TESTS_PIN.txt`（commit `21a6ac68`） |
+| `src/user/test1.c`、`test2.c`、`src/tests/hello.c`、`src/tests/cmds.sh` | 官方测例仓库 xv6-extend-vfs（GPL-3，见上游仓库 LICENSE 文件） | cmds.sh 与 hello.c 逐字节引入；test1.c、test2.c 引入时去除中文注释并规范化行尾，代码逻辑与上游一致；版本锚定见 `tests/VFS_TESTS_PIN.txt`（commit `21a6ac68`） |
 | 其余 `src/` 文件 | MIT xv6-riscv rev5 | 保留原许可证，见 `src/LICENSE` |
 
 ## 4. 第三方来源总表
@@ -39,7 +40,7 @@
 | RISC-V specifications | 架构参考 | 否 |
 | LoongArch Reference Manual | 架构参考 | 否 |
 | xv6-loongarch-exp | LoongArch 移植参考 | 是，后续有修改 |
-| xv6-extend-vfs tests | 赛题指定测例 | 是，逐字节引入 |
+| xv6-extend-vfs tests | 赛题指定测例 | 是，脚本逐字节引入，两个 C 测例去除注释后引入 |
 | 2025 年内核赛道参照项目（静春山、RuOK） | 对比分析取证 | 否（仅阅读取证） |
 
 ## 5. AI 使用

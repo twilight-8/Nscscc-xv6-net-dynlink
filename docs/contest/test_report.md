@@ -31,7 +31,7 @@ bash tests/run_all.sh      # 11 测试点 × 2 架构，输出 22 行 PASS/FAIL 
 
 ### 2.1 xv6 自带测例（赛题任务 3）
 
-以官方入口 `test-xv6.py` 执行 `usertests -q`（CPUS=3），并另行执行不带 `-q` 的完整版（含 bigdir、manywrites、badwrite、execout、diskfull、outofinodes 六项慢测试与内存泄漏检查）。原始输出（RISC-V 完整版尾部）：
+以官方入口 `test-xv6.py` 执行 `usertests -q`（CPUS=3），并另行执行不带 `-q` 的完整版（含 bigdir、manywrites、badwrite、execout、diskfull、outofinodes 六项慢测试与内存泄漏检查）。输出节选（RISC-V 完整版尾部，完整日志见 `tests/evidence/usertests-full-riscv.txt`）：
 
 ```text
 test bigdir: OK
@@ -47,7 +47,7 @@ ALL TESTS PASSED
 
 ### 2.2 官方 VFS 测例（赛题任务 4）
 
-官方测例四个文件（test1.c、test2.c、cmds.sh、hello.c）逐字节引入并锚定版本（`tests/VFS_TESTS_PIN.txt`，上游 commit `21a6ac68`）。镜像 `/tests` 目录按官方参考布局放置 cmds.sh、hello.c、test1、test2、hello。按官方参考流程执行——启动后手动挂载 ext2，`cd tests; cat cmds.sh | sh`。真实终端输出（RISC-V）：
+官方测例四个文件（test1.c、test2.c、cmds.sh、hello.c）按锚定版本入库（`tests/VFS_TESTS_PIN.txt`，上游 commit `21a6ac68`；脚本逐字节，C 测例去除中文注释、逻辑一致）。镜像 `/tests` 目录按官方参考布局放置 cmds.sh、hello.c、test1、test2、hello。按官方参考流程执行——启动后手动挂载 ext2，`cd tests; cat cmds.sh | sh`。真实终端输出（RISC-V）：
 
 ```text
 $ mount ext2 /mnt
@@ -90,7 +90,7 @@ test_cross_fs_copy(): succeed
 --------- test2: finished -------------------}
 ```
 
-LoongArch 输出与上述一致。四条 `test_copy_file(...): succeed` 覆盖 ext2↔xv6 四个方向的复制，test2 复制后读回验证内容并逐字节打印。输出与官方仓库 README 中的参考输出逐字节一致（含 `$ $` 提示符回声与 `mkdir: /mnt failed to create` 这一官方流程固有提示）。
+LoongArch 输出与上述一致。四条 `test_copy_file(...): succeed` 覆盖 ext2↔xv6 四个方向的复制，test2 复制后读回验证内容并逐字节打印。输出结构与官方仓库 README 的参考输出一致，各判定行逐条吻合（`mkdir: /mnt failed to create` 为官方流程固有提示：cmds.sh 首步即创建 /mnt；inode 号与文件大小等环境相关字段与参考输出存在合理差异）。
 
 ## 3. 自拟测试点逐项结果
 

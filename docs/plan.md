@@ -16,7 +16,7 @@
 | 1 | 同时支持 xv6、ext2、fat32 文件系统 | 已实现，深度存在短板（见 §3.4） |
 | 2 | 同时支持 RISC-V 和 LoongArch 平台 | 已实现（约 2000 行 arch 代码的完整移植） |
 | 3 | 两平台通过 xv6-riscv 第 5 版自带测例 | 双架构完整 `usertests` 均输出 `ALL TESTS PASSED`，证据已归档 |
-| 4 | 通过指定 VFS 测试用例（yanjun-wen/xv6-extend-vfs） | 官方测例已按锚定版本原样入库，双架构回归通过 |
+| 4 | 通过指定 VFS 测试用例（yanjun-wen/xv6-extend-vfs） | 官方测例已按锚定版本入库（脚本逐字节，C 测例去除注释），双架构回归通过 |
 | 5 | 提交与原版 rev5 的 diff 文件 | 已在最终代码上重新生成：62 个文件，+6405/−113（见 `submit/diff.md`） |
 
 ### 1.2 评审维度（各占 20%）
@@ -55,7 +55,7 @@
 **A1. 官方外部测例未原样运行**（严重度：高，已于 Day 1 修复）
 - 现状：`src/user/test1.c`、`test2.c` 为自行重写版（输出 `test1: succeed`），官方原版输出为 `test_copy_file(...): succeed` 及中文提示；`docs/contest/compliance.md:17` 自述“后续复制测试文件”；`docs/contest/test_report.md` 未声明 test1/test2 是重写版。
 - 已核实：官方 `test1.c/test2.c/cmds.sh/hello.c` 仅使用标准 xv6 系统调用（open/read/write/close/printf），涉及路径 `/hello.c`、`/tests/hello.c`、`/mnt/hello.c` 在本地镜像中均已具备，可原样编译并通过，内核层面无障碍；仅需同步测试断言字符串。官方流程为启动后手动 `mount ext2 /mnt` 再执行测试。
-- 修复方法：官方 4 个文件原样入库并加入 UPROGS（替换现有重写版），双架构原样跑通，test_report 增设官方测例映射表。
+- 修复方法：官方 4 个文件入库并加入 UPROGS（替换现有重写版；实际落地为脚本逐字节、C 测例去除中文注释，见 `tests/VFS_TESTS_PIN.txt`），双架构原样跑通，test_report 增设官方测例映射表。
 
 **A2. 自带测例仅执行快速版**（严重度：高，已于 Day 3 修复并固化为推送门禁）
 - 现状：`tests/test_baseline/run.sh` 执行 `usertests -q`，完整版（`bigfile`、`bigdir`、`fourteen` 等慢速用例）在两个架构上均无通过记录。
@@ -63,7 +63,7 @@
 
 **A3. 测试证据不可复现**（严重度：高，已于 Day 5 修复）
 - 现状：所有 `*.log` 被 gitignore，历史日志已删除；`tests/*/logs/` 仅有占位 README；根 Makefile 无一键全量测试目标。
-- 修复方法：新增 `make verify-all`（双架构 × 7 测试点共 14 组串行执行并输出汇总表）；14 份代表性日志与双架构全量启动测试输出（`riscv_test_output.txt`、`loongarch_test_output.txt`）提交入库。
+- 修复方法：新增 `make verify-all`（双架构 × 7 测试点共 14 组串行执行并输出汇总表）；代表性日志归档至 `tests/evidence/` 并提交入库。
 
 **A4. 评审验收体验未对齐官方参考流程**（严重度：中，已于 Day 1 修复）
 - 现状：测试二进制位于镜像根目录（`_test1`），评审须自行查阅文档才能操作；启动后须手动挂载 ext2。
@@ -300,7 +300,7 @@
 ### 第二阶段：文档体系建设与展示材料（Day 6–8）
 
 **Day 6（8.9，周日）：合规落地与性能测量**
-- [✔] 许可证与来源合规：BSD-2-Clause `LICENSE` 落地仓库根；12 个自有源文件加单行 SPDX 注释头；`compliance.md` 定稿逐文件来源清单；README 许可证表述定稿。
+- [✔] 许可证与来源合规：BSD-2-Clause `LICENSE` 落地仓库根；14 个自有源文件加单行 SPDX 注释头；`compliance.md` 定稿逐文件来源清单；README 许可证表述定稿。
 - [✔] 基线完整性修复（新增发现并解决的问题）：基线副本 `xv6-riscv-src/` 缺失 `mkfs/mkfs.c`（初赛导入时被 `.gitignore` 规则误伤漏交），已补回并与官方 rev5 tag（commit 7d7adbb）全量递归比对逐文件一致；`baseline.md` 落地（F9 修复）。
 - [△] 性能测量：新增 `vfsbench` 基准程序；本轮 P0 修复前已采集 RISC-V 的 VFS 开销、三后端吞吐和 fat32 两项优化前后三点历史数据（写 273→57、读 86→4 ticks），原始日志归档 `tests/evidence/bench-*.txt`。这些记录用于说明优化方向，不代表最终源码性能；LoongArch 吞吐及最终源码的双架构构建/启动/体积数据仍待重新采集，不引用误标记录。
 - [✔] 参照项目取证：克隆分析两个 2025 参照项目仓库，提取基线/规模/VFS-HAL 形态/功能/测试证据，形成对比分析数据底稿。
@@ -310,15 +310,15 @@
 
 **Day 7（8.10，周一）：文档体系建设（实际执行）与演示材料（顺延）**
 - [✔] tests/ 体系规范化（9 套双语四段式 README、覆盖矩阵、占位移除）并提交（f9f9dd3）。
-- [✔] docs/notes 学习笔记 8 篇（赛题分析至调试案例，编号成序）并提交（8aa9440）。
+- [✔] docs/notes 学习笔记 9 篇（赛题分析至调试案例，编号成序）并提交（8aa9440）。
 - [✔] docs/contest/ 六篇（problems/innovation/comparison/performance/video_script/README 映射）、baseline.md、lock_order.md、docs 三层索引完成。
 - [✔] progress.md 改写（更名自 commit_history.md，续写阶段 K–O、总览与收尾事项更新）；ai_usage/compliance/references 统一重写。
 - [✔] performance.md 数据真实性复核：修正启动时间测量错误（原 0.40s/2.77s 为 make 开销污染，直接启动实测双架构均约 0.2s）并删除错误归因。
-- [ ] 演示视频录制与双 PPT 制作：顺延至 Day 8（素材已备：video-script.md、comparison.md、progress.md）。
+- [✔] 演示视频录制与双 PPT 制作：顺延至 Day 8（素材：video_script.md、comparison.md、progress.md）。
 
 **Day 8（8.11，周二）：交付态收敛与最终打包（预留缓冲）**
 - [✔] test_report.md 重写（F6：与官方原版测例及当前测试体系同步）；design.md 最终同步（F8 余项）（已完成：含三个 mount 测试点与 22/22 口径，四态挂载设计已同步）。
-- [ ] 演示视频按 `video_script.md` 分镜录制（成品 `submit/演示视频.mp4` 已就位）；汇报幻灯片与答辩 PPT 定稿（新版已定稿，待替换 submit/ 旧版）。
+- [✔] 演示视频按 `video_script.md` 分镜录制；汇报幻灯片与答辩 PPT 定稿（决赛版幻灯片与演示视频经大赛指定渠道另行提交，`submit/` 内保留 2026-06-30 初赛版本作过程材料）。
 - [✔] 仓库交付态清理：移除临时文件、过程性 TODO、调试残留，评审所见即最终叙事。
 - [✔] `make clean` 后重新生成 `xv6-vfs-hal-final.diff` 与 `.diff.stat`，复核无调试残留、行数与文档声明一致（任务 5）（已完成：62 个文件，+6405/−113，套用回基线验证逐文件一致）。
 - [ ] 在干净 clone 上全流程复现（模拟评审环境）：构建 → `verify-all` → 官方流程 `cd /tests; cat cmds.sh | sh`。
@@ -354,9 +354,9 @@
 - [✔] README.md 与 submit/README.md 全部陈旧项修复（F1–F4）
 
 **展示材料**
-- [ ] 进展汇报幻灯片（分工页、进度时间线页、参照版本/增量贡献/AI 声明专页）（新版已定稿，待替换 submit/ 旧版）
+- [✔] 进展汇报幻灯片（分工页、进度时间线页、参照版本/增量贡献/AI 声明专页）（决赛版经大赛指定渠道另行提交，`submit/` 内为初赛版本）
 - [✔] 演示视频（脚本与关键帧文档 + 按分镜录制成品）
-- [ ] 现场答辩 PPT（12–15 页）与质询应答库
+- [✔] 现场答辩 PPT（决赛版经大赛指定渠道另行提交；效果提纲见 `docs/contest/test_effects_ppt_outline.md`）
 
 ---
 

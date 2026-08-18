@@ -9,7 +9,7 @@ This directory holds the project's host-side test infrastructure: test cases, dr
 ```text
 tests/
 |-- README.md / README.en.md     this file (bilingual)
-|-- MATRIX.md /                  test coverage matrix
+|-- MATRIX.md                    test coverage matrix
 |-- VFS_TESTS_PIN.txt            pinned upstream VFS test version
 |-- check_env.sh                 environment self-check
 |-- run_all.sh                   one-shot 22-case dual-arch regression

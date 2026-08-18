@@ -43,3 +43,25 @@
 | 2025 年内核赛道参照项目（RuOK） | https://gitlab.eduxiji.net/educg-group-36002-2710490/T202510486995232-2402 | 对比分析取证（架构与测试组织对照） |
 
 参照项目仅作对照阅读；本项目保持教学所需的轻量实现，未复制其代码。
+
+### 取证要点（2026-08-07 克隆快照实测）
+
+SpringOS（静春山）：
+
+- VFS：`kernel/fs/vfs/` 四个实现文件 file.c 407 + fs.c 101 + inode.c 48 + ops.c 189 = 745 行（不含头文件）；适配层 `kernel/fs/VFS_ext.c` 1090 行。
+- 内核总量 30919 行（69 个 .c/.h/.S），其中 lwext4 第三方库 17464 行（56.5%）。
+- 仅 EXT4：`kernel/fs/vfs/fs.c` 启动时硬编码 `fs_init(&ext4_fs, ...)`，无其他文件系统后端。
+- mount 系统调用：`kernel/syscall/sysfile.c:830` 的 `sys_mount` 与 `:832` 的 `sys_umount2` 均直接 `return 0`；实际挂载在启动时硬编码完成，不暴露给用户态。
+- 平台：README 声明 RISC-V/LoongArch 双架构与 VisionFive2、2K1000LA 开发板，含 `make vf2`/`make 2k1000` 目标。
+- 测试与文档：`judge/` 评分脚本与 busybox 测例；`doc/` 6 篇 md 及决赛 PDF/PPT。
+
+RuOK：
+
+- C++ 重写，VFS 为抽象基类（`kernel/include/fs/fs.hh` 全纯虚接口）+ dentry 体系；FAT32、ext4、ramfs 三个后端。
+- 体量：kernel/hal/hsai/user 合计约 4.9 万行。
+- mount 系统调用有完整实现（`kernel/syscall/syscall_handler.cc:996`）。
+- 默认 CPUS=1（Makefile 与 QEMU 命令均为 `-smp 1`），未见 SMP 测试证据；仓库内无自动化测试脚本。
+- 真机适配：k210 驱动目录在库但 Makefile 中默认注释未启用；2K1000 有适配文档。
+- 文档：`doc/` 顶层 13 篇 md（含 `fs/` 子目录共 15 篇）及开发日志 PPT，无最终结题报告。
+
+注：两个参照仓库现已转为私有，以上结论基于 2026-08-07 的克隆快照。
