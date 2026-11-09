@@ -40,3 +40,8 @@ struct proghdr {
 #define ELF_PROG_FLAG_EXEC      1
 #define ELF_PROG_FLAG_WRITE     2
 #define ELF_PROG_FLAG_READ      4
+
+#define ELF_EXEC 2
+#define ELF_DYN 3
+#define ELF_PROG_DYNAMIC 2
+#define ELF_PROG_INTERP 3

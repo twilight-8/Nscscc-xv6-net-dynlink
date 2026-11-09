@@ -106,7 +106,14 @@ extern uint64 sys_umount(void);
 
 // An array mapping syscall numbers from syscall.h
 // to the function that handles the system call.
+extern uint64 sys_dlmap(void);
+extern uint64 sys_nettx(void);
+extern uint64 sys_netrx(void);
+
 static uint64 (*syscalls[])(void) = {
+[SYS_dlmap] sys_dlmap,
+[SYS_nettx] sys_nettx,
+[SYS_netrx] sys_netrx,
 [SYS_fork]    sys_fork,
 [SYS_exit]    sys_exit,
 [SYS_wait]    sys_wait,

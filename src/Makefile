@@ -23,6 +23,7 @@ COMMON_OBJS = \
   $K/file.o \
   $K/pipe.o \
   $K/exec.o \
+  $K/virtio_net.o \
   $K/sysfile.o
 
 ifeq ($(ARCH),riscv)
@@ -43,6 +44,7 @@ USER_LD = $U/user.ld
 ARCH_CFLAGS = -DARCH_RISCV -mcmodel=medany
 ARCH_ASFLAGS =
 QEMU = qemu-system-riscv64
+NET_DEVICE = virtio-net-device,bus=virtio-mmio-bus.1
 else ifeq ($(ARCH),loongarch)
 ARCH_OBJS = \
   $K/arch/loongarch/entry.o \
@@ -65,6 +67,7 @@ USER_LD = $K/arch/loongarch/user.ld
 ARCH_CFLAGS = -DARCH_LOONGARCH -I$K -I$K/arch/loongarch -march=loongarch64 -mabi=lp64s
 ARCH_ASFLAGS = -DARCH_LOONGARCH -I$K -I$K/arch/loongarch -march=loongarch64 -mabi=lp64s
 QEMU = qemu-system-loongarch64
+NET_DEVICE = virtio-net-pci,disable-legacy=on,vectors=0,romfile=
 else
 $(error unsupported ARCH=$(ARCH))
 endif
@@ -199,7 +202,27 @@ mkfs/mkfat32: mkfs/mkfat32.c
 # http://www.gnu.org/software/make/manual/html_node/Chained-Rules.html
 .PRECIOUS: %.o
 
+# Small ELF64 fixtures for the native xv6 runtime linker.
+$U/_udpcheck $U/_xv6-ld $U/_dltest $U/_libdltest.so: LDFLAGS += -S
+DLFLAGS = $(LDFLAGS) --hash-style=sysv -z separate-code -z norelro
+DLLD = $(if $(filter riscv,$(ARCH)),riscv64-linux-gnu-ld,$(LD))
+$U/xv6ld.o $U/dltest.o $U/dllib.o: CFLAGS += -fPIC -fno-semantic-interposition
+$U/xv6ld.o $U/dltest.o $U/dllib.o: $(ARCH_STAMP)
+
+$U/_xv6-ld: $U/xv6ld.o $U/usys.o $U/ulib.o
+	$(DLLD) $(DLFLAGS) -pie --no-dynamic-linker -e main -o $@ $^
+
+$U/_libdltest.so: $U/dllib.o
+	$(DLLD) $(DLFLAGS) -shared -soname libdltest.so -o $@ $^
+
+$U/_dltest: $U/dltest.o $U/usys.o $U/_libdltest.so
+	$(DLLD) $(DLFLAGS) -pie --dynamic-linker /xv6-ld -e main -o $@ $^
+
 UPROGS=\
+	$U/_udpcheck\
+	$U/_xv6-ld\
+	$U/_libdltest.so\
+	$U/_dltest\
 	$U/_cat\
 	$U/_echo\
 	$U/_forktest\
@@ -289,7 +312,7 @@ CPUS := 3
 endif
 
 ifeq ($(ARCH),loongarch)
-QEMUOPTS = -machine virt -kernel $K/kernel -m 1G -smp $(CPUS) -nographic -no-reboot -net none
+QEMUOPTS = -machine virt -kernel $K/kernel -m 1G -smp $(CPUS) -nographic -no-reboot
 QEMUOPTS += -drive file=fs.img,if=none,format=raw,id=x0
 QEMUOPTS += -device virtio-blk-pci,drive=x0,disable-legacy=on,vectors=0
 else
@@ -297,6 +320,12 @@ QEMUOPTS = -machine virt -bios none -kernel $K/kernel -m 128M -smp $(CPUS) -nogr
 QEMUOPTS += -global virtio-mmio.force-legacy=false
 QEMUOPTS += -drive file=fs.img,if=none,format=raw,id=x0
 QEMUOPTS += -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0
+endif
+
+ifeq ($(NET),1)
+QEMUOPTS += -netdev user,id=n0 -device $(NET_DEVICE),netdev=n0,mac=52:54:00:12:34:56
+else
+QEMUOPTS += -nic none
 endif
 
 qemu: check-qemu-version $K/kernel fs.img

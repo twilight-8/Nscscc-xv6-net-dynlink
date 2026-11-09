@@ -50,3 +50,7 @@ entry("umount");
 entry("sbrk");
 entry("pause");
 entry("uptime");
+
+entry("dlmap");
+entry("nettx");
+entry("netrx");

@@ -198,9 +198,9 @@ int             uartgetc(void);
 void            kvminit(void);
 void            kvminithart(void);
 void            kvmmap(pagetable_t, uint64, uint64, uint64, int);
-int             mappages(pagetable_t, uint64, uint64, uint64, int);
+int             mappages(pagetable_t, uint64, uint64, uint64, uint64);
 pagetable_t     uvmcreate(void);
-uint64          uvmalloc(pagetable_t, uint64, uint64, int);
+uint64          uvmalloc(pagetable_t, uint64, uint64, uint64);
 uint64          uvmdealloc(pagetable_t, uint64, uint64);
 int             uvmcopy(pagetable_t, pagetable_t, uint64);
 void            uvmfree(pagetable_t, uint64);
@@ -219,6 +219,8 @@ void            plicinit(void);
 void            plicinithart(void);
 int             plic_claim(void);
 void            plic_complete(int);
+
+void            virtio_net_init(void);
 
 // virtio_disk.c
 void            virtio_disk_init(void);

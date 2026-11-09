@@ -99,7 +99,7 @@ ismapped(pagetable_t pagetable, uint64 va)
 }
 
 int
-mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
+mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, uint64 perm)
 {
   uint64 a, last;
   pte_t *pte;
@@ -172,7 +172,7 @@ uvminit(pagetable_t pagetable, uchar *src, uint sz)
 }
 
 uint64
-uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz, int xperm)
+uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz, uint64 xperm)
 {
   char *mem;
   uint64 a;
@@ -273,7 +273,7 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
 {
   pte_t *pte;
   uint64 pa, i;
-  uint flags;
+  uint64 flags;
   char *mem;
 
   for(i = 0; i < sz; i += PGSIZE){

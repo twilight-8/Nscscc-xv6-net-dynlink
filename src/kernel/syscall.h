@@ -22,3 +22,7 @@
 #define SYS_close  21
 #define SYS_mount  22
 #define SYS_umount 23
+
+#define SYS_dlmap 24
+#define SYS_nettx 25
+#define SYS_netrx 26

@@ -23,29 +23,9 @@
 #define VIRTIO_PCI_CAP_NOTIFY_CFG 2
 #define VIRTIO_PCI_CAP_ISR_CFG    3
 
-struct virtio_pci_common_cfg {
-  uint32 device_feature_select;
-  uint32 device_feature;
-  uint32 driver_feature_select;
-  uint32 driver_feature;
-  uint16 msix_config;
-  uint16 num_queues;
-  uint8 device_status;
-  uint8 config_generation;
-  uint16 queue_select;
-  uint16 queue_size;
-  uint16 queue_msix_vector;
-  uint16 queue_enable;
-  uint16 queue_notify_off;
-  uint64 queue_desc;
-  uint64 queue_driver;
-  uint64 queue_device;
-};
+#include "virtio_pci.h"
 
-static volatile struct virtio_pci_common_cfg *common_cfg;
-static volatile uint8 *isr_cfg;
-static volatile uint16 *notify_cfg;
-static uint32 notify_off_multiplier;
+static struct virtio_pci_device disk;
 
 static uint busno, devno, funcno;
 static uint64 bar_addr[6];
@@ -151,20 +131,20 @@ alloc_bars(uint bus, uint dev, uint func)
   }
 }
 
-static void
-find_device(void)
+static int
+find_device(uint16 id)
 {
   for(uint dev = 0; dev < 32; dev++){
     uint16 vendor = pci_read16(0, dev, 0, PCI_VENDOR_ID);
     uint16 device = pci_read16(0, dev, 0, PCI_DEVICE_ID);
-    if(vendor == PCI_VENDOR_VIRTIO && device == PCI_DEVICE_VIRTIO_BLK){
+    if(vendor == PCI_VENDOR_VIRTIO && device == id){
       busno = 0;
       devno = dev;
       funcno = 0;
-      return;
+      return 0;
     }
   }
-  panic("virtio pci disk");
+  return -1;
 }
 
 static uint64
@@ -176,7 +156,7 @@ cap_addr(uint8 bar, uint32 off)
 }
 
 static void
-parse_caps(void)
+parse_caps(struct virtio_pci_device *device)
 {
   uint8 cap = pci_read8(busno, devno, funcno, PCI_CAPABILITY_LIST);
 
@@ -190,42 +170,53 @@ parse_caps(void)
       uint32 offset = pci_read32(busno, devno, funcno, cap + 8);
 
       if(cfg_type == VIRTIO_PCI_CAP_COMMON_CFG){
-        common_cfg = (volatile struct virtio_pci_common_cfg*)cap_addr(bar, offset);
+        device->common = (volatile struct virtio_pci_common_cfg*)cap_addr(bar, offset);
       } else if(cfg_type == VIRTIO_PCI_CAP_NOTIFY_CFG){
-        notify_cfg = (volatile uint16*)cap_addr(bar, offset);
-        notify_off_multiplier = pci_read32(busno, devno, funcno, cap + 16);
+        device->notify = (volatile uint16*)cap_addr(bar, offset);
+        device->notify_multiplier = pci_read32(busno, devno, funcno, cap + 16);
       } else if(cfg_type == VIRTIO_PCI_CAP_ISR_CFG){
-        isr_cfg = (volatile uint8*)cap_addr(bar, offset);
+        device->isr = (volatile uint8*)cap_addr(bar, offset);
       }
     }
     cap = next;
   }
 
-  if(common_cfg == 0 || notify_cfg == 0 || isr_cfg == 0)
+  if(device->common == 0 || device->notify == 0 || device->isr == 0)
     panic("virtio pci caps");
+}
+
+// Probe at boot, before other harts can access the PCI devices.
+int
+virtio_pci_probe(uint16 id, struct virtio_pci_device *device, int polling)
+{
+  if(find_device(id) < 0)
+    return -1;
+  memset(bar_addr, 0, sizeof(bar_addr));
+  alloc_bars(busno, devno, funcno);
+  parse_caps(device);
+  pci_write16(busno, devno, funcno, PCI_COMMAND,
+              PCI_COMMAND_IO | PCI_COMMAND_MEMORY | PCI_COMMAND_MASTER |
+              (polling ? 0x400 : 0)); // PCI command interrupt disable
+  return 0;
 }
 
 void
 virtio_pci_init(void)
 {
-  find_device();
-  alloc_bars(busno, devno, funcno);
-  parse_caps();
-
-  pci_write16(busno, devno, funcno, PCI_COMMAND,
-              PCI_COMMAND_IO | PCI_COMMAND_MEMORY | PCI_COMMAND_MASTER);
+  if(virtio_pci_probe(PCI_DEVICE_VIRTIO_BLK, &disk, 0) < 0)
+    panic("virtio pci disk");
 }
 
 uint8
 virtio_pci_get_status(void)
 {
-  return common_cfg->device_status;
+  return disk.common->device_status;
 }
 
 void
 virtio_pci_set_status(uint8 status)
 {
-  common_cfg->device_status = status;
+  disk.common->device_status = status;
 }
 
 uint64
@@ -233,69 +224,69 @@ virtio_pci_get_features(void)
 {
   uint64 features;
 
-  common_cfg->device_feature_select = 0;
-  features = common_cfg->device_feature;
-  common_cfg->device_feature_select = 1;
-  features |= ((uint64)common_cfg->device_feature) << 32;
+  disk.common->device_feature_select = 0;
+  features = disk.common->device_feature;
+  disk.common->device_feature_select = 1;
+  features |= ((uint64)disk.common->device_feature) << 32;
   return features;
 }
 
 void
 virtio_pci_set_features(uint64 features)
 {
-  common_cfg->driver_feature_select = 0;
-  common_cfg->driver_feature = features;
-  common_cfg->driver_feature_select = 1;
-  common_cfg->driver_feature = features >> 32;
+  disk.common->driver_feature_select = 0;
+  disk.common->driver_feature = features;
+  disk.common->driver_feature_select = 1;
+  disk.common->driver_feature = features >> 32;
 }
 
 void
 virtio_pci_select_queue(uint16 queue)
 {
-  common_cfg->queue_select = queue;
+  disk.common->queue_select = queue;
 }
 
 uint16
 virtio_pci_queue_max(void)
 {
-  return common_cfg->queue_size;
+  return disk.common->queue_size;
 }
 
 uint16
 virtio_pci_queue_ready(void)
 {
-  return common_cfg->queue_enable;
+  return disk.common->queue_enable;
 }
 
 void
 virtio_pci_set_queue_num(uint16 num)
 {
-  common_cfg->queue_size = num;
+  disk.common->queue_size = num;
 }
 
 void
 virtio_pci_set_queue_desc(uint64 addr)
 {
-  common_cfg->queue_desc = addr;
+  disk.common->queue_desc = addr;
 }
 
 void
 virtio_pci_set_queue_avail(uint64 addr)
 {
-  common_cfg->queue_driver = addr;
+  disk.common->queue_driver = addr;
 }
 
 void
 virtio_pci_set_queue_used(uint64 addr)
 {
-  common_cfg->queue_device = addr;
+  disk.common->queue_device = addr;
 }
 
 void
 virtio_pci_set_queue_ready(uint16 ready)
 {
-  common_cfg->queue_msix_vector = 0xffff;
-  common_cfg->queue_enable = ready;
+  disk.common->queue_msix_vector = 0xffff;
+  disk.common->queue_enable = ready;
 }
 
 void
@@ -303,13 +294,13 @@ virtio_pci_notify(uint16 queue)
 {
   uint16 off;
 
-  common_cfg->queue_select = queue;
-  off = common_cfg->queue_notify_off;
-  *(volatile uint16*)((uint64)notify_cfg + off * notify_off_multiplier) = queue;
+  disk.common->queue_select = queue;
+  off = disk.common->queue_notify_off;
+  *(volatile uint16*)((uint64)disk.notify + off * disk.notify_multiplier) = queue;
 }
 
 void
 virtio_pci_intr_ack(void)
 {
-  (void)*isr_cfg;
+  (void)*disk.isr;
 }
